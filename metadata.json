@@ -1,0 +1,5 @@
+{
+  "name": "Volunteer Dashboard",
+  "description": "A dashboard for managing church volunteers, their schedules, and ministries, providing a clear overview of all activities.",
+  "requestFramePermissions": []
+}
