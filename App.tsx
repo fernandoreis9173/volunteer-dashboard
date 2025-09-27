@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
+import MinistriesPage from './components/MinistriesPage';
+import SchedulesPage from './components/SchedulesPage';
 import ApiConfigPage from './components/ApiConfigPage';
 import LoginPage from './components/LoginPage';
 import SignUpPage from './components/SignUpPage';
@@ -16,6 +18,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
+  const [isScheduleFormOpen, setIsScheduleFormOpen] = useState(false);
 
   useEffect(() => {
     const client = getSupabaseClient();
@@ -41,13 +45,36 @@ const App: React.FC = () => {
       setLoading(false);
     }
   }, []);
+  
+  const handleNavigate = (page: Page) => {
+    setActivePage(page);
+    setIsVolunteerFormOpen(false);
+    setIsScheduleFormOpen(false);
+    setIsSidebarOpen(false);
+  };
+
+  const handleNewVolunteer = () => {
+    setActivePage('volunteers');
+    setIsScheduleFormOpen(false);
+    setIsVolunteerFormOpen(true);
+    setIsSidebarOpen(false);
+  };
+
+  const handleNewSchedule = () => {
+    setActivePage('schedules');
+    setIsVolunteerFormOpen(false);
+    setIsScheduleFormOpen(true);
+    setIsSidebarOpen(false);
+  };
 
   const renderPage = () => {
     switch (activePage) {
       case 'volunteers':
-        return <VolunteersPage supabase={supabase} />;
+        return <VolunteersPage supabase={supabase} isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} />;
       case 'ministries':
+        return <MinistriesPage supabase={supabase} />;
       case 'schedules':
+        return <SchedulesPage supabase={supabase} isFormOpen={isScheduleFormOpen} setIsFormOpen={setIsScheduleFormOpen} />;
       case 'dashboard':
       default:
         return <Dashboard supabase={supabase} />;
@@ -77,7 +104,9 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-slate-100 font-sans overflow-hidden">
       <Sidebar 
         activePage={activePage} 
-        onNavigate={setActivePage} 
+        onNavigate={handleNavigate} 
+        onNewVolunteer={handleNewVolunteer}
+        onNewSchedule={handleNewSchedule}
         supabase={supabase}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}

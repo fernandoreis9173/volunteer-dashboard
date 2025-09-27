@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Schedule } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
 
-interface UpcomingShiftsListProps {
+interface TodayShiftsListProps {
   supabase: SupabaseClient | null;
 }
 
@@ -42,7 +42,7 @@ const ScheduleCard: React.FC<{ schedule: Schedule }> = ({ schedule }) => {
   );
 };
 
-const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ supabase }) => {
+const TodayShiftsList: React.FC<TodayShiftsListProps> = ({ supabase }) => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,21 +53,17 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ supabase }) => 
         return;
       };
       setLoading(true);
+      const todayDate = new Date();
+      const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
       
-      const tomorrowDate = new Date();
-      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-      const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
-
       const { data, error } = await supabase
         .from('schedules')
         .select('*, ministries(name), schedule_volunteers(volunteer_id, volunteers(name))')
-        .gte('date', tomorrow)
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true })
-        .limit(3);
+        .eq('date', today)
+        .order('start_time', { ascending: true });
 
       if (error) {
-        console.error('Error fetching schedules', error);
+        console.error('Error fetching today\'s schedules', error);
       } else {
         setSchedules(data as Schedule[] || []);
       }
@@ -76,14 +72,14 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ supabase }) => 
 
     fetchSchedules();
   }, [supabase]);
-  
+
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm h-full">
       <div className="flex items-center space-x-2 mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <h2 className="text-xl font-bold text-slate-800">Próximos Eventos</h2>
+        <h2 className="text-xl font-bold text-slate-800">Eventos de Hoje</h2>
       </div>
       <div className="space-y-4">
         {loading ? (
@@ -98,11 +94,11 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ supabase }) => 
             <ScheduleCard key={schedule.id} schedule={schedule} />
           ))
         ) : (
-          <p className="text-slate-500">Nenhum evento futuro encontrado.</p>
+          <p className="text-slate-500">Nenhum evento para hoje.</p>
         )}
       </div>
     </div>
   );
 };
 
-export default UpcomingShiftsList;
+export default TodayShiftsList;

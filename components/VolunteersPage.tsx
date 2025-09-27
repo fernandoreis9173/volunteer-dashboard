@@ -7,10 +7,11 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 interface VolunteersPageProps {
   supabase: SupabaseClient | null;
+  isFormOpen: boolean;
+  setIsFormOpen: (isOpen: boolean) => void;
 }
 
-const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase }) => {
-  const [isFormVisible, setIsFormVisible] = useState(false);
+const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, setIsFormOpen }) => {
   const [volunteers, setVolunteers] = useState<DetailedVolunteer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,10 +53,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase }) => {
 
   const showForm = () => {
     setSaveError(null);
-    setIsFormVisible(true);
+    setIsFormOpen(true);
   };
   const hideForm = () => {
-    setIsFormVisible(false);
+    setIsFormOpen(false);
     setEditingVolunteer(null);
   };
   
@@ -101,27 +102,33 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase }) => {
     setIsSaving(true);
     setSaveError(null);
 
-    let error;
-    let data;
+    let result;
 
-    if (volunteerData.id) { // It's an update
-        const { id, ...updateData } = volunteerData;
-        const { data: updateDataResult, error: updateError } = await supabase
-            .from('volunteers')
-            .update(updateData)
-            .eq('id', id)
-            .select();
-        data = updateDataResult;
-        error = updateError;
-    } else { // It's an insert
-        const { id, ...insertData } = volunteerData;
-        const { data: insertDataResult, error: insertError } = await supabase
-            .from('volunteers')
-            .insert([insertData])
-            .select();
-        data = insertDataResult;
-        error = insertError;
+    const payload = {
+      name: volunteerData.name,
+      email: volunteerData.email,
+      phone: volunteerData.phone,
+      initials: volunteerData.initials,
+      status: volunteerData.status,
+      ministries: volunteerData.ministries,
+      skills: volunteerData.skills,
+      availability: volunteerData.availability,
+    };
+
+    if (volunteerData.id) {
+      result = await supabase
+        .from('volunteers')
+        .update(payload)
+        .eq('id', volunteerData.id)
+        .select();
+    } else {
+      result = await supabase
+        .from('volunteers')
+        .insert([payload])
+        .select();
     }
+
+    const { data, error } = result;
 
     if (error || !data || data.length === 0) {
         const errorMessage = error ? error.message : "A operação falhou. Verifique suas permissões ou os dados inseridos.";
@@ -219,7 +226,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase }) => {
         </button>
       </div>
 
-      {isFormVisible ? (
+      {isFormOpen ? (
         <NewVolunteerForm 
           initialData={editingVolunteer}
           onCancel={hideForm} 

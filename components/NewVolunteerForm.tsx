@@ -149,7 +149,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
         phone: '',
     });
     const [availability, setAvailability] = useState({
-        domingo_manha: false, domingo_noite: false, segunda: false, terca: false,
+        domingo: false, segunda: false, terca: false,
         quarta: false, quinta: false, sexta: false, sabado: false,
     });
     const [isActive, setIsActive] = useState(true);
@@ -167,8 +167,8 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
     };
 
     useEffect(() => {
-        const resetAvailability = {
-            domingo_manha: false, domingo_noite: false, segunda: false, terca: false,
+        const availabilityKeys = {
+            domingo: false, segunda: false, terca: false,
             quarta: false, quinta: false, sexta: false, sabado: false,
         };
 
@@ -182,21 +182,39 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             setMinistries(initialData.ministries || []);
             setIsActive(initialData.status === 'Ativo');
             
-            const newAvailabilityState = { ...resetAvailability };
-            if (Array.isArray(initialData.availability)) {
-                initialData.availability.forEach(day => {
-                    if (day in newAvailabilityState) {
-                        newAvailabilityState[day as keyof typeof newAvailabilityState] = true;
+            let availabilityArray: string[] = [];
+            const rawAvailability: any = initialData.availability;
+
+            if (Array.isArray(rawAvailability)) {
+                availabilityArray = rawAvailability;
+            } else if (typeof rawAvailability === 'string' && rawAvailability.startsWith('[') && rawAvailability.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(rawAvailability);
+                    if(Array.isArray(parsed)) {
+                        availabilityArray = parsed;
                     }
-                });
+                } catch (e) {
+                    console.error("Failed to parse availability string:", e);
+                }
             }
+            
+            const newAvailabilityState = { ...availabilityKeys };
+            
+            availabilityArray.forEach(day => {
+                if (day === 'domingo_manha' || day === 'domingo_noite') {
+                    newAvailabilityState.domingo = true;
+                } else if (day in newAvailabilityState) {
+                    newAvailabilityState[day as keyof typeof newAvailabilityState] = true;
+                }
+            });
             setAvailability(newAvailabilityState);
         } else {
+            // Reset form for new volunteer
             setFormData({ fullName: '', email: '', phone: '' });
             setSkills([]);
             setMinistries([]);
             setIsActive(true);
-            setAvailability(resetAvailability);
+            setAvailability(availabilityKeys);
         }
     }, [initialData]);
 
@@ -286,8 +304,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <CheckboxField label="Domingo Manhã" name="domingo_manha" checked={availability.domingo_manha} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Domingo Noite" name="domingo_noite" checked={availability.domingo_noite} onChange={handleCheckboxChange} />
+                        <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} />
                         <CheckboxField label="Segunda-feira" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} />
                         <CheckboxField label="Terça-feira" name="terca" checked={availability.terca} onChange={handleCheckboxChange} />
                         <CheckboxField label="Quarta-feira" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} />
@@ -317,7 +334,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                            <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V4zm2 0v12h6V4H7zm3 1a.5.5 0 00-.5.5v2.5a.5.5 0 001 0V6a.5.5 0 00-.5-.5z" clipRule="evenodd" />
                         </svg>
-                        <span>{isSaving ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Salvar Voluntário')}</span>
+                        <span>{isSaving ? 'Salvando...' : (isEditing ? 'Atualizar Voluntário' : 'Salvar Voluntário')}</span>
                     </button>
                 </div>
             </form>
