@@ -35,29 +35,33 @@ const App: React.FC = () => {
     setSupabase(client);
 
     if (client) {
-      // Check for invitation link on initial load
-      if (window.location.hash.includes('type=recovery')) {
+      const initialUrlHasRecovery = window.location.hash.includes('type=recovery');
+      if (initialUrlHasRecovery) {
         setAuthView('accept-invite');
       }
 
-      client.auth.getSession().then(({ data: { session } }) => {
-        setSession(session);
-        setUserRole(getRoleFromMetadata(session?.user?.user_metadata));
+      client.auth.getSession().then(({ data: { session: initialSession } }) => {
+        setSession(initialSession);
+        if (initialSession) {
+          setUserRole(getRoleFromMetadata(initialSession.user.user_metadata));
+        }
         setLoading(false);
       });
 
-      const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-        setSession(session);
-        setUserRole(getRoleFromMetadata(session?.user?.user_metadata));
-
-        if (_event === 'SIGNED_IN') {
-          setActivePage('dashboard');
-          setAuthView('login'); 
-        } else if (_event === 'PASSWORD_RECOVERY') {
-          // This event is triggered for both password resets and new user invitations.
+      const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
+        if (_event === 'PASSWORD_RECOVERY') {
           setAuthView('accept-invite');
         } else if (_event === 'SIGNED_OUT') {
-           setAuthView('login');
+          setAuthView('login');
+          setSession(null);
+          setUserRole(null);
+        } else if (newSession && newSession.access_token !== session?.access_token) {
+           setSession(newSession);
+           setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
+           // Only switch view if not in the middle of an invite flow
+           if (authView !== 'accept-invite') {
+             setActivePage('dashboard');
+           }
         }
       });
 
@@ -65,7 +69,7 @@ const App: React.FC = () => {
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [session, authView]);
   
   const handleNavigate = (page: Page) => {
     setActivePage(page);
@@ -120,8 +124,6 @@ const App: React.FC = () => {
     return <ApiConfigPage />;
   }
   
-  // This is the core logic fix: always render the invitation page if the view is set,
-  // regardless of whether a temporary session exists.
   if (authView === 'accept-invite') {
     return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
   }

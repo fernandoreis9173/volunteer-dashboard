@@ -3,7 +3,6 @@ import { Page } from '../types';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
 
 interface NavItemProps {
-  // FIX: Changed icon type to React.ReactElement<any> to allow adding props like className via React.cloneElement.
   icon: React.ReactElement<any>;
   label: string;
   page: Page;
@@ -48,6 +47,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
     const getInitials = (name?: string | null): string => {
         if (!name) return '??';
         const nameParts = name.trim().split(' ');
+        if (nameParts.length === 1 && nameParts[0]) {
+            return nameParts[0].substring(0, 2).toUpperCase();
+        }
         const firstInitial = nameParts[0]?.[0] || '';
         const lastInitial = nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '';
         return (firstInitial + lastInitial).toUpperCase();
