@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { AuthView } from '../types';
 
+// FIX: Added setAuthView to LoginPageProps to resolve a TypeScript error in App.tsx where this prop was being passed without being defined on the component.
 interface LoginPageProps {
     supabase: SupabaseClient;
+    setAuthView: (view: AuthView) => void;
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ supabase }) => {

@@ -30,6 +30,8 @@ export interface Schedule {
 
 export type Page = 'dashboard' | 'volunteers' | 'ministries' | 'schedules' | 'admin';
 
+export type AuthView = 'login' | 'accept-invite';
+
 export interface DetailedVolunteer {
     id?: number;
     name: string;

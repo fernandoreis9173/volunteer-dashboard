@@ -7,7 +7,8 @@ import SchedulesPage from './components/SchedulesPage';
 import AdminPage from './components/AdminPage';
 import ApiConfigPage from './components/ApiConfigPage';
 import LoginPage from './components/LoginPage';
-import { Page } from './types';
+import AcceptInvitationPage from './components/AcceptInvitationPage';
+import { Page, AuthView } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
 
@@ -20,12 +21,11 @@ const App: React.FC = () => {
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isScheduleFormOpen, setIsScheduleFormOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [authView, setAuthView] = useState<AuthView>('login');
 
   const getRoleFromMetadata = (metadata: any): string | null => {
     if (!metadata) return null;
-    // Check for common keys 'role' (english) or 'papel' (portuguese)
     const role = metadata.role || metadata.papel;
-    // Normalize common portuguese value 'líder' to 'leader'
     if (role === 'líder') return 'leader';
     return role;
   }
@@ -35,19 +35,22 @@ const App: React.FC = () => {
     setSupabase(client);
 
     if (client) {
-      // Check initial session
       client.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
         setUserRole(getRoleFromMetadata(session?.user?.user_metadata));
         setLoading(false);
       });
 
-      // Listen for auth state changes
       const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
         setSession(session);
         setUserRole(getRoleFromMetadata(session?.user?.user_metadata));
+
         if (_event === 'SIGNED_IN') {
           setActivePage('dashboard');
+          setAuthView('login');
+        } else if (_event === 'PASSWORD_RECOVERY') {
+          // This event is triggered for both password resets and new user invitations.
+          setAuthView('accept-invite');
         }
       });
 
@@ -88,7 +91,6 @@ const App: React.FC = () => {
         return <SchedulesPage supabase={supabase} isFormOpen={isScheduleFormOpen} setIsFormOpen={setIsScheduleFormOpen} />;
       case 'admin':
         if (userRole !== 'admin') {
-            // Redirect non-admins to dashboard
             setActivePage('dashboard');
             return <Dashboard supabase={supabase} />;
         }
@@ -98,6 +100,16 @@ const App: React.FC = () => {
         return <Dashboard supabase={supabase} />;
     }
   };
+
+  const renderAuth = () => {
+    switch (authView) {
+      case 'accept-invite':
+        return <AcceptInvitationPage supabase={supabase!} setAuthView={setAuthView} />;
+      case 'login':
+      default:
+        return <LoginPage supabase={supabase!} setAuthView={setAuthView} />;
+    }
+  }
 
   if (loading) {
     return (
@@ -112,7 +124,7 @@ const App: React.FC = () => {
   }
 
   if (!session) {
-    return <LoginPage supabase={supabase} />;
+    return renderAuth();
   }
 
   return (
