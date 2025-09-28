@@ -38,6 +38,10 @@ const App: React.FC = () => {
       client.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
         setUserRole(getRoleFromMetadata(session?.user?.user_metadata));
+        // Check if the URL contains authentication tokens from an email link
+        if (window.location.hash.includes('access_token')) {
+          setAuthView('accept-invite');
+        }
         setLoading(false);
       });
 
