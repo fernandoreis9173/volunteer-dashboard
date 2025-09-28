@@ -28,7 +28,7 @@ export interface Schedule {
   observations?: string;
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'ministries' | 'schedules';
+export type Page = 'dashboard' | 'volunteers' | 'ministries' | 'schedules' | 'admin';
 
 export interface DetailedVolunteer {
     id?: number;

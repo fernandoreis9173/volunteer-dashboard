@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient, Session } from '@supabase/supabase-js';
 
 interface NavItemProps {
   // FIX: Changed icon type to React.ReactElement<any> to allow adding props like className via React.cloneElement.
@@ -34,14 +34,29 @@ interface SidebarProps {
   supabase: SupabaseClient | null;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  userRole: string | null;
+  session: Session | null;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewSchedule, supabase, isOpen, setIsOpen }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewSchedule, supabase, isOpen, setIsOpen, userRole, session }) => {
     const handleLogout = async () => {
         if (supabase) {
             await supabase.auth.signOut();
         }
     };
+
+    const getInitials = (email?: string): string => {
+        if (!email) return '??';
+        const nameFromEmail = email.split('@')[0].replace(/[\._-]/g, ' ');
+        const nameParts = nameFromEmail.split(' ');
+        const firstInitial = nameParts[0]?.[0] || '';
+        const lastInitial = nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '';
+        return ((firstInitial + lastInitial) || email.substring(0, 2)).toUpperCase();
+    };
+
+    const user = session?.user;
+    const userEmail = user?.email || 'Usuário';
+    const initials = getInitials(userEmail);
 
   return (
     <>
@@ -97,6 +112,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                 activePage={activePage}
                 onNavigate={onNavigate}
               />
+              {userRole === 'admin' && (
+                <NavItem
+                  icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944a11.955 11.955 0 019-2.606 11.955 11.955 0 019 2.606c.342-1.156.342-2.327 0-3.482z" /></svg>}
+                  label="Admin"
+                  page="admin"
+                  activePage={activePage}
+                  onNavigate={onNavigate}
+                />
+              )}
             </div>
           </div>
           <div>
@@ -116,19 +140,23 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
 
         <div className="mt-auto">
           <div className="w-full h-px bg-slate-200 mb-4"></div>
-          <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 flex items-center justify-center bg-orange-100 rounded-full text-orange-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+           <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3 overflow-hidden">
+                  <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center bg-blue-100 rounded-full text-blue-600 font-bold">
+                    {initials}
                   </div>
-                  <div>
-                      <p className="font-semibold text-slate-800">Sistema Igreja</p>
-                      <p className="text-sm text-slate-500">Servindo com amor</p>
+                  <div className="flex-1 overflow-hidden">
+                      <p className="font-semibold text-slate-800 text-sm truncate" title={userEmail}>{userEmail}</p>
+                      {userRole && (
+                          <span className={`text-xs font-semibold rounded-full capitalize px-2 py-0.5 inline-block mt-1 ${userRole === 'admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700'}`}>
+                              {userRole === 'admin' ? 'Admin' : 'Líder'}
+                          </span>
+                      )}
                   </div>
               </div>
               <button 
                   onClick={handleLogout} 
-                  className="text-slate-500 hover:text-red-600 transition-colors p-1" 
+                  className="text-slate-500 hover:text-red-600 transition-colors p-1 flex-shrink-0" 
                   aria-label="Sair" 
                   title="Sair"
               >

@@ -4,9 +4,9 @@ import Dashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
 import MinistriesPage from './components/MinistriesPage';
 import SchedulesPage from './components/SchedulesPage';
+import AdminPage from './components/AdminPage';
 import ApiConfigPage from './components/ApiConfigPage';
 import LoginPage from './components/LoginPage';
-import SignUpPage from './components/SignUpPage';
 import { Page } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
@@ -16,10 +16,19 @@ const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [loading, setLoading] = useState(true);
-  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isScheduleFormOpen, setIsScheduleFormOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  const getRoleFromMetadata = (metadata: any): string | null => {
+    if (!metadata) return null;
+    // Check for common keys 'role' (english) or 'papel' (portuguese)
+    const role = metadata.role || metadata.papel;
+    // Normalize common portuguese value 'líder' to 'leader'
+    if (role === 'líder') return 'leader';
+    return role;
+  }
 
   useEffect(() => {
     const client = getSupabaseClient();
@@ -29,12 +38,14 @@ const App: React.FC = () => {
       // Check initial session
       client.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
+        setUserRole(getRoleFromMetadata(session?.user?.user_metadata));
         setLoading(false);
       });
 
       // Listen for auth state changes
       const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
         setSession(session);
+        setUserRole(getRoleFromMetadata(session?.user?.user_metadata));
         if (_event === 'SIGNED_IN') {
           setActivePage('dashboard');
         }
@@ -75,6 +86,13 @@ const App: React.FC = () => {
         return <MinistriesPage supabase={supabase} />;
       case 'schedules':
         return <SchedulesPage supabase={supabase} isFormOpen={isScheduleFormOpen} setIsFormOpen={setIsScheduleFormOpen} />;
+      case 'admin':
+        if (userRole !== 'admin') {
+            // Redirect non-admins to dashboard
+            setActivePage('dashboard');
+            return <Dashboard supabase={supabase} />;
+        }
+        return <AdminPage supabase={supabase} />;
       case 'dashboard':
       default:
         return <Dashboard supabase={supabase} />;
@@ -94,10 +112,7 @@ const App: React.FC = () => {
   }
 
   if (!session) {
-    if (authView === 'login') {
-      return <LoginPage supabase={supabase} onSwitchToSignUp={() => setAuthView('signup')} />;
-    }
-    return <SignUpPage supabase={supabase} onSwitchToLogin={() => setAuthView('login')} />;
+    return <LoginPage supabase={supabase} />;
   }
 
   return (
@@ -110,6 +125,8 @@ const App: React.FC = () => {
         supabase={supabase}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
+        userRole={userRole}
+        session={session}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="p-4 md:p-8">
