@@ -36,6 +36,10 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
             setError('A senha deve ter pelo menos 6 caracteres.');
             return;
         }
+        if (!name.trim()) {
+            setError('Por favor, insira seu nome completo.');
+            return;
+        }
 
         setLoading(true);
         setError(null);
@@ -44,7 +48,7 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
         try {
             const { error: updateError } = await supabase.auth.updateUser({
                 password: password,
-                data: { name: name } // This updates user_metadata
+                data: { name: name.trim() } // This updates user_metadata
             });
 
             if (updateError) {

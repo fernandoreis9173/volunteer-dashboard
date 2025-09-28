@@ -45,7 +45,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
     };
 
     const getInitials = (name?: string | null): string => {
-        if (!name) return '??';
+        if (!name || typeof name !== 'string') return '??';
         const nameParts = name.trim().split(' ');
         if (nameParts.length === 1 && nameParts[0]) {
             return nameParts[0].substring(0, 2).toUpperCase();
@@ -148,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                     {initials}
                   </div>
                   <div className="flex-1 overflow-hidden">
-                      <p className="font-semibold text-slate-800 text-sm truncate" title={userEmail}>{userName}</p>
+                      <p className="font-semibold text-slate-800 text-sm truncate" title={userName}>{userName}</p>
                       {userRole && (
                           <span className={`text-xs font-semibold rounded-full capitalize px-2 py-0.5 inline-block mt-1 ${userRole === 'admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700'}`}>
                               {userRole === 'admin' ? 'Admin' : 'Líder'}

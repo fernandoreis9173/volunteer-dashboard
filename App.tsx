@@ -35,41 +35,47 @@ const App: React.FC = () => {
     setSupabase(client);
 
     if (client) {
-      const initialUrlHasRecovery = window.location.hash.includes('type=recovery');
-      if (initialUrlHasRecovery) {
+      // Check for recovery type in URL hash on initial load
+      if (window.location.hash.includes('type=recovery')) {
         setAuthView('accept-invite');
       }
 
-      client.auth.getSession().then(({ data: { session: initialSession } }) => {
-        setSession(initialSession);
-        if (initialSession) {
-          setUserRole(getRoleFromMetadata(initialSession.user.user_metadata));
+      const { data: { subscription } } = client.auth.onAuthStateChange((event, newSession) => {
+        setLoading(true);
+        // This event is triggered when the user clicks the invitation link
+        if (event === 'PASSWORD_RECOVERY') {
+          setAuthView('accept-invite');
+          setSession(newSession); // Important: set the temporary session
+        } else if (event === 'SIGNED_IN') {
+          setSession(newSession);
+          if (newSession) {
+            setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
+          }
+          setAuthView('login'); // Reset auth view to avoid being stuck
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUserRole(null);
+          setAuthView('login');
         }
         setLoading(false);
       });
-
-      const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
-        if (_event === 'PASSWORD_RECOVERY') {
-          setAuthView('accept-invite');
-        } else if (_event === 'SIGNED_OUT') {
-          setAuthView('login');
-          setSession(null);
-          setUserRole(null);
-        } else if (newSession && newSession.access_token !== session?.access_token) {
-           setSession(newSession);
-           setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
-           // Only switch view if not in the middle of an invite flow
-           if (authView !== 'accept-invite') {
-             setActivePage('dashboard');
+      
+      // Also check initial session
+      client.auth.getSession().then(({ data: { session } }) => {
+        if (!window.location.hash.includes('type=recovery')) {
+           setSession(session);
+           if (session) {
+             setUserRole(getRoleFromMetadata(session.user.user_metadata));
            }
         }
+        setLoading(false);
       });
 
       return () => subscription.unsubscribe();
     } else {
       setLoading(false);
     }
-  }, [session, authView]);
+  }, []);
   
   const handleNavigate = (page: Page) => {
     setActivePage(page);
@@ -124,11 +130,10 @@ const App: React.FC = () => {
     return <ApiConfigPage />;
   }
   
-  if (authView === 'accept-invite') {
-    return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
-  }
-
   if (!session) {
+    if (authView === 'accept-invite') {
+      return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
+    }
     return <LoginPage supabase={supabase} setAuthView={setAuthView} />;
   }
 
