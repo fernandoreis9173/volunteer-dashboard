@@ -34,45 +34,42 @@ const App: React.FC = () => {
     const client = getSupabaseClient();
     setSupabase(client);
 
-    if (client) {
-      const { data: { subscription } } = client.auth.onAuthStateChange((event, newSession) => {
-        setLoading(true);
-        if (event === 'PASSWORD_RECOVERY') {
-          setAuthView('accept-invite');
-        } else if (event === 'SIGNED_IN') {
-          setSession(newSession);
-          if (newSession) {
-            setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
-          }
-          // Reset auth view on successful sign-in to avoid being stuck
-          if (authView === 'accept-invite') {
-            setAuthView('login');
-          }
-        } else if (event === 'SIGNED_OUT') {
-          setSession(null);
-          setUserRole(null);
-          setAuthView('login');
-        }
+    if (!client) {
         setLoading(false);
-      });
-      
-      client.auth.getSession().then(({ data: { session: initialSession } }) => {
-        const hash = window.location.hash;
-        if (hash.includes('type=recovery') || hash.includes('type=invite')) {
-            setAuthView('accept-invite');
-        } else {
-           setSession(initialSession);
-           if (initialSession) {
-             setUserRole(getRoleFromMetadata(initialSession.user.user_metadata));
-           }
-        }
-        setLoading(false);
-      });
-
-      return () => subscription.unsubscribe();
-    } else {
-      setLoading(false);
+        return;
     }
+
+    // This is the most reliable way to catch the invite flow.
+    // Check the URL hash when the component mounts.
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery') || hash.includes('type=invite')) {
+        setAuthView('accept-invite');
+    }
+
+    // Get the initial session if one exists
+    client.auth.getSession().then(({ data: { session: initialSession } }) => {
+        setSession(initialSession);
+        if (initialSession) {
+            setUserRole(getRoleFromMetadata(initialSession.user.user_metadata));
+        }
+        setLoading(false);
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
+        setSession(newSession);
+        if (newSession) {
+            setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
+        } else {
+            // If user signs out, reset everything and go to login
+            setUserRole(null);
+            setAuthView('login');
+        }
+    });
+
+    return () => {
+        subscription.unsubscribe();
+    };
   }, []);
   
   const handleNavigate = (page: Page) => {
