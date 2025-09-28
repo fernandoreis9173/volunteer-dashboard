@@ -45,18 +45,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
         }
     };
 
-    const getInitials = (email?: string): string => {
-        if (!email) return '??';
-        const nameFromEmail = email.split('@')[0].replace(/[\._-]/g, ' ');
-        const nameParts = nameFromEmail.split(' ');
+    const getInitials = (name?: string | null): string => {
+        if (!name) return '??';
+        const nameParts = name.trim().split(' ');
         const firstInitial = nameParts[0]?.[0] || '';
         const lastInitial = nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '';
-        return ((firstInitial + lastInitial) || email.substring(0, 2)).toUpperCase();
+        return (firstInitial + lastInitial).toUpperCase();
     };
 
     const user = session?.user;
-    const userEmail = user?.email || 'Usuário';
-    const initials = getInitials(userEmail);
+    const userName = user?.user_metadata?.name || user?.email || 'Usuário';
+    const userEmail = user?.email || 'N/A';
+    const initials = getInitials(userName);
 
   return (
     <>
@@ -146,7 +146,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                     {initials}
                   </div>
                   <div className="flex-1 overflow-hidden">
-                      <p className="font-semibold text-slate-800 text-sm truncate" title={userEmail}>{userEmail}</p>
+                      <p className="font-semibold text-slate-800 text-sm truncate" title={userEmail}>{userName}</p>
                       {userRole && (
                           <span className={`text-xs font-semibold rounded-full capitalize px-2 py-0.5 inline-block mt-1 ${userRole === 'admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700'}`}>
                               {userRole === 'admin' ? 'Admin' : 'Líder'}

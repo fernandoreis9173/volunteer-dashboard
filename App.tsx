@@ -35,13 +35,14 @@ const App: React.FC = () => {
     setSupabase(client);
 
     if (client) {
+      // Check for invitation link on initial load
+      if (window.location.hash.includes('type=recovery')) {
+        setAuthView('accept-invite');
+      }
+
       client.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
         setUserRole(getRoleFromMetadata(session?.user?.user_metadata));
-        // Check if the URL contains authentication tokens from an email link
-        if (window.location.hash.includes('access_token')) {
-          setAuthView('accept-invite');
-        }
         setLoading(false);
       });
 
@@ -51,10 +52,12 @@ const App: React.FC = () => {
 
         if (_event === 'SIGNED_IN') {
           setActivePage('dashboard');
-          setAuthView('login');
+          setAuthView('login'); 
         } else if (_event === 'PASSWORD_RECOVERY') {
           // This event is triggered for both password resets and new user invitations.
           setAuthView('accept-invite');
+        } else if (_event === 'SIGNED_OUT') {
+           setAuthView('login');
         }
       });
 
@@ -105,16 +108,6 @@ const App: React.FC = () => {
     }
   };
 
-  const renderAuth = () => {
-    switch (authView) {
-      case 'accept-invite':
-        return <AcceptInvitationPage supabase={supabase!} setAuthView={setAuthView} />;
-      case 'login':
-      default:
-        return <LoginPage supabase={supabase!} setAuthView={setAuthView} />;
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-100">
@@ -126,9 +119,15 @@ const App: React.FC = () => {
   if (!supabase) {
     return <ApiConfigPage />;
   }
+  
+  // This is the core logic fix: always render the invitation page if the view is set,
+  // regardless of whether a temporary session exists.
+  if (authView === 'accept-invite') {
+    return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
+  }
 
   if (!session) {
-    return renderAuth();
+    return <LoginPage supabase={supabase} setAuthView={setAuthView} />;
   }
 
   return (
