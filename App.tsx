@@ -35,23 +35,19 @@ const App: React.FC = () => {
     setSupabase(client);
 
     if (client) {
-      // Check for recovery type in URL hash on initial load
-      if (window.location.hash.includes('type=recovery')) {
-        setAuthView('accept-invite');
-      }
-
       const { data: { subscription } } = client.auth.onAuthStateChange((event, newSession) => {
         setLoading(true);
-        // This event is triggered when the user clicks the invitation link
         if (event === 'PASSWORD_RECOVERY') {
           setAuthView('accept-invite');
-          setSession(newSession); // Important: set the temporary session
         } else if (event === 'SIGNED_IN') {
           setSession(newSession);
           if (newSession) {
             setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
           }
-          setAuthView('login'); // Reset auth view to avoid being stuck
+          // Reset auth view on successful sign-in to avoid being stuck
+          if (authView === 'accept-invite') {
+            setAuthView('login');
+          }
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUserRole(null);
@@ -60,12 +56,14 @@ const App: React.FC = () => {
         setLoading(false);
       });
       
-      // Also check initial session
-      client.auth.getSession().then(({ data: { session } }) => {
-        if (!window.location.hash.includes('type=recovery')) {
-           setSession(session);
-           if (session) {
-             setUserRole(getRoleFromMetadata(session.user.user_metadata));
+      client.auth.getSession().then(({ data: { session: initialSession } }) => {
+        const hash = window.location.hash;
+        if (hash.includes('type=recovery') || hash.includes('type=invite')) {
+            setAuthView('accept-invite');
+        } else {
+           setSession(initialSession);
+           if (initialSession) {
+             setUserRole(getRoleFromMetadata(initialSession.user.user_metadata));
            }
         }
         setLoading(false);
@@ -130,12 +128,16 @@ const App: React.FC = () => {
     return <ApiConfigPage />;
   }
   
-  if (!session) {
-    if (authView === 'accept-invite') {
+  // CRITICAL FIX: Prioritize the auth view over the session state.
+  // If the user is in the 'accept-invite' flow, show that page regardless of temporary session.
+  if (authView === 'accept-invite') {
       return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
-    }
-    return <LoginPage supabase={supabase} setAuthView={setAuthView} />;
   }
+
+  if (!session) {
+      return <LoginPage supabase={supabase} setAuthView={setAuthView} />;
+  }
+
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans overflow-hidden">
