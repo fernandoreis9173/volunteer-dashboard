@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from '@supabase/supabase-js';
 import EditUserModal from './EditUserModal';
+import ConfirmationModal from './ConfirmationModal';
 
 interface AdminPageProps {
   supabase: SupabaseClient | null;
@@ -21,6 +22,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
+
+    const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+    const [userToAction, setUserToAction] = useState<User | null>(null);
+    const [actionType, setActionType] = useState<'disable' | 'enable' | null>(null);
 
 
     const fetchInvitedUsers = async () => {
@@ -86,12 +91,38 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         if (error) {
             alert(`Falha ao atualizar permissões: ${error.message}`);
         } else {
-            setInvitedUsers(prevUsers => 
-                prevUsers.map(u => u.id === userId ? data.user : u)
-            );
+            await fetchInvitedUsers();
             setIsEditModalOpen(false);
         }
     };
+
+    const handleRequestAction = (user: User, type: 'disable' | 'enable') => {
+        setUserToAction(user);
+        setActionType(type);
+        setIsActionModalOpen(true);
+        setActiveMenu(null);
+    };
+
+    const handleConfirmAction = async () => {
+        if (!userToAction || !actionType || !supabase) return;
+        
+        const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
+
+        const { error } = await supabase.functions.invoke(functionName, {
+            body: { userId: userToAction.id }
+        });
+
+        if (error) {
+            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${error.message}`);
+        } else {
+            await fetchInvitedUsers();
+        }
+
+        setIsActionModalOpen(false);
+        setUserToAction(null);
+        setActionType(null);
+    };
+
 
     const formatDate = (dateString: string | undefined) => {
         if (!dateString) return 'N/A';
@@ -107,6 +138,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         if (userRole === 'leader' || userRole === 'líder') return 'Líder';
         return 'N/A';
     };
+    
+    const getStatusBadge = (user: User) => {
+        const isBanned = user.banned_until && new Date(user.banned_until) > new Date();
+        if (isBanned) {
+            return <span className="px-2 text-xs font-semibold rounded-full bg-red-100 text-red-800">Inativo</span>;
+        }
+        if (user.last_sign_in_at) {
+            return <span className="px-2 text-xs font-semibold rounded-full bg-green-100 text-green-800">Aceito</span>;
+        }
+        return <span className="px-2 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pendente</span>;
+    };
+
 
     return (
         <div className="space-y-8">
@@ -125,11 +168,11 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="sm:col-span-2">
                             <label htmlFor="invite-email" className="block text-sm font-medium text-slate-700 mb-1">E-mail do Líder</label>
-                            <input type="email" id="invite-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@igreja.com" required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
+                            <input type="email" id="invite-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@igreja.com" required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
                         </div>
                         <div>
                             <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
-                            <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
+                            <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
                                 <option value="leader">Líder de Ministério</option>
                                 <option value="admin">Admin (Líder Geral)</option>
                             </select>
@@ -167,14 +210,14 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                                 <tr><td colSpan={5} className="px-6 py-4 text-center">Carregando...</td></tr>
                             ) : listError ? (
                                 <tr><td colSpan={5} className="px-6 py-4 text-center text-red-500">{listError}</td></tr>
-                            ) : invitedUsers.map(user => (
+                            ) : invitedUsers.map(user => {
+                                const isBanned = user.banned_until && new Date(user.banned_until) > new Date();
+                                return (
                                 <tr key={user.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{formatDate(user.invited_at)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-semibold">{getRoleForDisplay(user)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        {user.last_sign_in_at ? <span className="px-2 text-xs font-semibold rounded-full bg-green-100 text-green-800">Aceito</span> : <span className="px-2 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pendente</span>}
-                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(user)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
                                         <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="text-slate-500 hover:text-slate-700">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
@@ -183,12 +226,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                                             <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                                                 <div className="py-1" role="menu" aria-orientation="vertical">
                                                     <button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button>
+                                                    {isBanned ? (
+                                                        <button onClick={() => handleRequestAction(user, 'enable')} className="w-full text-left block px-4 py-2 text-sm text-green-700 hover:bg-green-50">Reativar Líder</button>
+                                                    ) : (
+                                                        <button onClick={() => handleRequestAction(user, 'disable')} className="w-full text-left block px-4 py-2 text-sm text-red-700 hover:bg-red-50">Desativar Líder</button>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
                                     </td>
                                 </tr>
-                            ))}
+                                )
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -201,6 +250,17 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                     onSave={handleUpdateUser}
                 />
             )}
+            <ConfirmationModal
+                isOpen={isActionModalOpen}
+                onClose={() => setIsActionModalOpen(false)}
+                onConfirm={handleConfirmAction}
+                title={actionType === 'disable' ? 'Confirmar Desativação' : 'Confirmar Reativação'}
+                message={
+                    actionType === 'disable' 
+                    ? `Tem certeza que deseja desativar ${userToAction?.email}? Ele não poderá mais fazer login no sistema.`
+                    : `Tem certeza que deseja reativar ${userToAction?.email}? Ele poderá acessar o sistema novamente.`
+                }
+            />
         </div>
     );
 };

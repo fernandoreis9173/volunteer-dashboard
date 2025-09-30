@@ -62,7 +62,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
                 <div className="space-y-6">
                     <div>
                         <label htmlFor="user-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão Principal</label>
-                        <select id="user-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
+                        <select id="user-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
                             <option value="leader">Líder</option>
                             <option value="admin">Admin</option>
                         </select>

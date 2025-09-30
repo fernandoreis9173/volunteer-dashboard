@@ -132,16 +132,19 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ supabase, isFormOpen, set
     }
     
     if (conflictingSchedules && conflictingSchedules.length > 0) {
-        const conflictingNames = [
-          ...new Set(
-            conflictingSchedules.flatMap((s: any) => 
-              (s.schedule_volunteers || []).map((sv: any) => sv.volunteers?.name)
-            ).filter(Boolean)
-          ),
-        ];
-        setSaveError(`Conflito! Voluntário(s) já escalado(s) neste dia: ${conflictingNames.join(', ')}.`);
-        setIsSaving(false);
-        return;
+        // FIX: Replaced reduce().map() with flatMap() for safer and more concise data handling.
+        const conflictingNames = conflictingSchedules
+          .flatMap((schedule: any) => schedule.schedule_volunteers || [])
+          .map((sv: any) => sv.volunteers?.name)
+          .filter(Boolean);
+
+        const uniqueConflictingNames = [...new Set(conflictingNames)];
+
+        if (uniqueConflictingNames.length > 0) {
+            setSaveError(`Conflito! Voluntário(s) já escalado(s) neste dia: ${uniqueConflictingNames.join(', ')}.`);
+            setIsSaving(false);
+            return;
+        }
     }
 
     if (id) { 
@@ -191,7 +194,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ supabase, isFormOpen, set
       const matchesSearch = query === '' ||
         schedule.event_name.toLowerCase().includes(query) ||
         (schedule.ministries?.name || '').toLowerCase().includes(query) ||
-        schedule.schedule_volunteers.some(sv => sv.volunteers?.name.toLowerCase().includes(query));
+        (Array.isArray(schedule.schedule_volunteers) && schedule.schedule_volunteers.some(sv => sv.volunteers?.name.toLowerCase().includes(query)));
 
       const matchesMinistry = selectedMinistry === 'all' || 
         String(schedule.ministry_id) === selectedMinistry;
@@ -253,7 +256,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ supabase, isFormOpen, set
                                     <p className="font-semibold text-slate-800">
                                         {schedule.event_name} • <span className="text-blue-600">{schedule.ministries?.name}</span>
                                     </p>
-                                    <p className="text-sm text-slate-600">{schedule.schedule_volunteers.map(sv => sv.volunteers?.name).filter(Boolean).join(', ')}</p>
+                                    <p className="text-sm text-slate-600">{Array.isArray(schedule.schedule_volunteers) && schedule.schedule_volunteers.map(sv => sv.volunteers?.name).filter(Boolean).join(', ')}</p>
                                     <div className="flex items-center space-x-2 text-xs text-slate-500 mt-1">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         <span>{schedule.start_time} - {schedule.end_time}</span>
@@ -331,7 +334,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ supabase, isFormOpen, set
 
       <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3 text-sm">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-        <div>
+        <div className="flex-1">
           <p className="font-bold text-red-700">REGRA RÍGIDA: Um voluntário só pode servir em UM ministério por dia</p>
           <p className="text-red-600">Exemplo: Se escalado na Comunicação no domingo, não pode ser escalado em outro ministério no mesmo domingo.</p>
         </div>

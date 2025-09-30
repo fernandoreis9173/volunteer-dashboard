@@ -17,12 +17,12 @@ const Dashboard: React.FC<DashboardProps> = ({ supabase }) => {
     schedulesTomorrow: '0',
   });
   const [showTodaySchedules, setShowTodaySchedules] = useState(false);
+  const [showUpcomingSchedules, setShowUpcomingSchedules] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
       if (!supabase) return;
       
-      // Timezone-safe date calculation
       const todayDate = new Date();
       const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
 
@@ -30,37 +30,29 @@ const Dashboard: React.FC<DashboardProps> = ({ supabase }) => {
       tomorrowDate.setDate(todayDate.getDate() + 1);
       const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
 
-
-      // Fetch active volunteers count
       const { count: volunteersCount, error: volunteersError } = await supabase
-        .from('volunteers')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'Ativo');
+        .from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo');
 
-      // Fetch active ministries count
       const { count: ministriesCount, error: ministriesError } = await supabase
-        .from('ministries')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'Ativo');
+        .from('ministries').select('*', { count: 'exact', head: true }).eq('status', 'Ativo');
 
-      // Fetch schedules for today
       const { count: schedulesTodayCount, error: schedulesTodayError } = await supabase
-        .from('schedules')
-        .select('*', { count: 'exact', head: true })
-        .eq('date', today);
+        .from('schedules').select('*', { count: 'exact', head: true }).eq('date', today);
       
-      // Fetch schedules for tomorrow
       const { count: schedulesTomorrowCount, error: schedulesTomorrowError } = await supabase
-        .from('schedules')
-        .select('*', { count: 'exact', head: true })
-        .eq('date', tomorrow);
+        .from('schedules').select('*', { count: 'exact', head: true }).eq('date', tomorrow);
+        
+      const { count: upcomingSchedulesCount, error: upcomingSchedulesError } = await supabase
+        .from('schedules').select('*', { count: 'exact', head: true }).gte('date', tomorrow);
 
       if (volunteersError) console.error('Error fetching volunteers count', volunteersError);
       if (ministriesError) console.error('Error fetching ministries count', ministriesError);
       if (schedulesTodayError) console.error('Error fetching schedules for today', schedulesTodayError);
       if (schedulesTomorrowError) console.error('Error fetching schedules for tomorrow', schedulesTomorrowError);
+      if (upcomingSchedulesError) console.error('Error fetching upcoming schedules', upcomingSchedulesError);
       
       setShowTodaySchedules((schedulesTodayCount ?? 0) > 0);
+      setShowUpcomingSchedules((upcomingSchedulesCount ?? 0) > 0);
 
       setStats({
         activeVolunteers: (volunteersCount ?? 0).toString(),
@@ -108,13 +100,19 @@ const Dashboard: React.FC<DashboardProps> = ({ supabase }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {showTodaySchedules && <TodayShiftsList supabase={supabase} />}
-        
-        <div className={!showTodaySchedules ? 'lg:col-span-2' : ''}>
-          <UpcomingShiftsList supabase={supabase} />
+        {showTodaySchedules && (
+          <div className={!showUpcomingSchedules ? 'lg:col-span-2' : ''}>
+            <TodayShiftsList supabase={supabase} />
+          </div>
+        )}
+        {showUpcomingSchedules && (
+          <div className={!showTodaySchedules ? 'lg:col-span-2' : ''}>
+            <UpcomingShiftsList supabase={supabase} />
+          </div>
+        )}
+        <div className={!showTodaySchedules && !showUpcomingSchedules ? 'lg:col-span-3' : ''}>
+            <ActiveVolunteersList supabase={supabase} />
         </div>
-        
-        <ActiveVolunteersList supabase={supabase} />
       </div>
     </div>
   );
