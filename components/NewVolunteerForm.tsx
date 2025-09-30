@@ -156,14 +156,21 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
     const isEditing = !!initialData;
 
     const formatPhoneNumber = (value: string) => {
-        if (!value) return value;
-        const phoneNumber = value.replace(/[^\d]/g, '');
-        const phoneNumberLength = phoneNumber.length;
-        if (phoneNumberLength < 3) return `(${phoneNumber}`;
-        if (phoneNumberLength < 8) {
+        if (!value) return '';
+
+        const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
+        const { length } = phoneNumber;
+
+        if (length <= 2) {
+            return `(${phoneNumber}`;
+        }
+        if (length <= 6) {
             return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
         }
-        return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`;
+        if (length <= 10) {
+            return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
+        }
+        return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
     };
 
     useEffect(() => {

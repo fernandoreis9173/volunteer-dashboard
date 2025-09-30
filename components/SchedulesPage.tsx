@@ -132,11 +132,18 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ supabase, isFormOpen, set
     }
     
     if (conflictingSchedules && conflictingSchedules.length > 0) {
-        // FIX: Replaced reduce().map() with flatMap() for safer and more concise data handling.
+        // FIX: Replaced the potentially unsafe flatMap chain with a safer reduce method to handle cases where `schedule_volunteers` might not be an array, preventing runtime errors.
         const conflictingNames = conflictingSchedules
-          .flatMap((schedule: any) => schedule.schedule_volunteers || [])
-          .map((sv: any) => sv.volunteers?.name)
-          .filter(Boolean);
+          .reduce((allNames: string[], schedule: any) => {
+            if (Array.isArray(schedule.schedule_volunteers)) {
+              schedule.schedule_volunteers.forEach((sv: any) => {
+                if (sv.volunteers?.name) {
+                  allNames.push(sv.volunteers.name);
+                }
+              });
+            }
+            return allNames;
+          }, []);
 
         const uniqueConflictingNames = [...new Set(conflictingNames)];
 

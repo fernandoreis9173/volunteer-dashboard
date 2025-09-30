@@ -10,7 +10,7 @@ interface AdminPageProps {
 
 const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const [email, setEmail] = useState('');
-    const [role, setRole] = useState('leader');
+    const [role, setRole] = useState('lider');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -33,11 +33,22 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         setListLoading(true);
         setListError(null);
         
-        const { data, error: fetchError } = await supabase.functions.invoke('list-invited-users');
+        const { data, error: fetchError } = await supabase.functions.invoke('list-users');
 
         if (fetchError) {
-            setListError('Falha ao carregar a lista de convidados.');
+            let detailedError = fetchError.message;
+            // The Supabase client puts the JSON error response in the `context` property.
+            // This allows us to show a more specific error message from the function.
+            if (fetchError.context && fetchError.context.error) {
+                detailedError = fetchError.context.error;
+            }
+            setListError(`Falha ao carregar a lista de convidados: ${detailedError}`);
             console.error('Error fetching invited users:', fetchError);
+        } else if (data && data.error) {
+            // Also handle cases where the function returns 200 OK but with an error message in the body
+            setListError(`Erro retornado pela função: ${data.error}`);
+            console.error('Error payload from function:', data.error);
+            setInvitedUsers([]);
         } else {
             setInvitedUsers(data.users || []);
         }
@@ -74,7 +85,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         } else {
             setSuccessMessage(`Convite enviado com sucesso para ${email}!`);
             setEmail('');
-            setRole('leader');
+            setRole('lider');
             await fetchInvitedUsers();
         }
 
@@ -84,7 +95,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const handleUpdateUser = async (userId: string, newRole: string, newPermissions: string[]) => {
         if (!supabase) return;
         
-        const { data, error } = await supabase.functions.invoke('update-user-permissions', {
+        const { data, error } = await supabase.functions.invoke('update-permissions', {
             body: { userId, role: newRole, permissions: newPermissions }
         });
 
@@ -135,12 +146,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const getRoleForDisplay = (user: User) => {
         const userRole = user.user_metadata?.role || user.user_metadata?.papel;
         if (userRole === 'admin') return 'Admin';
-        if (userRole === 'leader' || userRole === 'líder') return 'Líder';
+        if (userRole === 'leader' || userRole === 'líder' || userRole === 'lider') return 'Líder';
         return 'N/A';
     };
     
     const getStatusBadge = (user: User) => {
-        const isBanned = user.banned_until && new Date(user.banned_until) > new Date();
+        // FIX: Cast `user` to `any` to access `banned_until`, as it's not in the default `User` type.
+        const isBanned = (user as any).banned_until && new Date((user as any).banned_until) > new Date();
         if (isBanned) {
             return <span className="px-2 text-xs font-semibold rounded-full bg-red-100 text-red-800">Inativo</span>;
         }
@@ -173,7 +185,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                         <div>
                             <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
                             <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
-                                <option value="leader">Líder de Ministério</option>
+                                <option value="lider">Líder de Ministério</option>
                                 <option value="admin">Admin (Líder Geral)</option>
                             </select>
                         </div>
@@ -210,8 +222,11 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                                 <tr><td colSpan={5} className="px-6 py-4 text-center">Carregando...</td></tr>
                             ) : listError ? (
                                 <tr><td colSpan={5} className="px-6 py-4 text-center text-red-500">{listError}</td></tr>
+                            ) : invitedUsers.length === 0 ? (
+                                <tr><td colSpan={5} className="px-6 py-4 text-center text-slate-500">Nenhum líder encontrado.</td></tr>
                             ) : invitedUsers.map(user => {
-                                const isBanned = user.banned_until && new Date(user.banned_until) > new Date();
+                                // FIX: Cast `user` to `any` to access `banned_until`, as it's not in the default `User` type.
+                                const isBanned = (user as any).banned_until && new Date((user as any).banned_until) > new Date();
                                 return (
                                 <tr key={user.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email}</td>

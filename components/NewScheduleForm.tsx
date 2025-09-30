@@ -133,17 +133,18 @@ const NewScheduleForm: React.FC<NewScheduleFormProps> = ({ supabase, initialData
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-                 <div>
-                    <label htmlFor="event_name" className="block text-sm font-medium text-slate-700 mb-1">Título do Evento/Atividade *</label>
-                    <input type="text" name="event_name" id="event_name" value={formData.event_name} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm text-slate-900" />
-                </div>
-                
-                 <div>
-                    <label htmlFor="ministry_id" className="block text-sm font-medium text-slate-700 mb-1">Ministério *</label>
-                    <select name="ministry_id" id="ministry_id" value={formData.ministry_id} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm text-slate-900">
-                       <option value="" disabled>Selecione um ministério</option>
-                       {allMinistries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label htmlFor="event_name" className="block text-sm font-medium text-slate-700 mb-1">Título do Evento/Atividade *</label>
+                        <input type="text" name="event_name" id="event_name" value={formData.event_name} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm text-slate-900" />
+                    </div>
+                    <div>
+                        <label htmlFor="ministry_id" className="block text-sm font-medium text-slate-700 mb-1">Ministério *</label>
+                        <select name="ministry_id" id="ministry_id" value={formData.ministry_id} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm text-slate-900">
+                        <option value="" disabled>Selecione um ministério</option>
+                        {allMinistries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </select>
+                    </div>
                 </div>
 
                  <div>

@@ -18,12 +18,12 @@ const allPages: { id: Page; label: string }[] = [
 ];
 
 const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, onSave }) => {
-    const [role, setRole] = useState('leader');
+    const [role, setRole] = useState('lider');
     const [pagePermissions, setPagePermissions] = useState<string[]>([]);
     
     useEffect(() => {
         if (user) {
-            setRole(user.user_metadata?.role || 'leader');
+            setRole(user.user_metadata?.role || 'lider');
             const currentPermissions = user.user_metadata?.page_permissions;
             // If user has no permissions set, default based on role
             if (!currentPermissions || !Array.isArray(currentPermissions)) {
@@ -63,7 +63,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
                     <div>
                         <label htmlFor="user-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão Principal</label>
                         <select id="user-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
-                            <option value="leader">Líder</option>
+                            <option value="lider">Líder</option>
                             <option value="admin">Admin</option>
                         </select>
                     </div>
