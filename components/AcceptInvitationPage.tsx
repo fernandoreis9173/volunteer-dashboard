@@ -54,6 +54,30 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
             if (updateError) {
                 throw updateError;
             }
+            
+            // Create the corresponding leader profile
+            const nameParts = name.trim().split(' ');
+            const initials = ((nameParts[0]?.[0] || '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')).toUpperCase();
+
+            const { error: insertError } = await supabase
+                .from('leaders')
+                .insert({
+                    name: name.trim(),
+                    email: email,
+                    status: 'Ativo',
+                    initials: initials,
+                    phone: '',
+                    ministries: [],
+                    skills: [],
+                    availability: [],
+                });
+
+            if (insertError) {
+                // Log the error but don't block the user, as the auth part was successful.
+                console.error("Failed to create leader profile:", insertError);
+                setError("Sua conta foi criada, mas houve um problema ao criar seu perfil de líder. Por favor, contate o suporte.")
+            }
+
 
             setSuccessMessage('Sua conta foi criada com sucesso! Você será redirecionado para o login.');
             

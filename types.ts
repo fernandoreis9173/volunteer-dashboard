@@ -45,6 +45,19 @@ export interface DetailedVolunteer {
     created_at?: string;
 }
 
+export interface Leader {
+    id?: number;
+    name: string;
+    email: string;
+    phone: string;
+    initials: string;
+    status: 'Ativo' | 'Inativo';
+    ministries: string[];
+    skills: string[];
+    availability: string[];
+    created_at?: string;
+}
+
 export interface Ministry {
   id?: number;
   name: string;

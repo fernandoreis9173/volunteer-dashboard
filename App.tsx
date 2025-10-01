@@ -8,6 +8,7 @@ import AdminPage from './components/AdminPage';
 import ApiConfigPage from './components/ApiConfigPage';
 import LoginPage from './components/LoginPage';
 import AcceptInvitationPage from './components/AcceptInvitationPage';
+import DisabledUserPage from './components/DisabledUserPage';
 import { Page, AuthView } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
@@ -22,6 +23,7 @@ const App: React.FC = () => {
   const [isScheduleFormOpen, setIsScheduleFormOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [authView, setAuthView] = useState<AuthView>('login');
+  const [isUserDisabled, setIsUserDisabled] = useState(false);
 
   const getRoleFromMetadata = (metadata: any): string | null => {
     if (!metadata) return null;
@@ -29,6 +31,25 @@ const App: React.FC = () => {
     if (role === 'líder') return 'leader';
     return role;
   }
+
+  const checkAndSetUserStatus = async (currentSession: Session | null, client: SupabaseClient) => {
+    if (!currentSession) {
+      setIsUserDisabled(false);
+      return;
+    }
+    // Logged in users are leaders/admins, so we check the `leaders` table for their status.
+    const { data: leaderProfile } = await client
+      .from('leaders')
+      .select('status')
+      .eq('email', currentSession.user.email)
+      .single();
+
+    if (leaderProfile && leaderProfile.status === 'Inativo') {
+      setIsUserDisabled(true);
+    } else {
+      setIsUserDisabled(false);
+    }
+  };
 
   useEffect(() => {
     const client = getSupabaseClient();
@@ -38,31 +59,35 @@ const App: React.FC = () => {
         setLoading(false);
         return;
     }
-
-    // This is the most reliable way to catch the invite flow.
-    // Check the URL hash when the component mounts.
+    
     const hash = window.location.hash;
     if (hash.includes('type=recovery') || hash.includes('type=invite')) {
         setAuthView('accept-invite');
     }
 
-    // Get the initial session if one exists
-    client.auth.getSession().then(({ data: { session: initialSession } }) => {
+    client.auth.getSession()
+      .then(async ({ data: { session: initialSession } }) => {
         setSession(initialSession);
         if (initialSession) {
             setUserRole(getRoleFromMetadata(initialSession.user.user_metadata));
+            await checkAndSetUserStatus(initialSession, client);
         }
-        setLoading(false);
-    });
+      })
+      .catch(err => {
+          console.error("Error getting session:", err);
+      })
+      .finally(() => {
+          setLoading(false);
+      });
 
-    // Listen for auth state changes
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange(async (_event, newSession) => {
         setSession(newSession);
         if (newSession) {
             setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
+            await checkAndSetUserStatus(newSession, client);
         } else {
-            // If user signs out, reset everything and go to login
             setUserRole(null);
+            setIsUserDisabled(false);
             setAuthView('login');
         }
     });
@@ -125,8 +150,6 @@ const App: React.FC = () => {
     return <ApiConfigPage />;
   }
   
-  // CRITICAL FIX: Prioritize the auth view over the session state.
-  // If the user is in the 'accept-invite' flow, show that page regardless of temporary session.
   if (authView === 'accept-invite') {
       return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
   }
@@ -135,6 +158,9 @@ const App: React.FC = () => {
       return <LoginPage supabase={supabase} setAuthView={setAuthView} />;
   }
 
+  if (isUserDisabled) {
+    return <DisabledUserPage supabase={supabase} />;
+  }
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans overflow-hidden">

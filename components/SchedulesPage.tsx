@@ -263,7 +263,8 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ supabase, isFormOpen, set
                                     <p className="font-semibold text-slate-800">
                                         {schedule.event_name} • <span className="text-blue-600">{schedule.ministries?.name}</span>
                                     </p>
-                                    <p className="text-sm text-slate-600">{Array.isArray(schedule.schedule_volunteers) && schedule.schedule_volunteers.map(sv => sv.volunteers?.name).filter(Boolean).join(', ')}</p>
+                                    {/* FIX: Cast `schedule.schedule_volunteers` to `any[]` after the Array.isArray check to resolve the TypeScript error "Property 'map' does not exist on type 'unknown'". This ensures the code compiles correctly while maintaining runtime safety. */}
+                                    <p className="text-sm text-slate-600">{Array.isArray(schedule.schedule_volunteers) && (schedule.schedule_volunteers as any[]).map(sv => sv.volunteers?.name).filter(Boolean).join(', ')}</p>
                                     <div className="flex items-center space-x-2 text-xs text-slate-500 mt-1">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         <span>{schedule.start_time} - {schedule.end_time}</span>

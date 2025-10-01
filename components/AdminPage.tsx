@@ -8,6 +8,12 @@ interface AdminPageProps {
   supabase: SupabaseClient | null;
 }
 
+// FIX: Changed EnrichedUser from an interface to a type alias using an intersection.
+// This resolves an issue where TypeScript was not correctly inheriting properties from the User type.
+type EnrichedUser = User & {
+    app_status?: 'Ativo' | 'Inativo' | 'Pendente';
+};
+
 const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const [email, setEmail] = useState('');
     const [role, setRole] = useState('lider');
@@ -15,7 +21,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     
-    const [invitedUsers, setInvitedUsers] = useState<User[]>([]);
+    const [invitedUsers, setInvitedUsers] = useState<EnrichedUser[]>([]);
     const [listLoading, setListLoading] = useState(true);
     const [listError, setListError] = useState<string | null>(null);
 
@@ -27,6 +33,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const [userToAction, setUserToAction] = useState<User | null>(null);
     const [actionType, setActionType] = useState<'disable' | 'enable' | null>(null);
 
+    const getDetailedError = (error: any): string => {
+        if (error?.context?.error) {
+            return error.context.error;
+        }
+        return error?.message || 'Ocorreu um erro desconhecido.';
+    };
+
 
     const fetchInvitedUsers = async () => {
         if (!supabase) return;
@@ -36,16 +49,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         const { data, error: fetchError } = await supabase.functions.invoke('list-users');
 
         if (fetchError) {
-            let detailedError = fetchError.message;
-            // The Supabase client puts the JSON error response in the `context` property.
-            // This allows us to show a more specific error message from the function.
-            if (fetchError.context && fetchError.context.error) {
-                detailedError = fetchError.context.error;
-            }
-            setListError(`Falha ao carregar a lista de convidados: ${detailedError}`);
+            setListError(`Falha ao carregar a lista de convidados: ${getDetailedError(fetchError)}`);
             console.error('Error fetching invited users:', fetchError);
         } else if (data && data.error) {
-            // Also handle cases where the function returns 200 OK but with an error message in the body
             setListError(`Erro retornado pela função: ${data.error}`);
             console.error('Error payload from function:', data.error);
             setInvitedUsers([]);
@@ -81,7 +87,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
 
         if (invokeError) {
             console.error('Error inviting user:', invokeError);
-            setError(`Falha ao enviar convite: ${invokeError.message}`);
+            setError(`Falha ao enviar convite: ${getDetailedError(invokeError)}`);
         } else {
             setSuccessMessage(`Convite enviado com sucesso para ${email}!`);
             setEmail('');
@@ -100,7 +106,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         });
 
         if (error) {
-            alert(`Falha ao atualizar permissões: ${error.message}`);
+            alert(`Falha ao atualizar permissões: ${getDetailedError(error)}`);
         } else {
             await fetchInvitedUsers();
             setIsEditModalOpen(false);
@@ -116,15 +122,15 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
 
     const handleConfirmAction = async () => {
         if (!userToAction || !actionType || !supabase) return;
-        
-        const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
 
+        const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
+        
         const { error } = await supabase.functions.invoke(functionName, {
-            body: { userId: userToAction.id }
+            body: { userId: userToAction.id },
         });
 
         if (error) {
-            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${error.message}`);
+            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getDetailedError(error)}`);
         } else {
             await fetchInvitedUsers();
         }
@@ -150,16 +156,14 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         return 'N/A';
     };
     
-    const getStatusBadge = (user: User) => {
-        // FIX: Cast `user` to `any` to access `banned_until`, as it's not in the default `User` type.
-        const isBanned = (user as any).banned_until && new Date((user as any).banned_until) > new Date();
-        if (isBanned) {
-            return <span className="px-2 text-xs font-semibold rounded-full bg-red-100 text-red-800">Inativo</span>;
+    const getStatusBadge = (user: EnrichedUser) => {
+        if (user.app_status === 'Inativo') {
+            return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">Inativo</span>;
         }
         if (user.last_sign_in_at) {
-            return <span className="px-2 text-xs font-semibold rounded-full bg-green-100 text-green-800">Aceito</span>;
+            return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ativo</span>;
         }
-        return <span className="px-2 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pendente</span>;
+        return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pendente</span>;
     };
 
 
@@ -225,8 +229,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                             ) : invitedUsers.length === 0 ? (
                                 <tr><td colSpan={5} className="px-6 py-4 text-center text-slate-500">Nenhum líder encontrado.</td></tr>
                             ) : invitedUsers.map(user => {
-                                // FIX: Cast `user` to `any` to access `banned_until`, as it's not in the default `User` type.
-                                const isBanned = (user as any).banned_until && new Date((user as any).banned_until) > new Date();
                                 return (
                                 <tr key={user.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email}</td>
@@ -241,7 +243,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                                             <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
                                                 <div className="py-1" role="menu" aria-orientation="vertical">
                                                     <button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button>
-                                                    {isBanned ? (
+                                                    {user.app_status === 'Inativo' ? (
                                                         <button onClick={() => handleRequestAction(user, 'enable')} className="w-full text-left block px-4 py-2 text-sm text-green-700 hover:bg-green-50">Reativar Líder</button>
                                                     ) : (
                                                         <button onClick={() => handleRequestAction(user, 'disable')} className="w-full text-left block px-4 py-2 text-sm text-red-700 hover:bg-red-50">Desativar Líder</button>
@@ -272,7 +274,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                 title={actionType === 'disable' ? 'Confirmar Desativação' : 'Confirmar Reativação'}
                 message={
                     actionType === 'disable' 
-                    ? `Tem certeza que deseja desativar ${userToAction?.email}? Ele não poderá mais fazer login no sistema.`
+                    ? `Tem certeza que deseja desativar ${userToAction?.email}? Ele não poderá mais acessar o sistema.`
                     : `Tem certeza que deseja reativar ${userToAction?.email}? Ele poderá acessar o sistema novamente.`
                 }
             />
