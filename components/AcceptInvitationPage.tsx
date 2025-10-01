@@ -46,20 +46,25 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
         setSuccessMessage(null);
 
         try {
-            const { data: updateData, error: updateError } = await supabase.auth.updateUser({
+            // Step 1: Update the user's password and metadata
+            const { error: updateError } = await supabase.auth.updateUser({
                 password: password,
-                data: { name: name.trim() } // This updates user_metadata
+                data: { name: name.trim() }
             });
 
             if (updateError) {
                 throw updateError;
             }
-            const user = updateData.user;
-            if (!user) {
-                throw new Error("Não foi possível obter os dados do usuário após a atualização.");
+
+            // Step 2: Get the fresh, updated session to reliably get the user ID
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+            if (sessionError || !session?.user) {
+                throw sessionError || new Error("Sessão do usuário não encontrada após atualização. Não foi possível criar o perfil.");
             }
+            const user = session.user;
             
-            // Create the corresponding leader profile
+            // Step 3: Create the corresponding leader profile with the correct user_id
             const nameParts = name.trim().split(' ');
             const initials = ((nameParts[0]?.[0] || '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')).toUpperCase();
 
@@ -68,7 +73,7 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
                 .insert({
                     user_id: user.id,
                     name: name.trim(),
-                    email: email,
+                    email: user.email!,
                     status: 'Ativo',
                     initials: initials,
                     phone: '',
@@ -79,14 +84,12 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
 
             if (insertError) {
                 console.error("Failed to create leader profile:", insertError);
-                // Throw an error to be caught by the catch block, stopping the success flow.
                 throw new Error("Sua conta foi criada, mas houve um problema ao criar seu perfil de líder. Por favor, contate o suporte.");
             }
 
-
+            // Step 4: Success flow
             setSuccessMessage('Sua conta foi criada com sucesso! Você será redirecionado para o login.');
             
-            // Sign out the temporary session to force a fresh login
             await supabase.auth.signOut();
 
             setTimeout(() => {
