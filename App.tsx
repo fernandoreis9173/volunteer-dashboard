@@ -37,13 +37,52 @@ const App: React.FC = () => {
       setIsUserDisabled(false);
       return;
     }
-    // Logged in users are leaders/admins, so we check the `leaders` table for their status.
-    const { data: leaderProfile } = await client
+
+    const user = currentSession.user;
+
+    const { data: leaderProfile, error } = await client
       .from('leaders')
       .select('status')
-      .eq('email', currentSession.user.email)
+      .eq('email', user.email)
       .single();
 
+    // Handle case where profile does not exist to prevent infinite loading
+    // PGRST116: "The result contains 0 rows"
+    if (error && error.code === 'PGRST116') {
+      console.warn('Leader profile not found for user, creating one to sync auth and public tables.');
+      
+      const name = user.user_metadata?.name || user.email;
+      const nameParts = name.trim().split(' ');
+      const initials = ((nameParts[0]?.[0] || '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')).toUpperCase();
+
+      const { error: insertError } = await client
+          .from('leaders')
+          .insert({
+              name: name,
+              email: user.email,
+              status: 'Ativo', // Default to active
+              initials: initials,
+              phone: '',
+              ministries: [],
+              skills: [],
+              availability: [],
+          });
+
+      if (insertError) {
+          console.error("Failed to auto-create leader profile on login:", insertError);
+          // Don't disable the user if creation fails, let them proceed.
+          // The error will be logged for debugging.
+      }
+      setIsUserDisabled(false); // New user is active
+      return;
+    } else if (error) {
+        // For other errors, log them but don't crash the app
+        console.error("Error fetching leader profile:", error);
+        setIsUserDisabled(false); // Default to not disabled to avoid locking user out
+        return;
+    }
+
+    // If profile exists, check its status
     if (leaderProfile && leaderProfile.status === 'Inativo') {
       setIsUserDisabled(true);
     } else {
@@ -68,11 +107,14 @@ const App: React.FC = () => {
 
     // onAuthStateChange fires immediately with the initial session (or null),
     // making it the most reliable way to handle the initial loading state.
-    const { data: { subscription } } = client.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       if (newSession) {
         setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
-        await checkAndSetUserStatus(newSession, client);
+        // FIX: Removed `await` to make the status check non-blocking.
+        // This prevents the UI from getting stuck on "Carregando..." if the
+        // database call hangs due to RLS policies or network issues.
+        checkAndSetUserStatus(newSession, client);
       } else {
         setUserRole(null);
         setIsUserDisabled(false);

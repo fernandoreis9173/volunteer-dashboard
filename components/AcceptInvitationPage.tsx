@@ -73,9 +73,9 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
                 });
 
             if (insertError) {
-                // Log the error but don't block the user, as the auth part was successful.
                 console.error("Failed to create leader profile:", insertError);
-                setError("Sua conta foi criada, mas houve um problema ao criar seu perfil de líder. Por favor, contate o suporte.")
+                // Throw an error to be caught by the catch block, stopping the success flow.
+                throw new Error("Sua conta foi criada, mas houve um problema ao criar seu perfil de líder. Por favor, contate o suporte.");
             }
 
 
@@ -85,6 +85,7 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
             await supabase.auth.signOut();
 
             setTimeout(() => {
+                window.location.hash = ''; // Clear the hash to avoid re-entering this page
                 setAuthView('login');
             }, 3000);
 
