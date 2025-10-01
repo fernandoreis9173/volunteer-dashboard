@@ -3,14 +3,17 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 interface DisabledUserPageProps {
     supabase: SupabaseClient | null;
+    userRole: string | null;
 }
 
-const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ supabase }) => {
+const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ supabase, userRole }) => {
     const handleLogout = async () => {
         if (supabase) {
             await supabase.auth.signOut();
         }
     };
+
+    const roleDisplay = userRole === 'admin' ? 'Administrador' : 'Líder';
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200">
@@ -22,9 +25,9 @@ const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ supabase }) => {
                         </svg>
                     </div>
                 </div>
-                <h1 className="text-3xl font-bold text-slate-800">Conta Desativada</h1>
+                <h1 className="text-3xl font-bold text-slate-800">Conta de {roleDisplay} Desativada</h1>
                 <p className="text-slate-600">
-                    Sua conta foi desativada por um administrador. Você não pode mais acessar o sistema.
+                    Sua conta de {roleDisplay.toLowerCase()} foi desativada por um administrador. Você não pode mais acessar o sistema.
                 </p>
                 <p className="text-slate-500 text-sm">
                     Se você acredita que isso é um erro, por favor, entre em contato com o administrador do sistema.

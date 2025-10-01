@@ -134,7 +134,7 @@ const App: React.FC = () => {
   }
 
   if (isUserDisabled) {
-    return <DisabledUserPage supabase={supabase} />;
+    return <DisabledUserPage supabase={supabase} userRole={userRole} />;
   }
 
   return (
