@@ -26,14 +26,26 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
     
-    // Update the user with the role and permissions provided from the frontend.
+    // 1. Fetch user to get existing metadata
+    const { data: { user: existingUser }, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (getUserError) throw getUserError;
+    if (!existingUser) throw new Error(`User with ID ${userId} not found.`);
+
+    // 2. Safely merge existing metadata with new data
+    const existingMetadata = (typeof existingUser.user_metadata === 'object' && existingUser.user_metadata !== null)
+      ? existingUser.user_metadata
+      : {};
+    const newMetadata = { 
+        ...existingMetadata, 
+        role: role,
+        page_permissions: permissions
+    };
+    
+    // 3. Update the user with merged metadata
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
         userId, 
         {
-          user_metadata: { 
-            role: role,
-            page_permissions: permissions // Use the permissions from the request body.
-          }
+          user_metadata: newMetadata
         }
     );
 

@@ -21,26 +21,24 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
     
-    // Get user's email to find them in the leaders table
-    const { data: { user }, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    // 1. Fetch the user to get existing metadata
+    const { data: { user }, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId)
     if (getUserError) throw getUserError;
-    if (!user) throw new Error("Usuário não encontrado.");
+    if (!user) throw new Error(`Usuário com ID ${userId} não encontrado.`);
 
-    const { email, user_metadata } = user;
-    const name = user_metadata?.name || email;
-    const initials = name.trim().split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+    // 2. Safely merge metadata, ensuring it's an object
+    const existingMetadata = (typeof user.user_metadata === 'object' && user.user_metadata !== null)
+      ? user.user_metadata
+      : {};
+    const newMetadata = { ...existingMetadata, status: 'Inativo' };
 
-    // Upsert the leader profile, ensuring it exists and setting its status to 'Inativo'
-    const { error: upsertError } = await supabaseAdmin
-      .from('leaders')
-      .upsert({
-        email: email,
-        name: name,
-        initials: initials,
-        status: 'Inativo'
-      }, { onConflict: 'email' });
+    // 3. Update the user with the merged metadata to avoid data loss
+    const { data: updatedUserData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      { user_metadata: newMetadata }
+    )
 
-    if (upsertError) throw upsertError;
+    if (updateError) throw updateError;
 
     return new Response(JSON.stringify({ message: 'Líder desativado com sucesso.' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
