@@ -75,7 +75,8 @@ const App: React.FC = () => {
     } else if (error) {
         console.error("Error fetching leader profile:", error);
         setIsUserDisabled(false);
-        return;
+        // Throw the error so the race condition handler can catch it if needed
+        throw error;
     }
 
     if (leaderProfile && leaderProfile.status === 'Inativo') {
@@ -99,19 +100,31 @@ const App: React.FC = () => {
       setAuthView('accept-invite');
     }
 
-    const { data: { subscription } } = client.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      
       if (newSession) {
         setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
-        // FIX: Re-added `await` to make the status check blocking.
-        // This ensures the user's status is known *before* the loading screen is hidden,
-        // which prevents the main UI from flashing for a disabled user.
-        await checkAndSetUserStatus(newSession, client);
+
+        const statusCheckPromise = checkAndSetUserStatus(newSession, client);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('A verificação de status demorou muito.')), 8000)
+        );
+
+        Promise.race([statusCheckPromise, timeoutPromise])
+          .catch(error => {
+            console.error("Falha ao verificar o status do usuário ou timeout:", error.message);
+            // Default to a safe state (not disabled) to prevent locking out users due to network/DB issues.
+            setIsUserDisabled(false);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
       } else {
         setUserRole(null);
         setIsUserDisabled(false);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
