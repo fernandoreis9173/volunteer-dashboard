@@ -46,48 +46,19 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
         setSuccessMessage(null);
 
         try {
-            // Step 1: Update the user's password and metadata
+            // Update the user's password and set metadata in a single, atomic operation
             const { error: updateError } = await supabase.auth.updateUser({
                 password: password,
-                data: { name: name.trim() }
+                data: { 
+                    name: name.trim(),
+                    status: 'Ativo' // Set the user as Active directly in the auth metadata
+                }
             });
 
             if (updateError) {
                 throw updateError;
             }
 
-            // Step 2: Get the fresh, updated session to reliably get the user ID
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-            if (sessionError || !session?.user) {
-                throw sessionError || new Error("Sessão do usuário não encontrada após atualização. Não foi possível criar o perfil.");
-            }
-            const user = session.user;
-            
-            // Step 3: Create the corresponding leader profile with the correct user_id
-            const nameParts = name.trim().split(' ');
-            const initials = ((nameParts[0]?.[0] || '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')).toUpperCase();
-
-            const { error: insertError } = await supabase
-                .from('leaders')
-                .insert({
-                    user_id: user.id,
-                    name: name.trim(),
-                    email: user.email!,
-                    status: 'Ativo',
-                    initials: initials,
-                    phone: '',
-                    ministries: [],
-                    skills: [],
-                    availability: [],
-                });
-
-            if (insertError) {
-                console.error("Failed to create leader profile:", insertError);
-                throw new Error("Sua conta foi criada, mas houve um problema ao criar seu perfil de líder. Por favor, contate o suporte.");
-            }
-
-            // Step 4: Success flow
             setSuccessMessage('Sua conta foi criada com sucesso! Você será redirecionado para o login.');
             
             await supabase.auth.signOut();
