@@ -46,13 +46,17 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
         setSuccessMessage(null);
 
         try {
-            const { error: updateError } = await supabase.auth.updateUser({
+            const { data: updateData, error: updateError } = await supabase.auth.updateUser({
                 password: password,
                 data: { name: name.trim() } // This updates user_metadata
             });
 
             if (updateError) {
                 throw updateError;
+            }
+            const user = updateData.user;
+            if (!user) {
+                throw new Error("Não foi possível obter os dados do usuário após a atualização.");
             }
             
             // Create the corresponding leader profile
@@ -62,6 +66,7 @@ const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, s
             const { error: insertError } = await supabase
                 .from('leaders')
                 .insert({
+                    user_id: user.id,
                     name: name.trim(),
                     email: email,
                     status: 'Ativo',

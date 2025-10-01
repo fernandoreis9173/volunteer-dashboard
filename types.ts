@@ -49,6 +49,7 @@ export interface DetailedVolunteer {
 // The structure is based on the usage in Leader-related components and is similar to DetailedVolunteer.
 export interface Leader {
     id?: number;
+    user_id?: string;
     name: string;
     email: string;
     phone: string;
