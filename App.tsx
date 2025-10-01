@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [isUserDisabled, setIsUserDisabled] = useState(false);
+  const [statusCheckError, setStatusCheckError] = useState<string | null>(null);
 
   const getRoleFromMetadata = (metadata: any): string | null => {
     if (!metadata) return null;
@@ -75,7 +76,6 @@ const App: React.FC = () => {
     } else if (error) {
         console.error("Error fetching leader profile:", error);
         setIsUserDisabled(false);
-        // Throw the error so the race condition handler can catch it if needed
         throw error;
     }
 
@@ -102,6 +102,7 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      setStatusCheckError(null);
       
       if (newSession) {
         setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
@@ -113,9 +114,9 @@ const App: React.FC = () => {
 
         Promise.race([statusCheckPromise, timeoutPromise])
           .catch(error => {
+            const friendlyError = "Não foi possível verificar o status da sua conta. A conexão com o servidor falhou ou demorou muito. Por favor, recarregue a página e tente novamente.";
             console.error("Falha ao verificar o status do usuário ou timeout:", error.message);
-            // Default to a safe state (not disabled) to prevent locking out users due to network/DB issues.
-            setIsUserDisabled(false);
+            setStatusCheckError(friendlyError);
           })
           .finally(() => {
             setLoading(false);
@@ -191,6 +192,34 @@ const App: React.FC = () => {
 
   if (!session) {
       return <LoginPage supabase={supabase} setAuthView={setAuthView} />;
+  }
+
+  if (statusCheckError) {
+    return (
+       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200">
+            <div className="w-full max-w-lg p-8 space-y-6 bg-white rounded-2xl shadow-lg text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="p-3 bg-red-500 text-white rounded-xl">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                </div>
+                <h1 className="text-3xl font-bold text-slate-800">Erro de Conexão</h1>
+                <p className="text-slate-600">
+                    {statusCheckError}
+                </p>
+                <div className="pt-4">
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-blue-600 text-base font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                        Recarregar Página
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
   }
 
   if (isUserDisabled) {
