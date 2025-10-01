@@ -8,11 +8,9 @@ interface AdminPageProps {
   supabase: SupabaseClient | null;
 }
 
-// FIX: Changed EnrichedUser from an interface to a type alias using an intersection.
-// This resolves an issue where TypeScript was not correctly inheriting properties from the User type.
-type EnrichedUser = User & {
+interface EnrichedUser extends User {
     app_status?: 'Ativo' | 'Inativo' | 'Pendente';
-};
+}
 
 const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const [email, setEmail] = useState('');

@@ -56,44 +56,33 @@ const App: React.FC = () => {
     setSupabase(client);
 
     if (!client) {
-        setLoading(false);
-        return;
+      setLoading(false);
+      return;
     }
-    
+
+    // Handle invite/recovery flows from URL hash before auth listener
     const hash = window.location.hash;
     if (hash.includes('type=recovery') || hash.includes('type=invite')) {
-        setAuthView('accept-invite');
+      setAuthView('accept-invite');
     }
 
-    client.auth.getSession()
-      .then(async ({ data: { session: initialSession } }) => {
-        setSession(initialSession);
-        if (initialSession) {
-            setUserRole(getRoleFromMetadata(initialSession.user.user_metadata));
-            await checkAndSetUserStatus(initialSession, client);
-        }
-      })
-      .catch(err => {
-          console.error("Error getting session:", err);
-      })
-      .finally(() => {
-          setLoading(false);
-      });
-
+    // onAuthStateChange fires immediately with the initial session (or null),
+    // making it the most reliable way to handle the initial loading state.
     const { data: { subscription } } = client.auth.onAuthStateChange(async (_event, newSession) => {
-        setSession(newSession);
-        if (newSession) {
-            setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
-            await checkAndSetUserStatus(newSession, client);
-        } else {
-            setUserRole(null);
-            setIsUserDisabled(false);
-            setAuthView('login');
-        }
+      setSession(newSession);
+      if (newSession) {
+        setUserRole(getRoleFromMetadata(newSession.user.user_metadata));
+        await checkAndSetUserStatus(newSession, client);
+      } else {
+        setUserRole(null);
+        setIsUserDisabled(false);
+      }
+      // This is the crucial part: once we have the initial auth state, we're done loading.
+      setLoading(false);
     });
 
     return () => {
-        subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
   

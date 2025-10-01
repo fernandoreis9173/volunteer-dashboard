@@ -45,6 +45,8 @@ export interface DetailedVolunteer {
     created_at?: string;
 }
 
+// FIX: Added the 'Leader' interface, which was missing and causing import errors in multiple components.
+// The structure is based on the usage in Leader-related components and is similar to DetailedVolunteer.
 export interface Leader {
     id?: number;
     name: string;
