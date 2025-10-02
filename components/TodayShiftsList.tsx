@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import type { Schedule } from '../types';
-import { SupabaseClient } from '@supabase/supabase-js';
+import React from 'react';
+import type { Event } from '../types';
 
 interface TodayShiftsListProps {
-  supabase: SupabaseClient | null;
+  schedules: Event[];
+  loading: boolean;
 }
 
-const ScheduleCard: React.FC<{ schedule: Schedule }> = ({ schedule }) => {
+const ScheduleCard: React.FC<{ schedule: Event }> = ({ schedule }) => {
   const formattedDate = new Date(schedule.date + 'T00:00:00').toLocaleDateString('pt-BR', {
     weekday: 'long',
     year: 'numeric',
@@ -14,12 +14,13 @@ const ScheduleCard: React.FC<{ schedule: Schedule }> = ({ schedule }) => {
     day: 'numeric',
   });
   
-  const volunteerNames = schedule.schedule_volunteers.map(sv => sv.volunteers?.name).filter(Boolean).join(', ');
+  const volunteerNames = schedule.event_volunteers.map(sv => sv.volunteers?.name).filter(Boolean).join(', ');
+  const departmentNames = schedule.event_departments.map(ed => ed.departments?.name).filter(Boolean).join(', ');
 
   return (
     <div className="bg-white p-5 rounded-xl border border-slate-200 relative">
-      <span className={`absolute top-4 right-4 text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
-      <h3 className="font-bold text-slate-800 mb-2">{schedule.event_name}</h3>
+      <span className={`absolute top-4 right-4 text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'Confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
+      <h3 className="font-bold text-slate-800 mb-2">{schedule.name}</h3>
       <div className="space-y-2 text-sm text-slate-500">
         <div className="flex items-center space-x-2">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -36,43 +37,13 @@ const ScheduleCard: React.FC<{ schedule: Schedule }> = ({ schedule }) => {
       </div>
       <div className="w-full h-px bg-slate-200 my-4"></div>
       <p className="text-sm text-slate-600">
-        {volunteerNames} • <span className="text-blue-600 font-medium">{schedule.ministries?.name}</span>
+        {volunteerNames || 'Nenhum voluntário escalado'} • <span className="text-blue-600 font-medium">{departmentNames}</span>
       </p>
     </div>
   );
 };
 
-const TodayShiftsList: React.FC<TodayShiftsListProps> = ({ supabase }) => {
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchSchedules = async () => {
-      if (!supabase) {
-        setLoading(false);
-        return;
-      };
-      setLoading(true);
-      const todayDate = new Date();
-      const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
-      
-      const { data, error } = await supabase
-        .from('schedules')
-        .select('*, ministries(name), schedule_volunteers(volunteer_id, volunteers(name))')
-        .eq('date', today)
-        .order('start_time', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching today\'s schedules', error);
-      } else {
-        setSchedules(data as Schedule[] || []);
-      }
-      setLoading(false);
-    };
-
-    fetchSchedules();
-  }, [supabase]);
-
+const TodayShiftsList: React.FC<TodayShiftsListProps> = ({ schedules, loading }) => {
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm h-full">
       <div className="flex items-center space-x-2 mb-6">

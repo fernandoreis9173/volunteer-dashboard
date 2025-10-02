@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -97,10 +98,10 @@ const App: React.FC = () => {
     switch (activePage) {
       case 'volunteers':
         return <VolunteersPage supabase={supabase} isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} />;
-      case 'ministries':
-        return <MinistriesPage supabase={supabase} />;
+      case 'departments':
+        return <MinistriesPage supabase={supabase} userRole={userRole} />;
       case 'schedules':
-        return <SchedulesPage supabase={supabase} isFormOpen={isScheduleFormOpen} setIsFormOpen={setIsScheduleFormOpen} />;
+        return <SchedulesPage supabase={supabase} isFormOpen={isScheduleFormOpen} setIsFormOpen={setIsScheduleFormOpen} userRole={userRole} />;
       case 'admin':
         if (userRole !== 'admin') {
             setActivePage('dashboard');

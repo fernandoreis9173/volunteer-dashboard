@@ -301,7 +301,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                 />
                 
                 <TagInputField 
-                    label="Ministérios de Interesse" 
+                    label="Departamentos de Interesse" 
                     placeholder="Ex: Louvor, Crianças, Jovens..." 
                     tags={ministries}
                     setTags={setMinistries}

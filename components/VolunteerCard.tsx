@@ -128,7 +128,7 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onDele
   
       {volunteer.ministries.length > 0 && (
         <div>
-          <p className="text-sm font-semibold text-slate-500 mb-2">Ministérios:</p>
+          <p className="text-sm font-semibold text-slate-500 mb-2">Departamentos:</p>
           <div className="flex flex-wrap gap-2">
             {volunteer.ministries.map(m => <Tag key={m} color="yellow">{m}</Tag>)}
           </div>

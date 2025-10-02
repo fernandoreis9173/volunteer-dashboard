@@ -1,284 +1,224 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import NewScheduleForm from './NewScheduleForm';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
-import { Schedule } from '../types';
+import EventCard from './EventCard';
+import { Event } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
 
-interface SchedulesPageProps {
+interface EventsPageProps {
   supabase: SupabaseClient | null;
   isFormOpen: boolean;
   setIsFormOpen: (isOpen: boolean) => void;
+  userRole: string | null;
 }
 
-const SchedulesPage: React.FC<SchedulesPageProps> = ({ supabase, isFormOpen, setIsFormOpen }) => {
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
+const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsFormOpen, userRole }) => {
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [scheduleToDeleteId, setScheduleToDeleteId] = useState<number | null>(null);
+  const [eventToDeleteId, setEventToDeleteId] = useState<number | null>(null);
+  const [leaderDepartmentId, setLeaderDepartmentId] = useState<number | null>(null);
 
-  // State for filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMinistry, setSelectedMinistry] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [allMinistries, setAllMinistries] = useState<{ id: number; name: string; }[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [allDepartments, setAllDepartments] = useState<{ id: number; name: string; }[]>([]);
 
+  const fetchEvents = useCallback(async () => {
+      if (!supabase) { setLoading(false); setError("Cliente Supabase não inicializado."); return; }
+      setLoading(true);
+      setError(null);
 
-  const fetchSchedules = async () => {
-    if (!supabase) {
+      let query = supabase.from('events').select(`
+        *,
+        event_departments ( department_id, departments ( id, name ) ),
+        event_volunteers ( volunteer_id, department_id, volunteers ( id, name, initials ), departments ( id, name ) )
+      `).order('date', { ascending: false }).order('start_time', { ascending: true });
+      
+      const { data, error: fetchError } = await query;
+
+      if (fetchError) {
+        console.error('Error fetching events:', fetchError);
+        setError("Não foi possível carregar os eventos.");
+        setEvents([]);
+      } else {
+        setEvents(data as Event[] || []);
+      }
       setLoading(false);
-      setError("Supabase client not initialized.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    const { data, error: fetchError } = await supabase
-      .from('schedules')
-      .select('*, ministries(id, name), schedule_volunteers(volunteer_id, volunteers(id, name, email, initials))')
-      .order('date', { ascending: true })
-      .order('start_time', { ascending: true });
-
-    if (fetchError) {
-      console.error('Error fetching schedules:', fetchError);
-      setError("Não foi possível carregar os eventos.");
-      setSchedules([]);
-    } else {
-      setSchedules(data as Schedule[] || []);
-    }
-    setLoading(false);
-  };
-  
-  useEffect(() => {
-    fetchSchedules();
-
-    const fetchMinistries = async () => {
-        if (!supabase) return;
-        const { data, error } = await supabase.from('ministries').select('id, name').order('name');
-        if (error) {
-            console.error("Error fetching ministries for filter", error);
-        } else {
-            setAllMinistries(data || []);
-        }
-    };
-    fetchMinistries();
-
   }, [supabase]);
 
-  const showForm = (schedule: Schedule | null = null) => {
-    setEditingSchedule(schedule);
+  useEffect(() => {
+    const initialize = async () => {
+        if (!supabase) return;
+        
+        if (userRole === 'leader' || userRole === 'lider') {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.email) {
+                const { data: department, error: deptError } = await supabase
+                    .from('departments')
+                    .select('id')
+                    .eq('leader_contact', user.email)
+                    .single();
+                if (deptError) console.error("Could not fetch leader's department", deptError);
+                else setLeaderDepartmentId(department?.id || null);
+            }
+        }
+        
+        const { data, error } = await supabase.from('departments').select('id, name').order('name');
+        if (error) console.error("Error fetching departments for filter", error);
+        else setAllDepartments(data || []);
+        
+        fetchEvents();
+    };
+    initialize();
+  }, [supabase, userRole, fetchEvents]);
+  
+  const showForm = (event: Event | null = null) => {
+    setEditingEvent(event);
     setSaveError(null);
     setIsFormOpen(true);
   };
   const hideForm = () => {
     setIsFormOpen(false);
-    setEditingSchedule(null);
+    setEditingEvent(null);
   };
   
   const handleDeleteRequest = (id: number) => {
-    setScheduleToDeleteId(id);
+    setEventToDeleteId(id);
     setIsDeleteModalOpen(true);
   };
 
   const handleConfirmDelete = async () => {
-    if (!scheduleToDeleteId || !supabase) return;
+    if (!eventToDeleteId || !supabase) return;
     
-    const { error: deleteJoinError } = await supabase
-      .from('schedule_volunteers')
-      .delete()
-      .eq('schedule_id', scheduleToDeleteId);
-
-    if (deleteJoinError) {
-        alert(`Falha ao remover voluntários do evento: ${deleteJoinError.message}`);
-        setIsDeleteModalOpen(false);
-        setScheduleToDeleteId(null);
-        return;
-    }
-
-    const { error: deleteError } = await supabase.from('schedules').delete().eq('id', scheduleToDeleteId);
+    const { error: deleteError } = await supabase.from('events').delete().eq('id', eventToDeleteId);
 
     if (deleteError) {
       alert(`Falha ao excluir evento: ${deleteError.message}`);
     } else {
-      setSchedules(schedules.filter(s => s.id !== scheduleToDeleteId));
+      setEvents(events.filter(e => e.id !== eventToDeleteId));
     }
     setIsDeleteModalOpen(false);
-    setScheduleToDeleteId(null);
+    setEventToDeleteId(null);
   };
 
-  const handleSaveSchedule = async (scheduleData: any) => {
-    if (!supabase) {
-      setSaveError("Conexão com o banco de dados não estabelecida.");
-      return;
-    }
+  const handleSaveEvent = async (eventPayload: any) => {
+    if (!supabase) { setSaveError("Conexão não estabelecida."); return; }
     setIsSaving(true);
     setSaveError(null);
 
-    const { id, volunteer_ids, ...dbData } = scheduleData;
-    
-    const { data: conflictingSchedules, error: checkError } = await supabase
-      .from('schedules')
-      .select('id, schedule_volunteers!inner(volunteer_id, volunteers(name))')
-      .eq('date', dbData.date)
-      .in('schedule_volunteers.volunteer_id', volunteer_ids)
-      .neq('id', id || 0);
+    const { volunteer_ids, ...upsertData } = eventPayload;
 
-    if (checkError) {
-      setSaveError(`Erro ao verificar evento: ${checkError.message}`);
-      setIsSaving(false);
-      return;
-    }
-    
-    if (conflictingSchedules && conflictingSchedules.length > 0) {
-        // FIX: Replaced the potentially unsafe flatMap chain with a safer reduce method to handle cases where `schedule_volunteers` might not be an array, preventing runtime errors.
-        const conflictingNames = conflictingSchedules
-          .reduce((allNames: string[], schedule: any) => {
-            if (Array.isArray(schedule.schedule_volunteers)) {
-              schedule.schedule_volunteers.forEach((sv: any) => {
-                if (sv.volunteers?.name) {
-                  allNames.push(sv.volunteers.name);
-                }
-              });
+    try {
+        if (userRole === 'admin') {
+            if (!upsertData.date || !upsertData.start_time || !upsertData.end_time) {
+                throw new Error("Data e horários são obrigatórios.");
             }
-            return allNames;
-          }, []);
+            if (upsertData.start_time >= upsertData.end_time) {
+                throw new Error("O horário de início deve ser anterior ao horário de fim.");
+            }
 
-        const uniqueConflictingNames = [...new Set(conflictingNames)];
+            let conflictQuery = supabase
+                .from('events')
+                .select('id, name, start_time, end_time')
+                .eq('date', upsertData.date);
 
-        if (uniqueConflictingNames.length > 0) {
-            setSaveError(`Conflito! Voluntário(s) já escalado(s) neste dia: ${uniqueConflictingNames.join(', ')}.`);
-            setIsSaving(false);
-            return;
+            if (upsertData.id) {
+                conflictQuery = conflictQuery.neq('id', upsertData.id);
+            }
+
+            const { data: potentialConflicts, error: fetchConflictError } = await conflictQuery;
+            if (fetchConflictError) throw fetchConflictError;
+
+            const newStartTime = upsertData.start_time;
+            const newEndTime = upsertData.end_time;
+
+            const conflict = potentialConflicts?.find(event => {
+                const existingStartTime = event.start_time;
+                const existingEndTime = event.end_time;
+                return (newStartTime < existingEndTime) && (newEndTime > existingStartTime);
+            });
+
+            if (conflict) {
+                throw new Error(`Conflito de horário com o evento "${conflict.name}" (${conflict.start_time} - ${conflict.end_time}).`);
+            }
+            
+            const { error: eventError } = await supabase.from('events').upsert(upsertData);
+            if (eventError) throw eventError;
+
+        } else if ((userRole === 'leader' || userRole === 'lider') && upsertData.id && leaderDepartmentId) {
+            const { error: statusError } = await supabase
+                .from('events')
+                .update({ status: upsertData.status })
+                .eq('id', upsertData.id);
+            if (statusError) throw statusError;
+
+            const { error: deleteVolError } = await supabase.from('event_volunteers').delete().eq('event_id', upsertData.id).eq('department_id', leaderDepartmentId);
+            if (deleteVolError) throw deleteVolError;
+
+            if (volunteer_ids && Array.isArray(volunteer_ids) && volunteer_ids.length > 0) {
+                const newRelations = volunteer_ids.map((volId: number) => ({ event_id: upsertData.id, volunteer_id: volId, department_id: leaderDepartmentId }));
+                const { error: insertVolError } = await supabase.from('event_volunteers').insert(newRelations);
+                if (insertVolError) throw insertVolError;
+            }
+        } else {
+             throw new Error("Ação não permitida ou dados insuficientes.");
         }
-    }
-
-    if (id) { 
-      const { error: updateError } = await supabase.from('schedules').update(dbData).eq('id', id);
-      if (updateError) {
-        setSaveError(`Falha ao atualizar o evento: ${updateError.message}`);
+    } catch (error: any) {
+        setSaveError(`Falha ao salvar: ${error.message}`);
         setIsSaving(false);
         return;
-      }
-
-      await supabase.from('schedule_volunteers').delete().eq('schedule_id', id);
-
-      const relations = volunteer_ids.map((volId: number) => ({ schedule_id: id, volunteer_id: volId }));
-      const { error: insertRelationsError } = await supabase.from('schedule_volunteers').insert(relations);
-
-      if (insertRelationsError) {
-        setSaveError(`Falha ao associar voluntários: ${insertRelationsError.message}`);
-      }
-    } else { 
-      const { data: newSchedule, error: insertError } = await supabase.from('schedules').insert(dbData).select().single();
-
-      if (insertError || !newSchedule) {
-        setSaveError(`Falha ao criar o evento: ${insertError?.message}`);
-        setIsSaving(false);
-        return;
-      }
-      
-      const relations = volunteer_ids.map((volId: number) => ({ schedule_id: newSchedule.id, volunteer_id: volId }));
-      const { error: insertRelationsError } = await supabase.from('schedule_volunteers').insert(relations);
-      
-      if (insertRelationsError) {
-        setSaveError(`Falha ao associar voluntários: ${insertRelationsError.message}`);
-      }
     }
-
-    if (!saveError) {
-      await fetchSchedules();
-      hideForm();
-    }
+    
+    await fetchEvents();
+    hideForm();
     setIsSaving(false);
   };
+  
+  const handleAddDepartmentToEvent = async (eventId: number) => {
+      if (!supabase || !leaderDepartmentId) return;
 
-  const filteredSchedules = useMemo(() => {
-    return schedules.filter(schedule => {
-      const query = searchQuery.toLowerCase();
-      
-      const matchesSearch = query === '' ||
-        schedule.event_name.toLowerCase().includes(query) ||
-        (schedule.ministries?.name || '').toLowerCase().includes(query) ||
-        (Array.isArray(schedule.schedule_volunteers) && schedule.schedule_volunteers.some(sv => sv.volunteers?.name.toLowerCase().includes(query)));
-
-      const matchesMinistry = selectedMinistry === 'all' || 
-        String(schedule.ministry_id) === selectedMinistry;
-
-      const matchesStatus = selectedStatus === 'all' ||
-        schedule.status === selectedStatus;
-
-      return matchesSearch && matchesMinistry && matchesStatus;
-    });
-  }, [schedules, searchQuery, selectedMinistry, selectedStatus]);
-
-
-  const groupedSchedules = useMemo(() => {
-    return filteredSchedules.reduce((acc: Record<string, Schedule[]>, schedule) => {
-      const date = new Date(schedule.date + 'T00:00:00').toLocaleDateString('pt-BR', {
-        weekday: 'long', year: 'numeric', month: 'long', day: '2-digit'
+      const { error } = await supabase.from('event_departments').insert({
+          event_id: eventId,
+          department_id: leaderDepartmentId,
       });
-      if (!acc[date]) {
-        acc[date] = [];
-      }
-      acc[date].push(schedule);
-      return acc;
-    }, {} as Record<string, Schedule[]>);
-  }, [filteredSchedules]);
 
-  const handleClearFilters = () => {
-    setSearchQuery('');
-    setSelectedMinistry('all');
-    setSelectedStatus('all');
+      if (error) {
+          alert(`Falha ao adicionar departamento ao evento: ${error.message}`);
+      } else {
+          fetchEvents();
+      }
   };
 
-  const hasActiveFilters = searchQuery !== '' || selectedMinistry !== 'all' || selectedStatus !== 'all';
+  const filteredEvents = useMemo(() => {
+    return events.filter(event => {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = query === '' || event.name.toLowerCase().includes(query);
+      const matchesDept = selectedDepartment === 'all' || event.event_departments.some(ed => String(ed.department_id) === selectedDepartment);
+      return matchesSearch && matchesDept;
+    });
+  }, [events, searchQuery, selectedDepartment]);
 
   const renderContent = () => {
     if (loading) return <p className="text-center text-slate-500 mt-10">Carregando eventos...</p>;
     if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
-    if (schedules.length === 0 && !isFormOpen) {
-        return <p className="text-center text-slate-500 mt-10">Nenhum evento encontrado. Clique em "Novo Evento" para começar.</p>
-    }
-    if (filteredSchedules.length === 0 && hasActiveFilters) {
-        return (
-            <div className="text-center py-12 text-slate-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1"><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <h3 className="mt-2 text-lg font-medium text-slate-800">Nenhum evento encontrado</h3>
-                <p className="mt-1 text-sm">Tente ajustar seus filtros ou termos de busca.</p>
-                <button onClick={handleClearFilters} className="mt-4 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">Limpar Filtros</button>
-            </div>
-        );
-    }
+    if (filteredEvents.length === 0) return <p className="text-center text-slate-500 mt-10">Nenhum evento encontrado.</p>;
+    
     return (
-        <div className="space-y-8">
-            {Object.entries(groupedSchedules).map(([date, schedulesOnDate]) => (
-                <div key={date}>
-                    <h2 className="font-bold text-slate-700 text-lg mb-3 capitalize">{date}</h2>
-                    <div className="space-y-3">
-                        {schedulesOnDate.map(schedule => (
-                            <div key={schedule.id} className="bg-white p-4 rounded-lg border border-slate-200 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                                <div className="flex-1">
-                                    <p className="font-semibold text-slate-800">
-                                        {schedule.event_name} • <span className="text-blue-600">{schedule.ministries?.name}</span>
-                                    </p>
-                                    {/* FIX: Cast `schedule.schedule_volunteers` to `any[]` after the Array.isArray check to resolve the TypeScript error "Property 'map' does not exist on type 'unknown'". This ensures the code compiles correctly while maintaining runtime safety. */}
-                                    <p className="text-sm text-slate-600">{Array.isArray(schedule.schedule_volunteers) && (schedule.schedule_volunteers as any[]).map(sv => sv.volunteers?.name).filter(Boolean).join(', ')}</p>
-                                    <div className="flex items-center space-x-2 text-xs text-slate-500 mt-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        <span>{schedule.start_time} - {schedule.end_time}</span>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 self-end sm:self-center">
-                                  <span className={`text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
-                                  <button onClick={() => showForm(schedule)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z" /></svg></button>
-                                  <button onClick={() => handleDeleteRequest(schedule.id!)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-md hover:bg-red-50"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+        <div className="space-y-6">
+            {filteredEvents.map(event => (
+                <EventCard 
+                    key={event.id} 
+                    event={event} 
+                    userRole={userRole} 
+                    leaderDepartmentId={leaderDepartmentId} 
+                    onEdit={showForm} 
+                    onDelete={handleDeleteRequest}
+                    onAddDepartment={handleAddDepartmentToEvent}
+                />
             ))}
         </div>
     );
@@ -291,86 +231,32 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ supabase, isFormOpen, set
           <h1 className="text-3xl font-bold text-slate-800">Eventos</h1>
           <p className="text-slate-500 mt-1">Organize os voluntários nos eventos</p>
         </div>
-        <button 
-          onClick={() => showForm()}
-          className="bg-green-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-green-600 transition-colors shadow-sm w-full md:w-auto justify-center"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-          <span>Novo Evento</span>
-        </button>
+        {userRole === 'admin' && (
+            <button onClick={() => showForm()} className="bg-green-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-green-600 transition-colors shadow-sm w-full md:w-auto justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+            <span>Novo Evento</span>
+            </button>
+        )}
       </div>
       
-      {!isFormOpen && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="relative md:col-span-3">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    </div>
-                    <input 
-                        type="text" 
-                        placeholder="Buscar por evento, ministério ou voluntário..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-slate-900 placeholder:text-slate-500"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="ministry_filter" className="sr-only">Filtrar por Ministério</label>
-                    <select id="ministry_filter" value={selectedMinistry} onChange={(e) => setSelectedMinistry(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-slate-900">
-                        <option value="all">Todos os Ministérios</option>
-                        {allMinistries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label htmlFor="status_filter" className="sr-only">Filtrar por Status</label>
-                    <select id="status_filter" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-slate-900">
-                        <option value="all">Todos os Status</option>
-                        <option value="pendente">Pendente</option>
-                        <option value="confirmado">Confirmado</option>
-                        <option value="cancelado">Cancelado</option>
-                    </select>
-                </div>
-                {hasActiveFilters && (
-                    <button onClick={handleClearFilters} className="px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors">
-                        Limpar Filtros
-                    </button>
-                )}
-            </div>
-        </div>
-      )}
-
-      <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3 text-sm">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-        <div className="flex-1">
-          <p className="font-bold text-red-700">REGRA RÍGIDA: Um voluntário só pode servir em UM ministério por dia</p>
-          <p className="text-red-600">Exemplo: Se escalado na Comunicação no domingo, não pode ser escalado em outro ministério no mesmo domingo.</p>
-        </div>
-      </div>
-
-
       {isFormOpen ? (
-        <NewScheduleForm 
-          supabase={supabase}
-          initialData={editingSchedule}
-          onCancel={hideForm} 
-          onSave={handleSaveSchedule}
-          isSaving={isSaving}
-          saveError={saveError}
-        />
+        <NewEventForm supabase={supabase} initialData={editingEvent} onCancel={hideForm} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} />
       ) : (
-        renderContent()
+        <>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input type="text" placeholder="Buscar por nome do evento..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="md:col-span-2 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
+            <select value={selectedDepartment} onChange={(e) => setSelectedDepartment(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
+                <option value="all">Todos os Departamentos</option>
+                {allDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+        </div>
+        {renderContent()}
+        </>
       )}
 
-      <ConfirmationModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={handleConfirmDelete}
-        title="Confirmar Exclusão"
-        message="Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita."
-      />
+      <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message="Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita."/>
     </div>
   );
 };
 
-export default SchedulesPage;
+export default EventsPage;

@@ -154,14 +154,17 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         return 'N/A';
     };
     
+    // FIX: Refactored to use the reliable `app_status` from the backend, removing the problematic dependency on `last_sign_in_at` and resolving the TypeScript error.
     const getStatusBadge = (user: EnrichedUser) => {
-        if (user.app_status === 'Inativo') {
-            return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">Inativo</span>;
+        switch (user.app_status) {
+            case 'Inativo':
+                return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">Inativo</span>;
+            case 'Ativo':
+                return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ativo</span>;
+            case 'Pendente':
+            default:
+                return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pendente</span>;
         }
-        if (user.last_sign_in_at) {
-            return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ativo</span>;
-        }
-        return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pendente</span>;
     };
 
 
@@ -175,7 +178,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
             <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 max-w-2xl">
                  <div className="flex items-center space-x-3 mb-6">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                    <h2 className="text-2xl font-bold text-slate-800">Convidar Líder de Ministério</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">Convidar Líder de Departamento</h2>
                 </div>
                 <p className="text-sm text-slate-600 mb-6">Insira o e-mail do líder que você deseja convidar. Ele receberá um link para criar sua conta e definir uma senha.</p>
                 <form onSubmit={handleInviteSubmit} className="space-y-4">
@@ -187,7 +190,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                         <div>
                             <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
                             <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
-                                <option value="lider">Líder de Ministério</option>
+                                <option value="lider">Líder de Departamento</option>
                                 <option value="admin">Admin (Líder Geral)</option>
                             </select>
                         </div>

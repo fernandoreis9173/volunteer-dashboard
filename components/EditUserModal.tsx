@@ -12,7 +12,8 @@ interface EditUserModalProps {
 const allPages: { id: Page; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'volunteers', label: 'Voluntários' },
-    { id: 'ministries', label: 'Ministérios' },
+    // FIX: Corrected page ID from 'ministries' to 'departments' to match Page type and updated label for consistency.
+    { id: 'departments', label: 'Departamentos' },
     { id: 'schedules', label: 'Eventos' },
     { id: 'admin', label: 'Admin' },
 ];

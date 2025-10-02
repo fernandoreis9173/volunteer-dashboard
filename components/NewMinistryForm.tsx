@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Ministry } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Department } from '../types';
+import { SupabaseClient, User } from '@supabase/supabase-js';
 
 interface InputFieldProps {
     label: string;
@@ -99,14 +100,22 @@ const TagInputField: React.FC<{
 
 
 interface NewMinistryFormProps {
-    initialData?: Ministry | null;
+    supabase: SupabaseClient | null;
+    initialData?: Department | null;
     onCancel: () => void;
-    onSave: (ministry: Omit<Ministry, 'created_at'>) => void;
+    onSave: (ministry: Omit<Department, 'created_at'>) => void;
     isSaving: boolean;
     saveError: string | null;
 }
 
-const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError }) => {
+const getInitials = (name?: string): string => {
+    if (!name) return '??';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
+};
+
+const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError }) => {
     const [formData, setFormData] = useState({ 
         name: '', 
         description: '', 
@@ -120,6 +129,27 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
     });
     const [isActive, setIsActive] = useState(true);
     const isEditing = !!initialData;
+    const [leaders, setLeaders] = useState<User[]>([]);
+    const [leaderSearch, setLeaderSearch] = useState('');
+    const [isLeaderDropdownOpen, setIsLeaderDropdownOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchLeaders = async () => {
+            if (!supabase) return;
+            const { data, error } = await supabase.functions.invoke('list-users');
+            if (error) {
+                console.error('Error fetching leaders:', error);
+            } else if (data.users) {
+                const potentialLeaders = data.users.filter((user: any) =>
+                    (user.user_metadata?.role === 'lider' || user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'admin') &&
+                    user.app_status === 'Ativo'
+                );
+                setLeaders(potentialLeaders);
+            }
+        };
+
+        fetchLeaders();
+    }, [supabase]);
 
     useEffect(() => {
         const meetingDayKeys = {
@@ -134,6 +164,7 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
                 leader: initialData.leader,
                 leader_contact: initialData.leader_contact || '',
             });
+            setLeaderSearch(initialData.leader);
             setSkills(initialData.skills_required || []);
             setIsActive(initialData.status === 'Ativo');
 
@@ -150,6 +181,7 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
             setMeetingDays(newMeetingDaysState);
         } else {
             setFormData({ name: '', description: '', leader: '', leader_contact: '' });
+            setLeaderSearch('');
             setSkills([]);
             setMeetingDays(meetingDayKeys);
             setIsActive(true);
@@ -160,6 +192,34 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
+
+    const handleLeaderSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const query = e.target.value;
+        setLeaderSearch(query);
+        if (query === '') {
+            setFormData(prev => ({ ...prev, leader: '', leader_contact: '' }));
+        }
+        setIsLeaderDropdownOpen(true);
+    };
+
+    const handleLeaderSelect = (leader: User) => {
+        const leaderName = leader.user_metadata?.name || '';
+        const leaderEmail = leader.email || '';
+        setFormData(prev => ({ ...prev, leader: leaderName, leader_contact: leaderEmail }));
+        setLeaderSearch(leaderName);
+        setIsLeaderDropdownOpen(false);
+    };
+
+    const filteredLeaders = useMemo(() => {
+        if (!leaderSearch || leaderSearch === formData.leader) {
+            return [];
+        }
+        const query = leaderSearch.toLowerCase();
+        return leaders.filter(leader =>
+            (leader.user_metadata?.name?.toLowerCase().includes(query)) ||
+            (leader.email?.toLowerCase().includes(query))
+        );
+    }, [leaderSearch, leaders, formData.leader]);
     
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, checked } = e.target;
@@ -169,11 +229,16 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
+        if (!formData.name || !formData.leader) {
+            alert('Por favor, preencha o Nome do Departamento e selecione um Líder.');
+            return;
+        }
+
         const selectedMeetingDays = Object.entries(meetingDays)
             .filter(([, isSelected]) => isSelected)
             .map(([day]) => day);
 
-        const ministryData: Omit<Ministry, 'created_at'> = {
+        const ministryData: Omit<Department, 'created_at'> = {
             id: initialData?.id,
             name: formData.name,
             description: formData.description,
@@ -187,7 +252,7 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
     };
 
     return (
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border-slate-200">
              <style>{`
                 input[type="checkbox"]:checked {
                     background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
@@ -197,10 +262,10 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
-                <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Ministério' : 'Novo Ministério'}</h2>
+                <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Departamento' : 'Novo Departamento'}</h2>
             </div>
             <form className="space-y-6" onSubmit={handleSubmit}>
-                <InputField label="Nome do Ministério" type="text" name="name" value={formData.name} onChange={handleInputChange} required />
+                <InputField label="Nome do Departamento" type="text" name="name" value={formData.name} onChange={handleInputChange} required />
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
                     <textarea 
@@ -212,8 +277,59 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
                     />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InputField label="Líder do Ministério" type="text" name="leader" value={formData.leader} onChange={handleInputChange} required />
-                    <InputField label="Contato do Líder" type="text" name="leader_contact" value={formData.leader_contact} onChange={handleInputChange} />
+                    <div>
+                        <label htmlFor="leader_search" className="block text-sm font-medium text-slate-700 mb-1">
+                            Líder do Departamento <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                id="leader_search"
+                                value={leaderSearch}
+                                onChange={handleLeaderSearchChange}
+                                onFocus={() => setIsLeaderDropdownOpen(true)}
+                                onBlur={() => setTimeout(() => setIsLeaderDropdownOpen(false), 200)}
+                                placeholder="Buscar por nome ou e-mail do líder..."
+                                required={!formData.leader}
+                                autoComplete="off"
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-slate-900"
+                            />
+                            {isLeaderDropdownOpen && filteredLeaders.length > 0 && (
+                                <ul className="absolute z-10 w-full bg-white border border-slate-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-auto">
+                                    {filteredLeaders.map(leader => {
+                                        const name = leader.user_metadata?.name || 'Nome desconhecido';
+                                        const email = leader.email || 'Email desconhecido';
+                                        const initials = getInitials(name);
+
+                                        return (
+                                            <li key={leader.id} onMouseDown={() => handleLeaderSelect(leader)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer flex items-center space-x-3">
+                                                <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs">
+                                                    {initials}
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold text-slate-800 text-sm">{name}</p>
+                                                    <p className="text-xs text-slate-500">{email}</p>
+                                                </div>
+                                            </li>
+                                        )
+                                    })}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Contato do Líder
+                        </label>
+                        <input
+                            type="text"
+                            name="leader_contact"
+                            value={formData.leader_contact}
+                            readOnly
+                            className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg shadow-sm text-slate-500 focus:outline-none focus:ring-0"
+                            placeholder="Preenchido automaticamente"
+                        />
+                    </div>
                 </div>
                 <TagInputField label="Habilidades Necessárias" placeholder="Ex: Comunicação, Ensino..." tags={skills} setTags={setSkills} />
 
@@ -230,7 +346,7 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
                     </div>
                 </div>
 
-                <CheckboxField label="Ministério ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                <CheckboxField label="Departamento ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
                 
                 <div className="pt-6 border-t border-slate-200 flex flex-wrap justify-end items-center gap-3">
                     {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
@@ -239,7 +355,7 @@ const NewMinistryForm: React.FC<NewMinistryFormProps> = ({ initialData, onCancel
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                            <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V4zm2 0v12h6V4H7zm3 1a.5.5 0 00-.5.5v2.5a.5.5 0 001 0V6a.5.5 0 00-.5-.5z" clipRule="evenodd" />
                         </svg>
-                        <span>{isSaving ? 'Salvando...' : 'Salvar Ministério'}</span>
+                        <span>{isSaving ? 'Salvando...' : 'Salvar Departamento'}</span>
                     </button>
                 </div>
             </form>

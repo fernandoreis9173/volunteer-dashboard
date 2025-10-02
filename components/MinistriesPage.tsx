@@ -1,27 +1,29 @@
+
 import React, { useState, useEffect } from 'react';
 import MinistryCard from './MinistryCard';
 import NewMinistryForm from './NewMinistryForm';
 import ConfirmationModal from './ConfirmationModal';
-import { Ministry } from '../types';
+import { Department } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 interface MinistriesPageProps {
   supabase: SupabaseClient | null;
+  userRole: string | null;
 }
 
-const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
+const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase, userRole }) => {
   const [isFormVisible, setIsFormVisible] = useState(false);
-  const [ministries, setMinistries] = useState<Ministry[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [editingMinistry, setEditingMinistry] = useState<Ministry | null>(null);
+  const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [ministryToDeleteId, setMinistryToDeleteId] = useState<number | null>(null);
 
-  const fetchMinistries = async () => {
+  const fetchDepartments = async () => {
     if (!supabase) {
       setLoading(false);
       setError("Supabase client not initialized.");
@@ -30,22 +32,22 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
     setLoading(true);
     setError(null);
     const { data, error: fetchError } = await supabase
-      .from('ministries')
+      .from('departments')
       .select('*')
       .order('name', { ascending: true });
 
     if (fetchError) {
-      console.error('Error fetching ministries:', fetchError.message);
-      setError("Não foi possível carregar os ministérios.");
-      setMinistries([]);
+      console.error('Error fetching departments:', fetchError.message);
+      setError("Não foi possível carregar os departamentos.");
+      setDepartments([]);
     } else {
-      setMinistries(data || []);
+      setDepartments(data || []);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchMinistries();
+    fetchDepartments();
   }, [supabase]);
 
   const showForm = () => {
@@ -54,11 +56,11 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
   };
   const hideForm = () => {
     setIsFormVisible(false);
-    setEditingMinistry(null);
+    setEditingDepartment(null);
   };
 
-  const handleEditMinistry = (ministry: Ministry) => {
-    setEditingMinistry(ministry);
+  const handleEditDepartment = (department: Department) => {
+    setEditingDepartment(department);
     showForm();
   };
   
@@ -75,17 +77,17 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
   const handleConfirmDelete = async () => {
     if (!ministryToDeleteId || !supabase) return;
 
-    const { error: deleteError } = await supabase.from('ministries').delete().eq('id', ministryToDeleteId);
+    const { error: deleteError } = await supabase.from('departments').delete().eq('id', ministryToDeleteId);
 
     if (deleteError) {
-      alert(`Falha ao excluir ministério: ${deleteError.message}`);
+      alert(`Falha ao excluir departamento: ${deleteError.message}`);
     } else {
-      setMinistries(ministries.filter(m => m.id !== ministryToDeleteId));
+      setDepartments(departments.filter(m => m.id !== ministryToDeleteId));
     }
     handleCancelDelete();
   };
   
-  const handleSaveMinistry = async (ministryData: Omit<Ministry, 'created_at'>) => {
+  const handleSaveDepartment = async (departmentData: Omit<Department, 'created_at'>) => {
     if (!supabase) {
       setSaveError("Conexão com o banco de dados não estabelecida.");
       return;
@@ -96,19 +98,19 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
     let error;
     let data;
 
-    if (ministryData.id) { // Update
-        const { id, ...updateData } = ministryData;
+    if (departmentData.id) { // Update
+        const { id, ...updateData } = departmentData;
         const { data: updateDataResult, error: updateError } = await supabase
-            .from('ministries')
+            .from('departments')
             .update(updateData)
             .eq('id', id)
             .select();
         data = updateDataResult;
         error = updateError;
     } else { // Insert
-        const { id, ...insertData } = ministryData;
+        const { id, ...insertData } = departmentData;
         const { data: insertDataResult, error: insertError } = await supabase
-            .from('ministries')
+            .from('departments')
             .insert([insertData])
             .select();
         data = insertDataResult;
@@ -118,24 +120,24 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
     if (error || !data || data.length === 0) {
         const errorMessage = error ? error.message : "A operação falhou. Verifique suas permissões ou os dados inseridos.";
         setSaveError(`Falha ao salvar: ${errorMessage}`);
-        console.error("Error saving ministry:", error);
+        console.error("Error saving department:", error);
     } else {
-        await fetchMinistries();
+        await fetchDepartments();
         hideForm();
     }
     setIsSaving(false);
   };
 
-  const filteredMinistries = ministries.filter(ministry => {
+  const filteredDepartments = departments.filter(department => {
     const query = searchQuery.toLowerCase();
     if (!query) return true;
-    const nameMatch = ministry.name.toLowerCase().includes(query);
-    const leaderMatch = ministry.leader.toLowerCase().includes(query);
+    const nameMatch = department.name.toLowerCase().includes(query);
+    const leaderMatch = department.leader.toLowerCase().includes(query);
     return nameMatch || leaderMatch;
   });
 
   const renderContent = () => {
-    if (loading) return <p className="text-center text-slate-500 mt-10">Carregando ministérios...</p>;
+    if (loading) return <p className="text-center text-slate-500 mt-10">Carregando departamentos...</p>;
     if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
     return (
       <div className="space-y-6">
@@ -146,7 +148,7 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
                 </div>
                 <input 
                     type="text"
-                    placeholder="Buscar por nome ou líder do ministério..."
+                    placeholder="Buscar por nome ou líder do departamento..."
                     className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -154,16 +156,16 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
             </div>
         </div>
 
-        {filteredMinistries.length > 0 ? (
+        {filteredDepartments.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredMinistries.map((ministry) => (
-              <MinistryCard key={ministry.id} ministry={ministry} onEdit={handleEditMinistry} onDelete={handleDeleteRequest} />
+            {filteredDepartments.map((department) => (
+              <MinistryCard key={department.id} ministry={department} onEdit={handleEditDepartment} onDelete={handleDeleteRequest} userRole={userRole} />
             ))}
           </div>
         ) : (
           <div className="text-center py-12 text-slate-500">
-            <h3 className="text-lg font-medium text-slate-800">Nenhum ministério encontrado</h3>
-            <p className="mt-1 text-sm">Tente ajustar seus termos de busca ou adicione um novo ministério.</p>
+            <h3 className="text-lg font-medium text-slate-800">Nenhum departamento encontrado</h3>
+            <p className="mt-1 text-sm">Tente ajustar seus termos de busca ou adicione um novo departamento.</p>
           </div>
         )}
       </div>
@@ -174,23 +176,26 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Ministérios</h1>
-          <p className="text-slate-500 mt-1">Gerencie os ministérios da igreja</p>
+          <h1 className="text-3xl font-bold text-slate-800">Departamentos</h1>
+          <p className="text-slate-500 mt-1">Gerencie os departamentos da igreja</p>
         </div>
-        <button 
-          onClick={() => { setEditingMinistry(null); showForm(); }}
-          className="bg-orange-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-orange-600 transition-colors shadow-sm w-full md:w-auto justify-center"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-          <span>Novo Ministério</span>
-        </button>
+        {userRole === 'admin' && (
+          <button 
+            onClick={() => { setEditingDepartment(null); showForm(); }}
+            className="bg-orange-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-orange-600 transition-colors shadow-sm w-full md:w-auto justify-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+            <span>Novo Departamento</span>
+          </button>
+        )}
       </div>
 
       {isFormVisible ? (
         <NewMinistryForm 
-            initialData={editingMinistry}
+            supabase={supabase}
+            initialData={editingDepartment}
             onCancel={hideForm} 
-            onSave={handleSaveMinistry}
+            onSave={handleSaveDepartment}
             isSaving={isSaving}
             saveError={saveError}
         />
@@ -203,7 +208,7 @@ const MinistriesPage: React.FC<MinistriesPageProps> = ({ supabase }) => {
         onClose={handleCancelDelete}
         onConfirm={handleConfirmDelete}
         title="Confirmar Exclusão"
-        message="Tem certeza que deseja excluir este ministério? Esta ação não pode ser desfeita."
+        message="Tem certeza que deseja excluir este departamento? Esta ação não pode ser desfeita."
       />
     </div>
   );
