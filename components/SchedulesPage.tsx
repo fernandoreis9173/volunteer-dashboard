@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
 import EventCard from './EventCard';
@@ -23,9 +23,22 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   const [eventToDeleteId, setEventToDeleteId] = useState<number | null>(null);
   const [leaderDepartmentId, setLeaderDepartmentId] = useState<number | null>(null);
 
+  // Filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
-  const [allDepartments, setAllDepartments] = useState<{ id: number; name: string; }[]>([]);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500); // 500ms delay before triggering search
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
+
 
   const fetchEvents = useCallback(async () => {
       if (!supabase) { setLoading(false); setError("Cliente Supabase não inicializado."); return; }
@@ -34,9 +47,45 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
 
       let query = supabase.from('events').select(`
         *,
-        event_departments ( department_id, departments ( id, name ) ),
+        event_departments ( department_id, departments ( id, name, leader ) ),
         event_volunteers ( volunteer_id, department_id, volunteers ( id, name, initials ), departments ( id, name ) )
-      `).order('date', { ascending: false }).order('start_time', { ascending: true });
+      `);
+      
+      // Apply server-side filters based on state
+      if (debouncedSearchQuery) {
+        query = query.ilike('name', `%${debouncedSearchQuery}%`);
+      }
+      if (selectedStatus !== 'all') {
+        query = query.eq('status', selectedStatus);
+      }
+
+      // If user has set a date range, use it.
+      if (dateRange.start) {
+        query = query.gte('date', dateRange.start);
+      }
+      if (dateRange.end) {
+        query = query.lte('date', dateRange.end);
+      }
+
+      // If no date range is set by the user, default to the current month.
+      if (!dateRange.start && !dateRange.end) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = today.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+
+        const formatDate = (date: Date) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+        
+        query = query.gte('date', formatDate(firstDay)).lte('date', formatDate(lastDay));
+      }
+      
+      query = query.order('date', { ascending: false }).order('start_time', { ascending: true });
       
       const { data, error: fetchError } = await query;
 
@@ -48,10 +97,11 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         setEvents(data as Event[] || []);
       }
       setLoading(false);
-  }, [supabase]);
+  }, [supabase, debouncedSearchQuery, selectedStatus, dateRange]);
+
 
   useEffect(() => {
-    const initialize = async () => {
+    const initializeLeader = async () => {
         if (!supabase) return;
         
         if (userRole === 'leader' || userRole === 'lider') {
@@ -66,15 +116,14 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
                 else setLeaderDepartmentId(department?.id || null);
             }
         }
-        
-        const { data, error } = await supabase.from('departments').select('id, name').order('name');
-        if (error) console.error("Error fetching departments for filter", error);
-        else setAllDepartments(data || []);
-        
-        fetchEvents();
     };
-    initialize();
-  }, [supabase, userRole, fetchEvents]);
+    initializeLeader();
+  }, [supabase, userRole]);
+  
+  // Re-fetch events whenever filters change
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
   
   const showForm = (event: Event | null = null) => {
     setEditingEvent(event);
@@ -99,7 +148,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     if (deleteError) {
       alert(`Falha ao excluir evento: ${deleteError.message}`);
     } else {
-      setEvents(events.filter(e => e.id !== eventToDeleteId));
+      await fetchEvents(); // Refetch to show the updated list
     }
     setIsDeleteModalOpen(false);
     setEventToDeleteId(null);
@@ -193,23 +242,27 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
       }
   };
 
-  const filteredEvents = useMemo(() => {
-    return events.filter(event => {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch = query === '' || event.name.toLowerCase().includes(query);
-      const matchesDept = selectedDepartment === 'all' || event.event_departments.some(ed => String(ed.department_id) === selectedDepartment);
-      return matchesSearch && matchesDept;
-    });
-  }, [events, searchQuery, selectedDepartment]);
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setSelectedStatus('all');
+    setDateRange({ start: '', end: '' });
+  };
+
+  const hasActiveFilters = searchQuery !== '' || selectedStatus !== 'all' || dateRange.start !== '' || dateRange.end !== '';
 
   const renderContent = () => {
     if (loading) return <p className="text-center text-slate-500 mt-10">Carregando eventos...</p>;
     if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
-    if (filteredEvents.length === 0) return <p className="text-center text-slate-500 mt-10">Nenhum evento encontrado.</p>;
+    if (events.length === 0) return (
+      <div className="text-center py-12 text-slate-500">
+        <h3 className="text-lg font-medium text-slate-800">Nenhum evento encontrado</h3>
+        <p className="mt-1 text-sm">Tente ajustar seus filtros ou adicione um novo evento.</p>
+      </div>
+    );
     
     return (
         <div className="space-y-6">
-            {filteredEvents.map(event => (
+            {events.map(event => (
                 <EventCard 
                     key={event.id} 
                     event={event} 
@@ -243,18 +296,56 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         <NewEventForm supabase={supabase} initialData={editingEvent} onCancel={hideForm} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} />
       ) : (
         <>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input type="text" placeholder="Buscar por nome do evento..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="md:col-span-2 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
-            <select value={selectedDepartment} onChange={(e) => setSelectedDepartment(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
-                <option value="all">Todos os Departamentos</option>
-                {allDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex flex-wrap items-end gap-4">
+                <div className="flex-grow min-w-[200px] lg:flex-grow-0 lg:w-1/3">
+                    <label htmlFor="search-event" className="block text-sm font-medium text-slate-700 mb-1">Buscar por Nome</label>
+                    <input 
+                        id="search-event" 
+                        type="text" 
+                        placeholder="Ex: Culto de Domingo" 
+                        value={searchQuery} 
+                        onChange={e => setSearchQuery(e.target.value)} 
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div className="flex-grow min-w-[150px] lg:flex-grow-0 lg:w-auto">
+                    <label htmlFor="status-filter" className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                    <select id="status-filter" value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="all">Todos</option>
+                        <option value="Confirmado">Confirmado</option>
+                        <option value="Pendente">Pendente</option>
+                        <option value="Cancelado">Cancelado</option>
+                    </select>
+                </div>
+                <div className="flex-grow min-w-[150px] lg:flex-grow-0 lg:w-auto">
+                    <label htmlFor="start-date" className="block text-sm font-medium text-slate-700 mb-1">Data Início</label>
+                    <input id="start-date" type="date" value={dateRange.start} onChange={e => setDateRange(prev => ({...prev, start: e.target.value}))} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div className="flex-grow min-w-[150px] lg:flex-grow-0 lg:w-auto">
+                    <label htmlFor="end-date" className="block text-sm font-medium text-slate-700 mb-1">Data Fim</label>
+                    <input id="end-date" type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({...prev, end: e.target.value}))} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                {hasActiveFilters && (
+                    <div className="flex-grow lg:flex-grow-0">
+                        <button onClick={handleClearFilters} className="w-full px-3 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200 border border-slate-300">
+                            Limpar Filtros
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
+
         {renderContent()}
         </>
       )}
 
-      <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message="Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita."/>
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Confirmar Exclusão"
+        message="Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita e removerá todas as escalas de voluntários associadas."
+      />
     </div>
   );
 };

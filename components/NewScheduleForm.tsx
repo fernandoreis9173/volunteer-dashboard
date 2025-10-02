@@ -16,6 +16,52 @@ interface NewEventFormProps {
 type VolunteerOption = { id: number; name: string; email: string; initials: string; };
 type ProcessedVolunteerOption = VolunteerOption & { isScheduledElsewhere: boolean };
 
+const VolunteerItem: React.FC<{
+    volunteer: ProcessedVolunteerOption;
+    onAction: () => void;
+    actionType: 'add' | 'remove';
+}> = ({ volunteer, onAction, actionType }) => {
+    const isAdd = actionType === 'add';
+    const isDisabled = isAdd && volunteer.isScheduledElsewhere;
+    
+    return (
+        <div className={`p-2 rounded-lg flex items-center justify-between transition-colors ${isDisabled ? 'bg-slate-100' : 'bg-white hover:bg-slate-50'} border border-slate-200`}>
+            <div className="flex items-center space-x-3 overflow-hidden">
+                <div className={`w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ${isDisabled ? 'opacity-50' : ''}`}>
+                    {volunteer.initials}
+                </div>
+                <div className="flex-1 overflow-hidden">
+                    <p className={`font-semibold text-slate-800 text-sm truncate ${isDisabled ? 'text-slate-500' : ''}`}>{volunteer.name}</p>
+                    {volunteer.isScheduledElsewhere && isAdd && (
+                        <span className="text-xs font-semibold text-orange-600">Já escalado</span>
+                    )}
+                </div>
+            </div>
+            <button
+                type="button"
+                onClick={onAction}
+                disabled={isDisabled}
+                className={`w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
+                    isAdd
+                        ? 'text-green-600 bg-green-100 hover:bg-green-200 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed'
+                        : 'text-red-600 bg-red-100 hover:bg-red-200'
+                }`}
+                aria-label={isAdd ? `Adicionar ${volunteer.name}` : `Remover ${volunteer.name}`}
+            >
+                {isAdd ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                    </svg>
+                ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                )}
+            </button>
+        </div>
+    );
+};
+
 const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId }) => {
     const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '' });
     const [selectedVolunteers, setSelectedVolunteers] = useState<VolunteerOption[]>([]);
@@ -93,13 +139,20 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
         setSelectedVolunteers(selectedVolunteers.filter(v => v.id !== volunteerId));
     };
 
-    const filteredVolunteers = useMemo(() => {
-        if (!volunteerSearch) return [];
-        return allVolunteers.filter(v => 
-            v.name.toLowerCase().includes(volunteerSearch.toLowerCase()) && 
-            !selectedVolunteers.some(sv => sv.id === v.id)
+    const unselectedVolunteers = useMemo(() => {
+        const selectedIds = new Set(selectedVolunteers.map(v => v.id));
+        return allVolunteers.filter(v => !selectedIds.has(v.id));
+    }, [allVolunteers, selectedVolunteers]);
+
+    const filteredAvailableVolunteers = useMemo(() => {
+        if (!volunteerSearch) return unselectedVolunteers;
+        const query = volunteerSearch.toLowerCase();
+        return unselectedVolunteers.filter(v =>
+            v.name.toLowerCase().includes(query) ||
+            (v.email && v.email.toLowerCase().includes(query))
         );
-    }, [volunteerSearch, allVolunteers, selectedVolunteers]);
+    }, [volunteerSearch, unselectedVolunteers]);
+
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -146,53 +199,41 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
 
             {isSchedulingMode && (
                 <div className="pt-5 border-t border-slate-200">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                         Voluntários do Departamento "{leaderDepartmentName}"
                     </label>
                     {allVolunteers.length > 0 ? (
-                        <>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder="Buscar voluntários para adicionar..."
-                                    value={volunteerSearch}
-                                    onChange={(e) => setVolunteerSearch(e.target.value)}
-                                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
-                                />
-                                {filteredVolunteers.length > 0 && (
-                                    <ul className="absolute z-10 w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-auto">
-                                        {filteredVolunteers.map(v => (
-                                            <li key={v.id} 
-                                                onMouseDown={() => !v.isScheduledElsewhere && addVolunteer(v)} 
-                                                className={`px-3 py-2 flex items-center space-x-3 ${v.isScheduledElsewhere ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-100'}`}
-                                            >
-                                                <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs">{v.initials}</div>
-                                                <div>
-                                                    <p className="font-semibold text-slate-800 text-sm">{v.name}</p>
-                                                    <p className="text-xs text-slate-500">{v.email}</p>
-                                                </div>
-                                                {v.isScheduledElsewhere && (
-                                                    <span className="ml-auto text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
-                                                        Já escalado
-                                                    </span>
-                                                )}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                            <div className="flex flex-wrap gap-2 mt-3">
-                                {selectedVolunteers.length > 0 ? selectedVolunteers.map(v => (
-                                    <div key={v.id} className="flex items-center gap-2 bg-blue-100 text-blue-800 text-sm font-medium pl-2 pr-1 py-1 rounded-full">
-                                        <div className="w-5 h-5 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs">{v.initials}</div>
-                                        <span>{v.name}</span>
-                                        <button type="button" onClick={() => removeVolunteer(v.id)} className="text-blue-500 hover:text-blue-800 rounded-full hover:bg-black/10 p-0.5">
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                                        </button>
+                        <div className="space-y-4">
+                            <input
+                                type="text"
+                                placeholder="Buscar voluntários disponíveis..."
+                                value={volunteerSearch}
+                                onChange={(e) => setVolunteerSearch(e.target.value)}
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
+                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{maxHeight: '400px', overflow: 'hidden'}}>
+                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col">
+                                   <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
+                                        Disponíveis ({filteredAvailableVolunteers.length})
+                                    </h4>
+                                    <div className="overflow-y-auto space-y-2 flex-grow pr-1">
+                                        {filteredAvailableVolunteers.length > 0 ? filteredAvailableVolunteers.map(v => (
+                                            <VolunteerItem key={v.id} volunteer={v} onAction={() => addVolunteer(v)} actionType="add" />
+                                        )) : <p className="text-sm text-slate-500 text-center pt-4">Nenhum voluntário encontrado.</p>}
                                     </div>
-                                )) : <p className="text-sm text-slate-500 px-2">Nenhum voluntário selecionado.</p>}
+                                </div>
+                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col">
+                                    <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
+                                        Selecionados ({selectedVolunteers.length})
+                                    </h4>
+                                    <div className="overflow-y-auto space-y-2 flex-grow pr-1">
+                                        {selectedVolunteers.length > 0 ? [...selectedVolunteers].sort((a, b) => a.name.localeCompare(b.name)).map(v => (
+                                            <VolunteerItem key={v.id} volunteer={v} onAction={() => removeVolunteer(v.id)} actionType="remove" />
+                                        )) : <p className="text-sm text-slate-500 text-center pt-4">Nenhum voluntário selecionado.</p>}
+                                    </div>
+                                </div>
                             </div>
-                        </>
+                        </div>
                     ) : (
                         <p className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg">Não há voluntários ativos neste departamento para escalar.</p>
                     )}

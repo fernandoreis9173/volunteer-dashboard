@@ -17,7 +17,7 @@ export interface EventVolunteer {
 export interface EventDepartment {
   event_id: number;
   department_id: number;
-  departments: { id: number; name: string; };
+  departments: { id: number; name: string; leader?: string; };
 }
 
 export interface Event {

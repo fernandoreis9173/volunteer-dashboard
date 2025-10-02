@@ -54,30 +54,46 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
             {expanded && (
             <div className="mt-4 pt-4 border-t border-slate-200">
                 <h4 className="text-sm font-bold text-slate-600 uppercase mb-3">Departamentos e Voluntários</h4>
-                <div className="space-y-3">
+                <div className="space-y-4">
                     {event.event_departments.length > 0 ? event.event_departments.map(({ departments }) => {
                         if (!departments) return null;
                         const volunteersForDept = event.event_volunteers.filter(ev => ev.department_id === departments.id);
                         const hasScheduled = volunteersForDept.length > 0;
+                        const isLeadersDept = isLeader && departments.id === leaderDepartmentId;
+
                         return (
-                        <div key={departments.id} className="p-3 bg-slate-50 rounded-lg">
-                            <div className="flex justify-between items-center">
-                                <p className="font-semibold text-slate-800">{departments.name}</p>
-                                <span className={`flex items-center space-x-1 text-xs font-bold ${hasScheduled ? 'text-green-600' : 'text-yellow-600'}`}>
+                        <div key={departments.id} className={`p-4 rounded-lg ${isLeadersDept ? 'bg-blue-50' : 'bg-slate-50/70'}`}>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="flex items-center space-x-3">
+                                        <p className={`font-bold text-lg ${isLeadersDept ? 'text-blue-800' : 'text-slate-800'}`}>{departments.name}</p>
+                                        {isLeadersDept && (
+                                            <span className="text-xs font-semibold px-2 py-1 rounded-md bg-blue-600 text-white">Seu Departamento</span>
+                                        )}
+                                    </div>
+                                    {departments.leader && (
+                                        <p className="text-xs text-slate-500 font-medium mt-1">Líder: {departments.leader}</p>
+                                    )}
+                                </div>
+                                <span className={`flex items-center space-x-1.5 text-sm font-semibold ${hasScheduled ? 'text-green-600' : 'text-amber-600'}`}>
                                     {hasScheduled ? <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 5a1 1 0 112 0v6a1 1 0 11-2 0V5zm1 11a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>}
                                     <span>{hasScheduled ? `Escalado (${volunteersForDept.length})` : 'Pendente'}</span>
                                 </span>
                             </div>
                             {hasScheduled && (
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                    {volunteersForDept.map(v => (
-                                        v.volunteers ? (
-                                        <div key={v.volunteer_id} className="flex items-center space-x-1.5 px-2 py-1 bg-white border border-slate-200 rounded-full text-sm">
-                                            <div className="w-5 h-5 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs">{v.volunteers?.initials}</div>
-                                            <span className="text-slate-700">{v.volunteers?.name}</span>
-                                        </div>
-                                        ) : null
-                                    ))}
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                    {volunteersForDept.map(v => {
+                                        if (!v.volunteers) return null;
+                                        const volunteerName = v.volunteers.name || '';
+                                        return (
+                                            <div key={v.volunteer_id} className="flex items-center space-x-2 pl-1 pr-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                                <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs bg-slate-500">
+                                                    {v.volunteers.initials}
+                                                </div>
+                                                <span>{volunteerName}</span>
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             )}
                         </div>
