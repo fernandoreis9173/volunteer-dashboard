@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "http-server dist --port $PORT"
+    "start": "spa-server dist --port $PORT"
   },
   "dependencies": {
     "react": "^19.1.1",
@@ -15,7 +15,7 @@
     "@supabase/supabase-js": "2.44.4",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",
-    "http-server": "^14.1.1"
+    "spa-server": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
