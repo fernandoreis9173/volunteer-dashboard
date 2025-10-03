@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AuthView, Department } from '../types';
@@ -92,6 +91,7 @@ const RemovableTag: React.FC<{ text: string; onRemove: () => void; }> = ({ text,
 
 export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, setAuthView }) => {
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
     const [availability, setAvailability] = useState({
@@ -181,12 +181,23 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
             setError("A senha deve ter pelo menos 6 caracteres.");
             return;
         }
+        if (password !== confirmPassword) {
+            setError("As senhas não coincidem. Por favor, verifique.");
+            return;
+        }
 
         setLoading(true);
         setError(null);
         setSuccessMessage(null);
 
         try {
+            // FIX: Explicitly check for a valid invitation session before proceeding.
+            // This prevents a race condition and resolves potential "token errors".
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !session) {
+                throw new Error("Sessão de convite inválida ou expirada. Por favor, use o link do seu e--mail novamente.");
+            }
+
             const { data: authData, error: updateError } = await supabase.auth.updateUser({
                 password: password,
                 data: { name: fullName, status: 'Ativo' }
@@ -218,8 +229,6 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     departaments: selectedDepartments,
                 };
 
-                // This is the key change: UPDATE the existing placeholder record created by the trigger,
-                // rather than trying to INSERT a new one.
                 const { error: volunteerUpdateError } = await supabase
                     .from('volunteers')
                     .update(volunteerUpdatePayload)
@@ -230,7 +239,6 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     throw new Error("Sua conta foi ativada, mas houve um erro ao atualizar seu perfil de voluntário. Por favor, contate um administrador.");
                 }
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
-                // For other roles, upsert into the 'profiles' table.
                 const { error: profileError } = await supabase
                     .from('profiles')
                     .upsert({ id: user.id, role: role }, { onConflict: 'id' });
@@ -240,13 +248,13 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                 }
             }
             
-            setSuccessMessage('Sua conta foi ativada com sucesso! Você será redirecionado para o login em alguns segundos.');
+            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login...');
             
             setTimeout(async () => {
                 await supabase.auth.signOut();
                 window.location.hash = '';
                 setAuthView('login');
-            }, 4000);
+            }, 3000);
 
         } catch (error: any) {
             console.error("Error accepting invitation:", error);
@@ -362,13 +370,23 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                         placeholder="Mínimo de 6 caracteres"
                         required
                     />
+                    
+                    <InputField 
+                        label="Confirme sua Senha"
+                        type="password"
+                        name="confirmPassword"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repita a senha"
+                        required
+                    />
 
                     {error && <p className="text-sm text-red-600 text-center pt-4">{error}</p>}
                     {successMessage && <p className="text-sm text-green-600 text-center pt-4">{successMessage}</p>}
 
                     <div className="pt-2">
                         <button type="submit" disabled={loading || !!successMessage} className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400">
-                            {loading ? 'Ativando...' : 'Ativar Conta e Entrar'}
+                            {loading ? 'Ativando...' : 'Ativar Conta'}
                         </button>
                     </div>
                 </form>
