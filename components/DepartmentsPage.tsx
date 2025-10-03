@@ -79,10 +79,10 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
     if (invokeError) {
         console.error('Error fetching leaders:', invokeError);
     } else if (data.users) {
-        const potentialLeaders = data.users.filter((user: any) =>
-            (user.user_metadata?.role === 'lider' || user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'admin') &&
-            user.app_status === 'Ativo'
-        );
+        const potentialLeaders = data.users.filter((user: any) => {
+            const role = user.user_metadata?.role;
+            return (role === 'leader' || role === 'lider' || role === 'admin') && user.app_status === 'Ativo';
+        });
         setLeaders(potentialLeaders);
     }
   }, [supabase]);
@@ -132,7 +132,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
     handleCancelDelete();
   };
   
-  const handleSaveDepartment = async (departmentData: Omit<Department, 'created_at'>, new_leader_id?: string) => {
+  const handleSaveDepartment = async (departmentData: Omit<Department, 'id' | 'created_at'> & { id?: number }, new_leader_id?: string) => {
     if (!supabase) {
       setSaveError("Conexão com o banco de dados não estabelecida.");
       return;
@@ -141,14 +141,19 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
     setSaveError(null);
 
     try {
-        const { data: savedDeptData, error: deptError } = await supabase
-            .from('departments')
-            .upsert(departmentData)
-            .select('id')
-            .single();
-
-        if (deptError) throw deptError;
-        if (!savedDeptData) throw new Error("Falha ao obter o ID do departamento salvo.");
+        let savedDeptData;
+        if (departmentData.id) { // Update
+            const { data, error } = await supabase.from('departments').update(departmentData).eq('id', departmentData.id).select().single();
+            if (error) throw error;
+            savedDeptData = data;
+        } else { // Insert
+            const { id, ...insertData } = departmentData; // eslint-disable-line @typescript-eslint/no-unused-vars
+            const { data, error } = await supabase.from('departments').insert(insertData).select().single();
+            if (error) throw error;
+            savedDeptData = data;
+        }
+        
+        if (!savedDeptData) throw new Error("Falha ao obter os dados do departamento salvo.");
         
         const departmentId = savedDeptData.id;
 
@@ -159,12 +164,18 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
                 .eq('id', new_leader_id);
             
             if (profileError) {
-                throw new Error(`Departamento salvo, mas falha ao vincular o líder: ${profileError.message}`);
+                // This is a partial success, the department was saved but leader link failed.
+                // We should still update the UI and maybe show a different message.
+                console.error(`Departamento salvo, mas falha ao vincular o líder: ${profileError.message}`);
             }
         }
         
-        await fetchDepartments('');
-        setSearchQuery('');
+        if (departmentData.id) {
+            setDepartments(departments.map(d => d.id === savedDeptData.id ? savedDeptData : d));
+        } else {
+            setDepartments([savedDeptData, ...departments].sort((a,b) => a.name.localeCompare(b.name)));
+        }
+
         hideForm();
     } catch (error: any) {
         const errorMessage = error.message || "A operação falhou.";

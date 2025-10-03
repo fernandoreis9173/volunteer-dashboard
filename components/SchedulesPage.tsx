@@ -137,10 +137,20 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     if (deleteError) {
       alert(`Falha ao excluir evento: ${deleteError.message}`);
     } else {
-      await fetchEvents();
+      setAllEvents(prevEvents => prevEvents.filter(event => event.id !== eventToDeleteId));
     }
     setIsDeleteModalOpen(false);
     setEventToDeleteId(null);
+  };
+
+  const refetchEvent = async (eventId: number): Promise<Event | null> => {
+      if (!supabase) return null;
+      const { data, error } = await supabase.from('events').select(`*, event_departments (department_id, departments (id, name, leader)), event_volunteers (volunteer_id, department_id, volunteers (*))`).eq('id', eventId).single();
+      if (error) {
+          console.error("Failed to refetch event", error);
+          return null;
+      }
+      return data as unknown as Event;
   };
 
   const handleSaveEvent = async (eventPayload: any) => {
@@ -151,53 +161,32 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     const { volunteer_ids, ...upsertData } = eventPayload;
 
     try {
+        let eventIdToUpdate: number | undefined = upsertData.id;
+
         if (userRole === 'admin') {
-            if (!upsertData.date || !upsertData.start_time || !upsertData.end_time) {
-                throw new Error("Data e horários são obrigatórios.");
-            }
-            if (upsertData.start_time >= upsertData.end_time) {
-                throw new Error("O horário de início deve ser anterior ao horário de fim.");
-            }
-
-            let conflictQuery = supabase
-                .from('events')
-                .select('id, name, start_time, end_time')
-                .eq('date', upsertData.date);
-
-            if (upsertData.id) {
-                conflictQuery = conflictQuery.neq('id', upsertData.id);
-            }
-
+            if (!upsertData.date || !upsertData.start_time || !upsertData.end_time) throw new Error("Data e horários são obrigatórios.");
+            if (upsertData.start_time >= upsertData.end_time) throw new Error("O horário de início deve ser anterior ao horário de fim.");
+            
+            // Conflict check
+            let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', upsertData.date);
+            if (upsertData.id) conflictQuery = conflictQuery.neq('id', upsertData.id);
             const { data: potentialConflicts, error: fetchConflictError } = await conflictQuery;
             if (fetchConflictError) throw fetchConflictError;
 
-            const newStartTime = upsertData.start_time;
-            const newEndTime = upsertData.end_time;
-
-            const conflict = potentialConflicts?.find(event => {
-                const existingStartTime = event.start_time;
-                const existingEndTime = event.end_time;
-                return (newStartTime < existingEndTime) && (newEndTime > existingStartTime);
-            });
-
-            if (conflict) {
-                throw new Error(`Conflito de horário com o evento "${conflict.name}" (${conflict.start_time} - ${conflict.end_time}).`);
-            }
+            const conflict = potentialConflicts?.find(event => (upsertData.start_time < event.end_time) && (upsertData.end_time > event.start_time));
+            if (conflict) throw new Error(`Conflito de horário com o evento "${conflict.name}" (${conflict.start_time} - ${conflict.end_time}).`);
             
-            const { error: eventError } = await supabase.from('events').upsert(upsertData);
+            const { data: savedEvent, error: eventError } = await supabase.from('events').upsert(upsertData).select('id').single();
             if (eventError) throw eventError;
+            if (!upsertData.id) eventIdToUpdate = savedEvent.id;
 
         } else if (isLeader && upsertData.id && leaderDepartmentId) {
-            const { error: statusError } = await supabase
-                .from('events')
-                .update({ status: upsertData.status })
-                .eq('id', upsertData.id);
+            const { error: statusError } = await supabase.from('events').update({ status: upsertData.status }).eq('id', upsertData.id);
             if (statusError) throw statusError;
 
-            const { error: deleteVolError } = await supabase.from('event_volunteers').delete().eq('event_id', upsertData.id).eq('department_id', leaderDepartmentId);
-            if (deleteVolError) throw deleteVolError;
-
-            if (volunteer_ids && Array.isArray(volunteer_ids) && volunteer_ids.length > 0) {
+            await supabase.from('event_volunteers').delete().eq('event_id', upsertData.id).eq('department_id', leaderDepartmentId);
+            
+            if (volunteer_ids?.length > 0) {
                 const newRelations = volunteer_ids.map((volId: number) => ({ event_id: upsertData.id, volunteer_id: volId, department_id: leaderDepartmentId }));
                 const { error: insertVolError } = await supabase.from('event_volunteers').insert(newRelations);
                 if (insertVolError) throw insertVolError;
@@ -205,15 +194,32 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         } else {
              throw new Error("Ação não permitida ou dados insuficientes.");
         }
+        
+        // Refetch just the single event that was changed and update state
+        if (eventIdToUpdate) {
+            const updatedEvent = await refetchEvent(eventIdToUpdate);
+            if (updatedEvent) {
+                setAllEvents(prevEvents => {
+                    const existing = prevEvents.find(e => e.id === eventIdToUpdate);
+                    if (existing) {
+                        return prevEvents.map(e => e.id === eventIdToUpdate ? updatedEvent : e);
+                    } else {
+                        return [updatedEvent, ...prevEvents].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || a.start_time.localeCompare(b.start_time));
+                    }
+                });
+            } else {
+                await fetchEvents(); // Fallback to full refresh if single refetch fails
+            }
+        } else {
+            await fetchEvents();
+        }
+
+        hideForm();
     } catch (error: any) {
         setSaveError(`Falha ao salvar: ${error.message}`);
+    } finally {
         setIsSaving(false);
-        return;
     }
-    
-    await fetchEvents();
-    hideForm();
-    setIsSaving(false);
   };
   
   const handleAddDepartmentToEvent = async (event: Event) => {
@@ -229,7 +235,13 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         return;
     }
     
-    await fetchEvents();
+    // Optimistically update the UI
+    const updatedEvent = await refetchEvent(event.id);
+    if (updatedEvent) {
+        setAllEvents(allEvents.map(e => e.id === event.id ? updatedEvent : e));
+    } else {
+        await fetchEvents(); // Fallback
+    }
   };
 
   const handleClearFilters = () => {
@@ -330,7 +342,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
                 <EventCard 
                     key={event.id} 
                     event={event} 
-                    userRole={userRole} 
+                    userRole={userRole === 'lider' ? 'leader' : userRole} 
                     leaderDepartmentId={leaderDepartmentId} 
                     onEdit={showForm} 
                     onDelete={handleDeleteRequest}

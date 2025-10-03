@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import VolunteerCard from './VolunteerCard';
 import NewVolunteerForm from './NewVolunteerForm';
@@ -27,6 +26,29 @@ interface VolunteersPageProps {
   setIsFormOpen: (isOpen: boolean) => void;
 }
 
+const getEdgeFunctionError = (error: any): string => {
+    // Case 1: The function returns a JSON object with an 'error' property (our standard)
+    // error.context.error = { error: "My error message" }
+    if (typeof error?.context?.error?.error === 'string') {
+        return error.context.error.error;
+    }
+    // Case 2: The function returns a simple string error
+    // error.context.error = "My error message"
+    if (typeof error?.context?.error === 'string') {
+        return error.context.error;
+    }
+    // Case 3: The function returns a JSON object with a 'message' property
+    // error.context.error = { message: "My error message" }
+    if (typeof error?.context?.error?.message === 'string') {
+        return error.context.error.message;
+    }
+    // Fallback to the generic invoke error message or a default
+    if (typeof error?.message === 'string') {
+        return error.message;
+    }
+    return 'Ocorreu um erro desconhecido. Tente novamente.';
+};
+
 const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, setIsFormOpen }) => {
   const [allVolunteers, setAllVolunteers] = useState<DetailedVolunteer[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -51,25 +73,27 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
       setLoading(true);
       setError(null);
       
-      let queryBuilder = supabase
-        .from('volunteers')
-        .select('id, name, email, phone, initials, status, departments:departaments, skills, availability, created_at')
-        .order('created_at', { ascending: false });
+      try {
+        let queryBuilder = supabase
+            .from('volunteers')
+            .select('id, user_id, name, email, phone, initials, status, departments:departaments, skills, availability, created_at')
+            .order('created_at', { ascending: false });
 
-      if (query) {
-        queryBuilder = queryBuilder.or(`name.ilike.%${query}%,email.ilike.%${query}%`);
-      }
+        if (query) {
+            queryBuilder = queryBuilder.or(`name.ilike.%${query}%,email.ilike.%${query}%`);
+        }
 
-      const { data, error: fetchError } = await queryBuilder;
+        const { data, error: fetchError } = await queryBuilder;
+        if (fetchError) throw fetchError;
 
-      if (fetchError) {
-        console.error('Error fetching volunteers:', fetchError);
-        setError("Não foi possível carregar os voluntários.");
-        setAllVolunteers([]);
-      } else {
         setAllVolunteers(data as DetailedVolunteer[] || []);
+      } catch (error: any) {
+        console.error('Error fetching volunteers:', error);
+        setError(`Falha ao carregar voluntários: ${error.message || 'Erro desconhecido'}`);
+        setAllVolunteers([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
   }, [supabase]);
   
   const fetchActiveDepartments = useCallback(async () => {
@@ -136,7 +160,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
     handleCancelDelete();
   };
 
-  const handleSaveVolunteer = async (volunteerData: Omit<DetailedVolunteer, 'created_at'>) => {
+  const handleSaveVolunteer = async (volunteerData: Omit<DetailedVolunteer, 'created_at'> & { id?: number }) => {
     if (!supabase) {
       setSaveError("Conexão com o banco de dados não estabelecida.");
       return;
@@ -144,46 +168,46 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
     
     setIsSaving(true);
     setSaveError(null);
+    
+    try {
+        if (volunteerData.id) { // Update existing volunteer
+            const { id, user_id, ...updatePayload } = volunteerData;
+            const dbPayload = {
+                ...updatePayload,
+                departaments: updatePayload.departments,
+            };
 
-    let result;
+            const { data, error } = await supabase.from('volunteers').update(dbPayload).eq('id', volunteerData.id).select().single();
+            if (error) throw error;
+            const updatedVolunteer = { ...data, departments: data.departaments, user_id: user_id };
+            setAllVolunteers(allVolunteers.map(v => v.id === updatedVolunteer.id ? updatedVolunteer : v));
+        } else { // Invite new volunteer
+            const invitePayload = {
+                name: volunteerData.name,
+                email: volunteerData.email,
+            };
 
-    const payload = {
-      name: volunteerData.name,
-      email: volunteerData.email,
-      phone: volunteerData.phone,
-      initials: volunteerData.initials,
-      status: volunteerData.status,
-      departaments: volunteerData.departments,
-      skills: volunteerData.skills,
-      availability: volunteerData.availability,
-    };
+            const { error: invokeError } = await supabase.functions.invoke('invite-volunteer', {
+                body: invitePayload,
+            });
 
-    if (volunteerData.id) {
-      result = await supabase
-        .from('volunteers')
-        .update(payload)
-        .eq('id', volunteerData.id)
-        .select('id');
-    } else {
-      result = await supabase
-        .from('volunteers')
-        .insert([payload])
-        .select('id');
-    }
-
-    const { data, error } = result;
-
-    if (error || !data || data.length === 0) {
-        const errorMessage = error ? error.message : "A operação falhou. Verifique suas permissões ou os dados inseridos.";
-        setSaveError(`Falha ao salvar: ${errorMessage}`);
-        console.error("Error saving volunteer:", error);
-    } else {
-        await fetchVolunteers(''); // Refetch all after saving
-        setSearchQuery(''); // Clear search query
+            if (invokeError) {
+                throw invokeError;
+            }
+            
+            // On successful invite, we don't refetch because the user won't be in the 'volunteers' table yet.
+            // The form closing indicates success. A more advanced implementation could use a success toast.
+        }
         hideForm();
+    } catch(error: any) {
+        const errorMessage = getEdgeFunctionError(error);
+        setSaveError(`Falha ao salvar: ${errorMessage}`);
+        console.error("Error saving/inviting volunteer:", error);
+    } finally {
+        setIsSaving(false);
     }
-    setIsSaving(false);
   };
+
 
   const renderContent = () => {
     if (loading) {
@@ -197,7 +221,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
           <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2">
             <div className="relative flex-grow w-full">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg xmlns="http://www.w.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                 </svg>
               </div>
@@ -249,7 +273,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
           </svg>
-          <span>Novo Voluntário</span>
+          <span>Convidar Voluntário</span>
         </button>
       </div>
 

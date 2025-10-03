@@ -1,6 +1,5 @@
 
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
@@ -13,7 +12,7 @@ import LoginPage from './components/LoginPage';
 import { AcceptInvitationPage } from './components/AcceptInvitationPage';
 import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
-import { Page, AuthView } from './types';
+import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
 
@@ -24,120 +23,194 @@ interface UserProfileState {
   volunteer_id: number | null;
 }
 
+interface DashboardData {
+    stats?: {
+        activeVolunteers: string;
+        departments: string;
+        schedulesToday: string;
+        schedulesTomorrow: string;
+    };
+    todaySchedules?: DashboardEvent[];
+    upcomingSchedules?: DashboardEvent[];
+    activeVolunteers?: DashboardVolunteer[];
+    schedules?: VolunteerEvent[];
+}
+
 const App: React.FC = () => {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const sessionUserId = useRef<string | null>(null);
   const [activePage, setActivePage] = useState<Page>('dashboard');
-  const [loading, setLoading] = useState(true); // This now only tracks the initial session check
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [isUserDisabled, setIsUserDisabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
 
-  // Initial setup and session check effect
+  // Effect for initial session check and subscription
   useEffect(() => {
     const client = getSupabaseClient();
     setSupabase(client);
-
     if (!client) {
-      setLoading(false);
-      return;
+        setIsInitializing(false);
+        return;
     }
-
+    
     const hash = window.location.hash;
     if (hash.includes('type=recovery') || hash.includes('type=invite')) {
       setAuthView('accept-invite');
     }
 
-    // Immediately get the session and stop loading, profile is fetched in a separate effect
-    client.auth.getSession().then(({ data: { session: currentSession } }) => {
-        setSession(currentSession);
-        setLoading(false);
-    });
-
-    const { data: { subscription } } = client.auth.onAuthStateChange((event, newSession) => {
-        // Only reset the profile if the user has actually changed (e.g., login/logout)
-        // A simple token refresh will have the same user ID.
-        if (event === 'SIGNED_OUT' || event === 'SIGNED_IN') {
-            setUserProfile(null);
-            setIsUserDisabled(false);
-        }
-        setSession(newSession);
-
-        if(!newSession) {
-            setLoading(false);
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
+        const newUserId = newSession?.user?.id ?? null;
+        // Only update the session state if the user has actually changed.
+        // This is the most reliable way to prevent re-renders and data fetches
+        // on background token refreshes when the user remains the same.
+        if (newUserId !== sessionUserId.current) {
+            setSession(newSession);
+            sessionUserId.current = newUserId;
         }
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Effect to fetch user profile AFTER session is known
+  // Effect for fetching ALL application data when session changes
   useEffect(() => {
-      const fetchProfile = async () => {
-          if (session && supabase) {
-              try {
-                  const userStatus = session.user.user_metadata?.status;
-                  if (userStatus === 'Inativo') {
-                      setIsUserDisabled(true);
-                      setUserProfile(null);
-                      return; 
-                  }
-                  setIsUserDisabled(false);
+    const fetchApplicationData = async () => {
+        if (session && supabase) {
+            setIsInitializing(true);
 
-                  const { data: profileData, error: profileError } = await supabase
-                      .from('profiles')
-                      .select('role, department_id') 
-                      .eq('id', session.user.id)
-                      .single();
+            // 1. Check user status from metadata first
+            const userStatus = session.user.user_metadata?.status;
+            if (userStatus === 'Inativo') {
+                setIsUserDisabled(true);
+                setUserProfile(null);
+                setDashboardData(null);
+                setIsInitializing(false);
+                return; 
+            }
+            setIsUserDisabled(false);
 
-                  if (profileError) {
-                      console.error("Error fetching user profile:", profileError);
-                      setUserProfile(null);
-                      return;
-                  }
+            // 2. Determine role from user metadata (the source of truth)
+            const userRole = session.user.user_metadata?.role;
+            if (!userRole) {
+                console.error("User role not found in metadata.");
+                setUserProfile(null);
+                setDashboardData(null);
+                setIsInitializing(false);
+                return;
+            }
 
-                  if (profileData) {
-                      const profile: UserProfileState = {
-                          role: profileData.role,
-                          department_id: profileData.department_id,
-                          volunteer_id: null,
-                      };
+            // 3. Based on role, fetch necessary data and build profile state
+            if (userRole === 'volunteer') {
+                const { data: volunteerData, error: volunteerError } = await supabase
+                    .from('volunteers')
+                    .select('id')
+                    .eq('user_id', session.user.id)
+                    .single();
 
-                      if (profile.role === 'volunteer' && session.user.email) {
-                          const { data: volunteerData, error: volError } = await supabase
-                              .from('volunteers')
-                              .select('id')
-                              .eq('email', session.user.email)
-                              .single();
-                          
-                          if (volError) {
-                              console.error("Could not find volunteer record for user.", volError);
-                          } else if (volunteerData) {
-                              profile.volunteer_id = volunteerData.id;
-                          }
-                      }
-                      
-                      setUserProfile(profile);
-                      if (profile.role === 'volunteer') {
-                          setActivePage('dashboard');
-                      }
-                  } else {
-                      setUserProfile(null);
-                  }
-              } catch (error) {
-                  console.error("An unexpected error occurred while fetching profile:", error);
-                  setUserProfile(null);
-              }
-          }
-      };
-      
-      fetchProfile();
-  }, [session, supabase]);
+                if (volunteerError || !volunteerData) {
+                    console.error("Error fetching volunteer profile by user_id:", volunteerError);
+                    setUserProfile({ role: userRole, department_id: null, volunteer_id: null });
+                    setDashboardData({ schedules: [] });
+                } else {
+                    const profile: UserProfileState = {
+                        role: userRole,
+                        department_id: null, // Volunteers don't have a single assigned department in 'profiles'
+                        volunteer_id: volunteerData.id,
+                    };
+                    setUserProfile(profile);
+                    
+                    // Fetch volunteer's schedules
+                    const today = new Date().toISOString().slice(0, 10);
+                    const { data: scheduleQueryData } = await supabase
+                      .from('event_volunteers')
+                      .select('events(*, event_departments(departments(name)))')
+                      .eq('volunteer_id', profile.volunteer_id)
+                      .gte('events.date', today)
+                      .order('date', { referencedTable: 'events', ascending: true });
+
+                    const schedules = (scheduleQueryData || []).flatMap(item => item.events || []).filter((event): event is VolunteerEvent => event !== null);
+                    setDashboardData({ schedules });
+                }
+                setActivePage('dashboard');
+
+            } else { // Admin or Leader
+                const { data: profileData, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('role, department_id')
+                    .eq('id', session.user.id)
+                    .single();
+
+                if (profileError || !profileData) {
+                    console.error("Error fetching admin/leader profile:", profileError);
+                    setUserProfile(null);
+                    setDashboardData(null);
+                    setIsInitializing(false);
+                    return;
+                }
+
+                const profile: UserProfileState = {
+                    role: profileData.role,
+                    department_id: profileData.department_id,
+                    volunteer_id: null,
+                };
+                setUserProfile(profile);
+
+                // Fetch admin dashboard data in parallel
+                const getLocalYYYYMMDD = (d: Date) => new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                const todayDate = new Date();
+                const today = getLocalYYYYMMDD(todayDate);
+                const tomorrowDate = new Date();
+                tomorrowDate.setDate(todayDate.getDate() + 1);
+                const tomorrow = getLocalYYYYMMDD(tomorrowDate);
+                const sevenDaysFromNow = new Date();
+                sevenDaysFromNow.setDate(todayDate.getDate() + 7);
+                const nextSevenDays = getLocalYYYYMMDD(sevenDaysFromNow);
+
+                const [statsRes, todaySchedulesRes, upcomingSchedulesRes, activeVolunteersRes] = await Promise.all([
+                    Promise.all([
+                        supabase.from('volunteers').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
+                        supabase.from('departments').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
+                        supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', today).eq('status', 'Confirmado'),
+                        supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', tomorrow).eq('status', 'Confirmado'),
+                    ]),
+                    supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').eq('date', today).eq('status', 'Confirmado').order('start_time').limit(10),
+                    supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').gte('date', tomorrow).lte('date', nextSevenDays).eq('status', 'Confirmado').order('date').limit(5),
+                    supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').order('created_at', { ascending: false }).limit(5)
+                ]);
+
+                setDashboardData({
+                    stats: {
+                        activeVolunteers: String(statsRes[0].count ?? 0),
+                        departments: String(statsRes[1].count ?? 0),
+                        schedulesToday: String(statsRes[2].count ?? 0),
+                        schedulesTomorrow: String(statsRes[3].count ?? 0),
+                    },
+                    // FIX: Cast through `unknown` to resolve complex type inference error from Supabase.
+                    // The runtime data structure is expected to match DashboardEvent[], and this avoids a wider refactor.
+                    todaySchedules: (todaySchedulesRes.data as unknown as DashboardEvent[]) || [],
+                    upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
+                    activeVolunteers: (activeVolunteersRes.data as DashboardVolunteer[]) || [],
+                });
+            }
+            setIsInitializing(false);
+
+        } else {
+            // No session, clear all user-related state
+            setUserProfile(null);
+            setDashboardData(null);
+            setIsUserDisabled(false);
+            setIsInitializing(false);
+        }
+    };
+    
+    fetchApplicationData();
+}, [session, supabase]);
   
   const handleNavigate = (page: Page) => {
     setActivePage(page);
@@ -163,41 +236,30 @@ const App: React.FC = () => {
   const renderPage = () => {
     const userRole = userProfile?.role;
     
-    // Volunteer-specific view
     if (userRole === 'volunteer') {
-      return <VolunteerDashboard supabase={supabase} volunteerId={userProfile?.volunteer_id ?? null} />;
+      return <VolunteerDashboard initialData={dashboardData} />;
     }
 
-    // Admin and Leader views
     switch (activePage) {
       case 'volunteers':
         return <VolunteersPage supabase={supabase} isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} />;
       case 'departments':
         return <DepartmentsPage supabase={supabase} userRole={userRole} />;
       case 'events':
-        const roleForEvents = userRole === 'lider' ? 'leader' : userRole;
-        return <EventsPage supabase={supabase} isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={roleForEvents} leaderDepartmentId={userProfile?.department_id ?? null} />;
+        return <EventsPage supabase={supabase} isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userRole} leaderDepartmentId={userProfile?.department_id ?? null} />;
       case 'admin':
         if (userRole !== 'admin') {
             setActivePage('dashboard');
-            return <Dashboard supabase={supabase} />;
+            return <Dashboard initialData={dashboardData} />;
         }
         return <AdminPage supabase={supabase} />;
       case 'dashboard':
       default:
-        // Show a loading state here if the profile is still being fetched after login
-        if (session && !userProfile) {
-            return (
-                 <div className="flex items-center justify-center h-full">
-                    <p className="text-slate-500">Carregando perfil do usuário...</p>
-                </div>
-            )
-        }
-        return <Dashboard supabase={supabase} />;
+        return <Dashboard initialData={dashboardData} />;
     }
   };
 
-  if (loading) {
+  if (isInitializing) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-100">
         <p className="text-lg text-slate-500">Carregando...</p>
@@ -241,7 +303,7 @@ const App: React.FC = () => {
               className="lg:hidden mb-4 p-2 rounded-md bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 shadow-sm flex items-center space-x-2"
               aria-label="Abrir menu"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg xmlns="http://www.w.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                 </svg>
                 <span>Menu</span>

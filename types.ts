@@ -1,4 +1,5 @@
 
+
 export interface Volunteer {
   name: string;
   email: string;
@@ -50,14 +51,15 @@ export type AuthView = 'login' | 'accept-invite';
 
 export interface DetailedVolunteer {
     id?: number;
+    user_id?: string;
     name: string;
     email: string;
     phone: string;
     initials: string;
-    status: 'Ativo' | 'Inativo';
+    status: 'Ativo' | 'Inativo' | 'Pendente';
     departments: string[];
     skills: string[];
-    availability: string[];
+    availability: string[] | string;
     created_at?: string;
 }
 

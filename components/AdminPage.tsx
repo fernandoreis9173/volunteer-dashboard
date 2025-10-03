@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from '@supabase/supabase-js';
@@ -19,7 +18,7 @@ interface EnrichedUser extends User {
 
 const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const [email, setEmail] = useState('');
-    const [role, setRole] = useState('lider');
+    const [role, setRole] = useState('leader');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -36,13 +35,28 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const [userToAction, setUserToAction] = useState<User | null>(null);
     const [actionType, setActionType] = useState<'disable' | 'enable' | null>(null);
 
-    const getDetailedError = (error: any): string => {
-        if (error?.context?.error) {
+    const getEdgeFunctionError = (error: any): string => {
+        // Case 1: The function returns a JSON object with an 'error' property (our standard)
+        // error.context.error = { error: "My error message" }
+        if (typeof error?.context?.error?.error === 'string') {
+            return error.context.error.error;
+        }
+        // Case 2: The function returns a simple string error
+        // error.context.error = "My error message"
+        if (typeof error?.context?.error === 'string') {
             return error.context.error;
         }
-        return error?.message || 'Ocorreu um erro desconhecido.';
+        // Case 3: The function returns a JSON object with a 'message' property
+        // error.context.error = { message: "My error message" }
+        if (typeof error?.context?.error?.message === 'string') {
+            return error.context.error.message;
+        }
+        // Fallback to the generic invoke error message or a default
+        if (typeof error?.message === 'string') {
+            return error.message;
+        }
+        return 'Ocorreu um erro desconhecido. Tente novamente.';
     };
-
 
     const fetchInvitedUsers = async () => {
         if (!supabase) return;
@@ -52,7 +66,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         const { data, error: fetchError } = await supabase.functions.invoke('list-users');
 
         if (fetchError) {
-            setListError(`Falha ao carregar la lista de convidados: ${getDetailedError(fetchError)}`);
+            setListError(`Falha ao carregar a lista de convidados: ${getEdgeFunctionError(fetchError)}`);
             console.error('Error fetching invited users:', fetchError);
         } else if (data && data.error) {
             setListError(`Erro retornado pela função: ${data.error}`);
@@ -84,21 +98,26 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         setError(null);
         setSuccessMessage(null);
 
-        const { data: invitedUser, error: invokeError } = await supabase.functions.invoke('invite-user', {
-            body: { email, role },
-        });
+        try {
+            const { error: invokeError } = await supabase.functions.invoke('invite-user', {
+                body: { email, role },
+            });
 
-        if (invokeError) {
-            console.error('Error inviting user:', invokeError);
-            setError(`Falha ao enviar convite: ${getDetailedError(invokeError)}`);
-        } else {
+            if (invokeError) {
+                throw invokeError;
+            }
+            
             setSuccessMessage(`Convite enviado com sucesso para ${email}!`);
             setEmail('');
-            setRole('lider');
+            setRole('leader');
             await fetchInvitedUsers();
-        }
 
-        setLoading(false);
+        } catch (err) {
+            console.error('Error inviting user:', err);
+            setError(`Falha ao enviar convite: ${getEdgeFunctionError(err)}`);
+        } finally {
+            setLoading(false);
+        }
     };
     
     const handleUpdateUser = async (userId: string, newRole: string, newPermissions: string[]) => {
@@ -109,7 +128,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         });
 
         if (error) {
-            alert(`Falha ao atualizar permissões: ${getDetailedError(error)}`);
+            alert(`Falha ao atualizar permissões: ${getEdgeFunctionError(error)}`);
         } else {
             await fetchInvitedUsers();
             setIsEditModalOpen(false);
@@ -133,7 +152,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         });
 
         if (error) {
-            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getDetailedError(error)}`);
+            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getEdgeFunctionError(error)}`);
         } else {
             await fetchInvitedUsers();
         }
@@ -197,8 +216,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                         <div>
                             <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
                             <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
-                                <option value="lider">Líder de Departamento</option>
-                                <option value="volunteer">Voluntário</option>
+                                <option value="leader">Líder de Departamento</option>
                                 <option value="admin">Admin (Líder Geral)</option>
                             </select>
                         </div>

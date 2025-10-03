@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { DetailedVolunteer, Department } from '../types';
 
@@ -21,10 +20,11 @@ interface InputFieldProps {
     placeholder?: string;
     required?: boolean;
     className?: string;
+    readOnly?: boolean;
 }
 
 const InputField: React.FC<InputFieldProps> = 
-({ label, type, name, value, onChange, placeholder, required, className }) => (
+({ label, type, name, value, onChange, placeholder, required, className, readOnly }) => (
     <div className={className}>
         <label className="block text-sm font-medium text-slate-700 mb-1">
             {label} {required && <span className="text-red-500">*</span>}
@@ -36,6 +36,7 @@ const InputField: React.FC<InputFieldProps> =
             onChange={onChange}
             placeholder={placeholder}
             required={required}
+            readOnly={readOnly}
             className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
         />
     </div>
@@ -173,6 +174,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
         fullName: '',
         email: '',
         phone: '',
+        initials: '',
     });
     const [availability, setAvailability] = useState({
         domingo: false, segunda: false, terca: false,
@@ -212,6 +214,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                 fullName: initialData.name,
                 email: initialData.email,
                 phone: initialData.phone ? formatPhoneNumber(initialData.phone) : '',
+                initials: initialData.initials || '',
             });
             setSkills(initialData.skills || []);
             setSelectedDepartments(initialData.departments || []);
@@ -245,13 +248,33 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             setAvailability(newAvailabilityState);
         } else {
             // Reset form for new volunteer
-            setFormData({ fullName: '', email: '', phone: '' });
+            setFormData({ fullName: '', email: '', phone: '', initials: '' });
             setSkills([]);
             setSelectedDepartments([]);
             setIsActive(true);
             setAvailability(availabilityKeys);
         }
     }, [initialData]);
+
+    // Automatically generate initials from full name, but only when editing.
+    useEffect(() => {
+        if (!isEditing) return; // Only generate initials in edit mode.
+        const name = formData.fullName.trim();
+        if (!name) {
+            setFormData(prev => ({...prev, initials: ''}));
+            return;
+        }
+        const nameParts = name.split(' ').filter(p => p);
+        if (nameParts.length === 0) {
+            setFormData(prev => ({...prev, initials: ''}));
+            return;
+        }
+        const newInitials = (
+            (nameParts[0]?.[0] || '') + 
+            (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
+        ).toUpperCase();
+        setFormData(prev => ({...prev, initials: newInitials}));
+    }, [formData.fullName, isEditing]);
 
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -292,13 +315,15 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
         if (!formData.fullName || !formData.email) {
-            alert('Por favor, preencha o Nome Completo e o Email.');
+            alert('Por favor, preencha o Nome Completo e Email.');
             return;
         }
-
-        const nameParts = formData.fullName.trim().split(' ');
-        const initials = ((nameParts[0]?.[0] || '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')).toUpperCase();
+        if (isEditing && !formData.initials) {
+            alert('As iniciais são obrigatórias ao editar um voluntário.');
+            return;
+        }
         
         const selectedAvailabilityDays = Object.entries(availability)
             .filter(([, isSelected]) => isSelected)
@@ -308,12 +333,12 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             id: initialData?.id,
             name: formData.fullName,
             email: formData.email,
-            phone: formData.phone.replace(/[^\d]/g, ''),
-            initials,
-            status: isActive ? 'Ativo' : 'Inativo',
-            departments: selectedDepartments,
-            skills,
-            availability: selectedAvailabilityDays,
+            phone: isEditing ? formData.phone.replace(/[^\d]/g, '') : '',
+            initials: isEditing ? formData.initials : '',
+            status: isEditing ? (isActive ? 'Ativo' : 'Inativo') : 'Pendente',
+            departments: isEditing ? selectedDepartments : [],
+            skills: isEditing ? skills : [],
+            availability: isEditing ? selectedAvailabilityDays : [],
         };
 
         onSave(volunteerData);
@@ -330,77 +355,84 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                 </svg>
-                <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Voluntário' : 'Novo Voluntário'}</h2>
+                <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Voluntário' : 'Convidar Novo Voluntário'}</h2>
             </div>
             
             <form className="space-y-6" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <InputField label="Nome Completo" type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} required />
-                    <InputField label="Email" type="email" name="email" value={formData.email} onChange={handleInputChange} required />
+                    <InputField label="Email" type="email" name="email" value={formData.email} onChange={handleInputChange} required readOnly={isEditing} className={isEditing ? 'cursor-not-allowed bg-slate-100' : ''} />
                 </div>
-                
-                <InputField label="Telefone" type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="(11) 99876-5432" />
-                
-                <TagInputField 
-                    label="Habilidades e Talentos" 
-                    placeholder="Ex: Música, Tecnologia, Liderança..." 
-                    tags={skills}
-                    setTags={setSkills}
-                    color="blue"
-                />
-                
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="Buscar por departamento..."
-                            value={departmentSearch}
-                            onChange={(e) => setDepartmentSearch(e.target.value)}
-                            onFocus={() => setIsDepartmentDropdownOpen(true)}
-                            onBlur={() => setTimeout(() => setIsDepartmentDropdownOpen(false), 200)}
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
-                        />
-                        {isDepartmentDropdownOpen && filteredDepartments.length > 0 && (
-                            <ul className="absolute z-10 w-full bg-white border border-slate-300 rounded-lg shadow-lg mt-1 max-h-48 overflow-auto">
-                                {filteredDepartments.map((dep) => (
-                                    <li
-                                        key={dep.id}
-                                        onMouseDown={() => handleAddDepartment(dep.name)}
-                                        className="px-3 py-2 hover:bg-slate-100 cursor-pointer text-slate-800"
-                                    >
-                                        {dep.name}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+
+                {isEditing && (
+                <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <InputField label="Iniciais" type="text" name="initials" value={formData.initials} onChange={handleInputChange} placeholder="Ex: BF" required />
+                        <InputField label="Telefone" type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="(11) 99876-5432" />
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
-                        {selectedDepartments.map((department) => (
-                            <RemovableTag
-                                key={department}
-                                text={department}
-                                color="yellow"
-                                onRemove={() => handleRemoveDepartment(department)}
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Buscar por departamento..."
+                                value={departmentSearch}
+                                onChange={(e) => setDepartmentSearch(e.target.value)}
+                                onFocus={() => setIsDepartmentDropdownOpen(true)}
+                                onBlur={() => setTimeout(() => setIsDepartmentDropdownOpen(false), 200)}
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
                             />
-                        ))}
+                            {isDepartmentDropdownOpen && filteredDepartments.length > 0 && (
+                                <ul className="absolute z-10 w-full bg-white border border-slate-300 rounded-lg shadow-lg mt-1 max-h-48 overflow-auto">
+                                    {filteredDepartments.map((dep) => (
+                                        <li
+                                            key={dep.id}
+                                            onMouseDown={() => handleAddDepartment(dep.name)}
+                                            className="px-3 py-2 hover:bg-slate-100 cursor-pointer text-slate-800"
+                                        >
+                                            {dep.name}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
+                            {selectedDepartments.map((department) => (
+                                <RemovableTag
+                                    key={department}
+                                    text={department}
+                                    color="yellow"
+                                    onRemove={() => handleRemoveDepartment(department)}
+                                />
+                            ))}
+                        </div>
                     </div>
-                </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Segunda-feira" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Terça-feira" name="terca" checked={availability.terca} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Quarta-feira" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Quinta-feira" name="quinta" checked={availability.quinta} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Sexta-feira" name="sexta" checked={availability.sexta} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Sábado" name="sabado" checked={availability.sabado} onChange={handleCheckboxChange} />
+                    <TagInputField 
+                        label="Habilidades e Talentos" 
+                        placeholder="Ex: Música, Tecnologia, Liderança..." 
+                        tags={skills}
+                        setTags={setSkills}
+                        color="blue"
+                    />
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} />
+                            <CheckboxField label="Segunda-feira" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} />
+                            <CheckboxField label="Terça-feira" name="terca" checked={availability.terca} onChange={handleCheckboxChange} />
+                            <CheckboxField label="Quarta-feira" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} />
+                            <CheckboxField label="Quinta-feira" name="quinta" checked={availability.quinta} onChange={handleCheckboxChange} />
+                            <CheckboxField label="Sexta-feira" name="sexta" checked={availability.sexta} onChange={handleCheckboxChange} />
+                            <CheckboxField label="Sábado" name="sabado" checked={availability.sabado} onChange={handleCheckboxChange} />
+                        </div>
                     </div>
-                </div>
-
-                <CheckboxField label="Voluntário ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                    
+                    <CheckboxField label="Voluntário ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                </>
+                )}
                 
                 <div className="pt-6 border-t border-slate-200 flex flex-wrap justify-end items-center gap-3">
                     {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
@@ -420,7 +452,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
-                        <span>{isSaving ? 'Salvando...' : (isEditing ? 'Atualizar Voluntário' : 'Salvar Voluntário')}</span>
+                        <span>{isSaving ? 'Salvando...' : (isEditing ? 'Atualizar Voluntário' : 'Enviar Convite')}</span>
                     </button>
                 </div>
             </form>

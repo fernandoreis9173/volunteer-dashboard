@@ -1,64 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+
+import React from 'react';
 import { Event } from '../types';
 
 interface VolunteerDashboardProps {
-  supabase: SupabaseClient | null;
-  volunteerId: number | null;
+  initialData: {
+    schedules?: Event[];
+  } | null;
 }
 
-const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ supabase, volunteerId }) => {
-  const [schedules, setSchedules] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchSchedules = async () => {
-      if (!supabase || !volunteerId) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      
-      const today = new Date().toISOString().slice(0, 10);
-
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('event_volunteers')
-          .select(`
-            events (
-              *,
-              event_departments (
-                departments ( name )
-              )
-            )
-          `)
-          .eq('volunteer_id', volunteerId)
-          .gte('events.date', today)
-          .order('date', { referencedTable: 'events', ascending: true });
-          
-        if (fetchError) throw fetchError;
-        
-        // FIX: The Supabase query returns a nested array of events ([{events: [...]}, {events: [...]}])
-        // which needs to be flattened into a single list of event objects.
-        // `flatMap` correctly extracts and flattens these nested event arrays.
-        const formattedData = data
-          .flatMap(item => item.events || [])
-          .filter((event): event is Event => event !== null);
-        setSchedules(formattedData);
-
-      } catch (error: any) {
-        console.error('Error fetching volunteer schedules:', error);
-        setError("Não foi possível carregar suas escalas.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSchedules();
-  }, [supabase, volunteerId]);
+const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ initialData }) => {
+  const schedules = initialData?.schedules ?? [];
+  const loading = !initialData;
+  const error = null; // Error handling would be managed by the parent component now
 
   const ScheduleCard: React.FC<{ schedule: Event }> = ({ schedule }) => {
     const departmentNames = (schedule.event_departments || []).map(ed => ed.departments?.name).filter(Boolean).join(', ');

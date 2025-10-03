@@ -30,16 +30,7 @@ Deno.serve(async (req) => {
 
     // FIX: Refactored logic to determine user status based on metadata, making it the single source of truth.
     // This ensures invited users remain 'Pendente' until they accept the invitation and prevents them from being marked 'Ativo' prematurely.
-    const enrichedUsers = users
-      .filter(u => {
-        // Ensure user_metadata is an object before accessing properties
-        const metadata = u.user_metadata;
-        if (typeof metadata !== 'object' || metadata === null) return false;
-        
-        const role = metadata.role || metadata.papel;
-        return role === 'admin' || role === 'lider';
-      })
-      .map(user => {
+    const enrichedUsers = users.map(user => {
         const metadataStatus = user.user_metadata?.status;
         let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Pendente'; // Default for legacy users or if status is somehow missing
 

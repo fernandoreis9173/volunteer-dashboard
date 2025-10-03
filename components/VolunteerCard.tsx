@@ -66,6 +66,29 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onDele
     return String(volunteer.availability);
   };
 
+  const getStatusInfo = () => {
+    switch (volunteer.status) {
+      case 'Ativo':
+        return {
+          color: 'text-green-600',
+          icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+        };
+      case 'Pendente':
+        return {
+          color: 'text-amber-600',
+          icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+        };
+      case 'Inativo':
+      default:
+        return {
+          color: 'text-slate-500',
+          icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+        };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
+
   return (
     <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col space-y-4">
       <div className="flex items-start justify-between">
@@ -75,16 +98,8 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onDele
           </div>
           <div>
             <p className="font-bold text-slate-800">{volunteer.name}</p>
-            <div className={`flex items-center space-x-1.5 text-sm font-semibold mt-1 ${volunteer.status === 'Ativo' ? 'text-green-600' : 'text-slate-500'}`}>
-              {volunteer.status === 'Ativo' ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
+            <div className={`flex items-center space-x-1.5 text-sm font-semibold mt-1 ${statusInfo.color}`}>
+              {statusInfo.icon}
               <span>{volunteer.status}</span>
             </div>
           </div>
