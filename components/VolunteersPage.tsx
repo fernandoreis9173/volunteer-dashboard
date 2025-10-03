@@ -1,10 +1,24 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import VolunteerCard from './VolunteerCard';
 import NewVolunteerForm from './NewVolunteerForm';
 import ConfirmationModal from './ConfirmationModal';
 import { DetailedVolunteer, Department } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
+
+// Debounce hook
+function useDebounce(value: string, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  return debouncedValue;
+}
 
 interface VolunteersPageProps {
   supabase: SupabaseClient | null;
@@ -23,8 +37,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
   const [searchQuery, setSearchQuery] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [volunteerToDeleteId, setVolunteerToDeleteId] = useState<number | null>(null);
+  
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  const fetchAllVolunteers = async () => {
+  const fetchVolunteers = useCallback(async (query: string) => {
       if (!supabase) {
         setLoading(false);
         setError("Supabase client not initialized.");
@@ -34,10 +50,16 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
       setLoading(true);
       setError(null);
       
-      const { data, error: fetchError } = await supabase
+      let queryBuilder = supabase
         .from('volunteers')
         .select('id, name, email, phone, initials, status, departments:departaments, skills, availability, created_at')
         .order('created_at', { ascending: false });
+
+      if (query) {
+        queryBuilder = queryBuilder.or(`name.ilike.%${query}%,email.ilike.%${query}%`);
+      }
+
+      const { data, error: fetchError } = await queryBuilder;
 
       if (fetchError) {
         console.error('Error fetching volunteers:', fetchError);
@@ -47,9 +69,9 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
         setAllVolunteers(data as DetailedVolunteer[] || []);
       }
       setLoading(false);
-  };
+  }, [supabase]);
   
-  const fetchActiveDepartments = async () => {
+  const fetchActiveDepartments = useCallback(async () => {
     if (!supabase) return;
     const { data, error } = await supabase
         .from('departments')
@@ -61,25 +83,15 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
     } else {
         setDepartments(data as Department[] || []);
     }
-  };
-
-  useEffect(() => {
-    fetchAllVolunteers();
-    fetchActiveDepartments();
   }, [supabase]);
 
-  const filteredVolunteers = useMemo(() => {
-    return allVolunteers.filter(volunteer => {
-        const query = searchQuery.toLowerCase();
-        if (!query) return true;
-        
-        const nameMatch = volunteer.name.toLowerCase().includes(query);
-        const emailMatch = volunteer.email.toLowerCase().includes(query);
-        
-        return nameMatch || emailMatch;
-    });
-  }, [allVolunteers, searchQuery]);
+  useEffect(() => {
+    fetchVolunteers(debouncedSearchQuery);
+  }, [debouncedSearchQuery, fetchVolunteers]);
 
+  useEffect(() => {
+    fetchActiveDepartments();
+  }, [fetchActiveDepartments]);
 
   const showForm = () => {
     setSaveError(null);
@@ -165,7 +177,8 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
         setSaveError(`Falha ao salvar: ${errorMessage}`);
         console.error("Error saving volunteer:", error);
     } else {
-        await fetchAllVolunteers();
+        await fetchVolunteers(''); // Refetch all after saving
+        setSearchQuery(''); // Clear search query
         hideForm();
     }
     setIsSaving(false);
@@ -195,17 +208,11 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="bg-slate-100 text-slate-600 text-sm font-semibold px-4 py-1.5 rounded-lg flex items-center space-x-2 flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <span>Exibindo {filteredVolunteers.length} de {allVolunteers.length} voluntários</span>
-            </div>
           </div>
 
-          {filteredVolunteers.length > 0 ? (
+          {allVolunteers.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {filteredVolunteers.map((volunteer) => (
+                {allVolunteers.map((volunteer) => (
                 <VolunteerCard 
                     key={volunteer.id} 
                     volunteer={volunteer} 

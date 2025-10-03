@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { DashboardVolunteer } from '../types';
 
@@ -32,7 +33,15 @@ const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ volunteers,
       </div>
       <div className="space-y-5">
         {loading ? (
-            <p className="text-slate-500">Carregando voluntários...</p>
+            Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="flex items-center space-x-4 animate-pulse">
+                    <div className="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0"></div>
+                    <div className="flex-1 space-y-2 py-1">
+                        <div className="h-3 bg-slate-200 rounded w-3/4"></div>
+                        <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                    </div>
+                </div>
+            ))
         ) : volunteers.length > 0 ? (
             volunteers.map((volunteer) => (
                 <VolunteerItem key={volunteer.id} volunteer={volunteer} />

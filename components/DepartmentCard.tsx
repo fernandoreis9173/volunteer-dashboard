@@ -70,4 +70,4 @@ const DepartmentCard: React.FC<DepartmentCardProps> = ({ department, onEdit, onD
   );
 };
 
-export default DepartmentCard;
+export default React.memo(DepartmentCard);

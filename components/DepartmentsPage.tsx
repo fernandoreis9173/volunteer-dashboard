@@ -1,10 +1,24 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import DepartmentCard from './DepartmentCard';
 import NewDepartmentForm from './NewDepartmentForm';
 import ConfirmationModal from './ConfirmationModal';
 import { Department } from '../types';
 import { SupabaseClient, User } from '@supabase/supabase-js';
+
+// Debounce hook
+function useDebounce(value: string, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  return debouncedValue;
+}
 
 interface DepartmentsPageProps {
   supabase: SupabaseClient | null;
@@ -23,8 +37,10 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [departmentToDeleteId, setDepartmentToDeleteId] = useState<number | null>(null);
   const [leaders, setLeaders] = useState<User[]>([]);
+  
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  const fetchDepartments = async () => {
+  const fetchDepartments = useCallback(async (query: string) => {
     if (!supabase) {
       setLoading(false);
       setError("Supabase client not initialized.");
@@ -32,10 +48,17 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
     }
     setLoading(true);
     setError(null);
-    const { data, error: fetchError } = await supabase
+    
+    let queryBuilder = supabase
       .from('departments')
       .select('*')
       .order('name', { ascending: true });
+
+    if(query) {
+        queryBuilder = queryBuilder.or(`name.ilike.%${query}%,leader.ilike.%${query}%`);
+    }
+
+    const { data, error: fetchError } = await queryBuilder;
 
     if (fetchError) {
       console.error('Error fetching departments:', fetchError.message);
@@ -45,9 +68,9 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
       setDepartments(data || []);
     }
     setLoading(false);
-  };
+  }, [supabase]);
 
-  const fetchLeaders = async () => {
+  const fetchLeaders = useCallback(async () => {
     if (!supabase) return;
     const { data, error: invokeError } = await supabase.functions.invoke('list-users');
     if (invokeError) {
@@ -59,12 +82,15 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
         );
         setLeaders(potentialLeaders);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
-    fetchDepartments();
-    fetchLeaders();
-  }, [supabase]);
+    fetchDepartments(debouncedSearchQuery);
+  }, [debouncedSearchQuery, fetchDepartments]);
+
+  useEffect(() => {
+      fetchLeaders();
+  }, [fetchLeaders]);
 
   const showForm = () => {
     setSaveError(null);
@@ -112,7 +138,6 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
     setSaveError(null);
 
     try {
-        // Step 1: Upsert department data and get the saved record back
         const { data: savedDeptData, error: deptError } = await supabase
             .from('departments')
             .upsert(departmentData)
@@ -124,8 +149,6 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
         
         const departmentId = savedDeptData.id;
 
-        // Step 2: If a new leader was selected, update their profile with the department ID.
-        // This is the critical step that fixes the data integrity.
         if (new_leader_id) {
             const { error: profileError } = await supabase
                 .from('profiles')
@@ -133,31 +156,21 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
                 .eq('id', new_leader_id);
             
             if (profileError) {
-                // This is a significant error, let the user know.
                 throw new Error(`Departamento salvo, mas falha ao vincular o líder: ${profileError.message}`);
             }
         }
         
-        // Success case
-        await fetchDepartments();
+        await fetchDepartments('');
+        setSearchQuery('');
         hideForm();
     } catch (error: any) {
-        const errorMessage = error.message || "A operação falhou. Verifique suas permissões ou os dados inseridos.";
+        const errorMessage = error.message || "A operação falhou.";
         setSaveError(`Falha ao salvar: ${errorMessage}`);
-        console.error("Error saving department and linking leader:", error);
+        console.error("Error saving department:", error);
     } finally {
         setIsSaving(false);
     }
   };
-
-
-  const filteredDepartments = departments.filter(department => {
-    const query = searchQuery.toLowerCase();
-    if (!query) return true;
-    const nameMatch = department.name.toLowerCase().includes(query);
-    const leaderMatch = department.leader.toLowerCase().includes(query);
-    return nameMatch || leaderMatch;
-  });
 
   const renderContent = () => {
     if (loading) return <p className="text-center text-slate-500 mt-10">Carregando departamentos...</p>;
@@ -179,9 +192,9 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
             </div>
         </div>
 
-        {filteredDepartments.length > 0 ? (
+        {departments.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredDepartments.map((department) => (
+            {departments.map((department) => (
               <DepartmentCard key={department.id} department={department} onEdit={handleEditDepartment} onDelete={handleDeleteRequest} userRole={userRole} />
             ))}
           </div>

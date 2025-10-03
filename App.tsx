@@ -26,7 +26,7 @@ const App: React.FC = () => {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [activePage, setActivePage] = useState<Page>('dashboard');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // This now only tracks the initial session check
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const [isUserDisabled, setIsUserDisabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
 
+  // Initial setup and session check effect
   useEffect(() => {
     const client = getSupabaseClient();
     setSupabase(client);
@@ -48,82 +49,93 @@ const App: React.FC = () => {
       setAuthView('accept-invite');
     }
 
-    const { data: { subscription } } = client.auth.onAuthStateChange(async (_event, newSession) => {
-      try {
-          setSession(newSession);
-          
-          if (newSession) {
-            const userStatus = newSession.user.user_metadata?.status;
-            if (userStatus === 'Inativo') {
-              setIsUserDisabled(true);
-              setUserProfile(null);
-              return; 
-            }
-            setIsUserDisabled(false);
+    // Immediately get the session and stop loading, profile is fetched in a separate effect
+    client.auth.getSession().then(({ data: { session: currentSession } }) => {
+        setSession(currentSession);
+        setLoading(false);
+    });
 
-            // FIX: Simplified and robust profile fetching.
-            // We now fetch 'department_id' directly, as we've fixed the data integrity issue.
-            const { data: profileData, error: profileError } = await client
-              .from('profiles')
-              .select('role, department_id') 
-              .eq('id', newSession.user.id)
-              .single();
-
-            if (profileError) {
-              console.error("Error fetching user profile:", profileError);
-              setUserProfile(null);
-              return;
-            }
-
-            if (profileData) {
-              const profile: UserProfileState = {
-                role: profileData.role,
-                department_id: profileData.department_id, // Directly use the reliable data.
-                volunteer_id: null,
-              };
-
-              // Logic to find the volunteer ID for volunteer roles remains.
-              if (profile.role === 'volunteer' && newSession.user.email) {
-                  const { data: volunteerData, error: volError } = await client
-                    .from('volunteers')
-                    .select('id')
-                    .eq('email', newSession.user.email)
-                    .single();
-                  
-                  if (volError) {
-                    console.error("Could not find volunteer record for user.", volError);
-                  } else if (volunteerData) {
-                    profile.volunteer_id = volunteerData.id;
-                  }
-              }
-              
-              setUserProfile(profile);
-              if (profile.role === 'volunteer') {
-                setActivePage('dashboard');
-              }
-            } else {
-              setUserProfile(null);
-            }
-
-          } else {
+    const { data: { subscription } } = client.auth.onAuthStateChange((event, newSession) => {
+        // Only reset the profile if the user has actually changed (e.g., login/logout)
+        // A simple token refresh will have the same user ID.
+        if (event === 'SIGNED_OUT' || event === 'SIGNED_IN') {
             setUserProfile(null);
             setIsUserDisabled(false);
-          }
-      } catch (error) {
-          console.error("An unexpected error occurred during auth state change:", error);
-          setUserProfile(null);
-          setIsUserDisabled(false);
-          setSession(null);
-      } finally {
-          // This block is guaranteed to run, solving the infinite loading screen.
-          setLoading(false);
-      }
+        }
+        setSession(newSession);
+
+        if(!newSession) {
+            setLoading(false);
+        }
     });
 
     return () => {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Effect to fetch user profile AFTER session is known
+  useEffect(() => {
+      const fetchProfile = async () => {
+          if (session && supabase) {
+              try {
+                  const userStatus = session.user.user_metadata?.status;
+                  if (userStatus === 'Inativo') {
+                      setIsUserDisabled(true);
+                      setUserProfile(null);
+                      return; 
+                  }
+                  setIsUserDisabled(false);
+
+                  const { data: profileData, error: profileError } = await supabase
+                      .from('profiles')
+                      .select('role, department_id') 
+                      .eq('id', session.user.id)
+                      .single();
+
+                  if (profileError) {
+                      console.error("Error fetching user profile:", profileError);
+                      setUserProfile(null);
+                      return;
+                  }
+
+                  if (profileData) {
+                      const profile: UserProfileState = {
+                          role: profileData.role,
+                          department_id: profileData.department_id,
+                          volunteer_id: null,
+                      };
+
+                      if (profile.role === 'volunteer' && session.user.email) {
+                          const { data: volunteerData, error: volError } = await supabase
+                              .from('volunteers')
+                              .select('id')
+                              .eq('email', session.user.email)
+                              .single();
+                          
+                          if (volError) {
+                              console.error("Could not find volunteer record for user.", volError);
+                          } else if (volunteerData) {
+                              profile.volunteer_id = volunteerData.id;
+                          }
+                      }
+                      
+                      setUserProfile(profile);
+                      if (profile.role === 'volunteer') {
+                          setActivePage('dashboard');
+                      }
+                  } else {
+                      setUserProfile(null);
+                  }
+              } catch (error) {
+                  console.error("An unexpected error occurred while fetching profile:", error);
+                  setUserProfile(null);
+              }
+          }
+      };
+      
+      fetchProfile();
+  }, [session, supabase]);
   
   const handleNavigate = (page: Page) => {
     setActivePage(page);
@@ -171,6 +183,14 @@ const App: React.FC = () => {
         return <AdminPage supabase={supabase} />;
       case 'dashboard':
       default:
+        // Show a loading state here if the profile is still being fetched after login
+        if (session && !userProfile) {
+            return (
+                 <div className="flex items-center justify-center h-full">
+                    <p className="text-slate-500">Carregando perfil do usuário...</p>
+                </div>
+            )
+        }
         return <Dashboard supabase={supabase} />;
     }
   };

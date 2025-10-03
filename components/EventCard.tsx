@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Event } from '../types';
 
@@ -106,4 +107,4 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
     );
 }
 
-export default EventCard;
+export default React.memo(EventCard);

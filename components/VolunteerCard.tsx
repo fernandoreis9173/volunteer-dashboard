@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { DetailedVolunteer } from '../types';
 
@@ -38,21 +37,16 @@ const formatPhoneNumber = (value: string) => {
 
 const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onDelete }) => {
   const getAvailabilityText = () => {
-    // FIX: The availability property is typed as string[], but based on the following logic,
-    // it can sometimes be a string from the database. Casting to `any` allows the runtime
-    // checks to handle both cases and prevents a TypeScript error.
     let availabilityData: any = volunteer.availability;
 
     if (!availabilityData || availabilityData.length === 0) {
       return 'Nenhuma registrada';
     }
 
-    // Check if it's a string that looks like a JSON array and parse it
     if (typeof availabilityData === 'string' && availabilityData.startsWith('[') && availabilityData.endsWith(']')) {
       try {
         availabilityData = JSON.parse(availabilityData);
       } catch (e) {
-        // If parsing fails, it's just a string. Return it as is.
         return String(volunteer.availability);
       }
     }
@@ -68,7 +62,6 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onDele
       return `${count} dias disponíveis`;
     }
     
-    // Fallback for non-array, non-JSON-array-string data.
     return String(volunteer.availability);
   };
 
@@ -159,4 +152,5 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onDele
     </div>
   );
 }
-export default VolunteerCard;
+
+export default React.memo(VolunteerCard);

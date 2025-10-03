@@ -1,6 +1,5 @@
 
-
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
 import EventCard from './EventCard';
@@ -8,6 +7,21 @@ import { Event } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// Debounce hook
+function useDebounce(value: string, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  return debouncedValue;
+}
+
 
 interface EventsPageProps {
   supabase: SupabaseClient | null;
@@ -32,6 +46,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const isLeader = userRole === 'leader' || userRole === 'lider';
   const [showOnlyMyDepartmentEvents, setShowOnlyMyDepartmentEvents] = useState(false);
 
@@ -45,10 +60,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     setError(null);
 
     try {
-      // FIX: The query is now more explicit, selecting specific columns from 'events'
-      // instead of using a wildcard ('*'). This is a more robust approach that ensures
-      // Supabase correctly processes the query and returns all nested data from related tables.
-      const { data, error: fetchError } = await supabase
+      let queryBuilder = supabase
         .from('events')
         .select(`
           id, name, date, start_time, end_time, status, local, observations, created_at,
@@ -65,9 +77,27 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         .order('date', { ascending: false })
         .order('start_time', { ascending: true });
 
-      if (fetchError) throw fetchError;
+        // Apply server-side filters
+        if (debouncedSearchQuery) {
+            queryBuilder = queryBuilder.ilike('name', `%${debouncedSearchQuery}%`);
+        }
+        if (selectedStatus !== 'all') {
+            queryBuilder = queryBuilder.eq('status', selectedStatus);
+        }
+        if (dateRange.start) {
+            queryBuilder = queryBuilder.gte('date', dateRange.start);
+        }
+        if (dateRange.end) {
+            queryBuilder = queryBuilder.lte('date', dateRange.end);
+        }
+        if (isLeader && showOnlyMyDepartmentEvents && leaderDepartmentId) {
+            queryBuilder = queryBuilder.eq('event_departments.department_id', leaderDepartmentId);
+        }
 
-      // FIX: Cast to unknown first to bypass Supabase's incorrect type inference for complex queries.
+
+      const { data, error: fetchError } = await queryBuilder;
+      if (fetchError) throw fetchError;
+      
       setAllEvents((data as unknown as Event[]) || []);
 
     } catch (error: any) {
@@ -77,40 +107,12 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, debouncedSearchQuery, selectedStatus, dateRange, isLeader, showOnlyMyDepartmentEvents, leaderDepartmentId]);
   
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
   
-  const filteredEvents = useMemo(() => {
-    return allEvents.filter(event => {
-      // Search query filter
-      if (searchQuery && !event.name.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return false;
-      }
-      // Status filter
-      if (selectedStatus !== 'all' && event.status !== selectedStatus) {
-        return false;
-      }
-      // Date range filter
-      if (dateRange.start && event.date < dateRange.start) {
-        return false;
-      }
-      if (dateRange.end && event.date > dateRange.end) {
-        return false;
-      }
-      // Leader's department filter
-      if (isLeader && showOnlyMyDepartmentEvents) {
-        if (!leaderDepartmentId || !event.event_departments.some(ed => ed.department_id === leaderDepartmentId)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [allEvents, searchQuery, selectedStatus, dateRange, isLeader, showOnlyMyDepartmentEvents, leaderDepartmentId]);
-
-
   const showForm = (event: Event | null = null) => {
     setEditingEvent(event);
     setSaveError(null);
@@ -226,9 +228,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         return;
     }
     
-    // After successfully adding the department, simply refetch all event data.
-    // The UI will update automatically, showing the "Escalar Voluntários" button.
-    // This is a more robust and predictable user experience.
     await fetchEvents();
   };
 
@@ -254,7 +253,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         : "Todos os Eventos";
     doc.text(dateText, 14, 30);
     
-    filteredEvents.forEach((event) => {
+    allEvents.forEach((event) => {
         if (y > pageHeight - 60) {
             doc.addPage();
             y = 20;
@@ -316,7 +315,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   const renderContent = () => {
     if (loading) return <p className="text-center text-slate-500 mt-10">Carregando eventos...</p>;
     if (error && !allEvents.length) return <p className="text-center text-red-500 mt-10">{error}</p>;
-    if (filteredEvents.length === 0) return (
+    if (allEvents.length === 0) return (
       <div className="text-center py-12 text-slate-500">
         <h3 className="text-lg font-medium text-slate-800">Nenhum evento encontrado</h3>
         <p className="mt-1 text-sm">Tente ajustar seus filtros ou adicione um novo evento.</p>
@@ -326,7 +325,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     return (
         <div className="space-y-6">
             {error && <p className="text-center text-yellow-600 bg-yellow-50 p-3 rounded-lg">{error}</p>}
-            {filteredEvents.map(event => (
+            {allEvents.map(event => (
                 <EventCard 
                     key={event.id} 
                     event={event} 
@@ -352,7 +351,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                 <button
                     onClick={handleExportPDF}
-                    disabled={filteredEvents.length === 0 || loading}
+                    disabled={allEvents.length === 0 || loading}
                     className="bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-800 transition-colors shadow-sm w-full md:w-auto justify-center disabled:bg-slate-400 disabled:cursor-not-allowed"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clipRule="evenodd" /></svg>
