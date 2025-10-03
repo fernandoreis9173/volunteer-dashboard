@@ -1,6 +1,7 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DetailedVolunteer, Department } from '../types';
+// FIX: Imported SearchItem type and changed handler and props to fix type mismatch.
+import SmartSearch, { type SearchItem } from './SmartSearch';
 
 interface NewVolunteerFormProps {
     initialData?: DetailedVolunteer | null;
@@ -169,7 +170,7 @@ const TagInputField: React.FC<{
 
 const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, departments }) => {
     const [skills, setSkills] = useState<string[]>([]);
-    const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+    const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
     const [formData, setFormData] = useState({
         fullName: '',
         email: '',
@@ -181,8 +182,6 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
         quarta: false, quinta: false, sexta: false, sabado: false,
     });
     const [isActive, setIsActive] = useState(true);
-    const [departmentSearch, setDepartmentSearch] = useState('');
-    const [isDepartmentDropdownOpen, setIsDepartmentDropdownOpen] = useState(false);
     const isEditing = !!initialData;
 
     const formatPhoneNumber = (value: string) => {
@@ -217,7 +216,11 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                 initials: initialData.initials || '',
             });
             setSkills(initialData.skills || []);
-            setSelectedDepartments(initialData.departments || []);
+            const initialSelectedDepts = (initialData.departments || [])
+                .map(deptName => departments.find(d => d.name === deptName))
+                .filter((d): d is Department => d !== undefined);
+            setSelectedDepartments(initialSelectedDepts);
+
             setIsActive(initialData.status === 'Ativo');
             
             let availabilityArray: string[] = [];
@@ -254,7 +257,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             setIsActive(true);
             setAvailability(availabilityKeys);
         }
-    }, [initialData]);
+    }, [initialData, departments]);
 
     // Automatically generate initials from full name, but only when editing.
     useEffect(() => {
@@ -292,26 +295,16 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
         setAvailability(prev => ({...prev, [name]: checked}));
     };
 
-    const handleAddDepartment = (departmentName: string) => {
-        if (!selectedDepartments.includes(departmentName)) {
-            setSelectedDepartments([...selectedDepartments, departmentName]);
+    const handleSelectDepartment = (item: SearchItem) => {
+        const department = departments.find(d => d.id === item.id);
+        if (department && !selectedDepartments.some(d => d.id === department.id)) {
+            setSelectedDepartments([...selectedDepartments, department]);
         }
-        setDepartmentSearch('');
-        setIsDepartmentDropdownOpen(false);
     };
 
-    const handleRemoveDepartment = (departmentNameToRemove: string) => {
-        setSelectedDepartments(selectedDepartments.filter(dep => dep !== departmentNameToRemove));
+    const handleRemoveDepartment = (departmentId: number | string) => {
+        setSelectedDepartments(selectedDepartments.filter(d => d.id !== departmentId));
     };
-
-    const filteredDepartments = useMemo(() => {
-        if (!departmentSearch) return [];
-        const query = departmentSearch.toLowerCase();
-        return departments
-            .filter(min => !selectedDepartments.includes(min.name))
-            .filter(min => min.name.toLowerCase().includes(query));
-    }, [departmentSearch, departments, selectedDepartments]);
-
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -336,7 +329,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             phone: isEditing ? formData.phone.replace(/[^\d]/g, '') : '',
             initials: isEditing ? formData.initials : '',
             status: isEditing ? (isActive ? 'Ativo' : 'Inativo') : 'Pendente',
-            departments: isEditing ? selectedDepartments : [],
+            departments: isEditing ? selectedDepartments.map(d => d.name) : [],
             skills: isEditing ? skills : [],
             availability: isEditing ? selectedAvailabilityDays : [],
         };
@@ -373,37 +366,19 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
 
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Buscar por departamento..."
-                                value={departmentSearch}
-                                onChange={(e) => setDepartmentSearch(e.target.value)}
-                                onFocus={() => setIsDepartmentDropdownOpen(true)}
-                                onBlur={() => setTimeout(() => setIsDepartmentDropdownOpen(false), 200)}
-                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
-                            />
-                            {isDepartmentDropdownOpen && filteredDepartments.length > 0 && (
-                                <ul className="absolute z-10 w-full bg-white border border-slate-300 rounded-lg shadow-lg mt-1 max-h-48 overflow-auto">
-                                    {filteredDepartments.map((dep) => (
-                                        <li
-                                            key={dep.id}
-                                            onMouseDown={() => handleAddDepartment(dep.name)}
-                                            className="px-3 py-2 hover:bg-slate-100 cursor-pointer text-slate-800"
-                                        >
-                                            {dep.name}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
+                        <SmartSearch
+                            items={departments.filter(d => d.id != null) as SearchItem[]}
+                            selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
+                            onSelectItem={handleSelectDepartment}
+                            placeholder="Buscar por departamento..."
+                        />
                         <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
                             {selectedDepartments.map((department) => (
                                 <RemovableTag
-                                    key={department}
-                                    text={department}
+                                    key={department.id}
+                                    text={department.name}
                                     color="yellow"
-                                    onRemove={() => handleRemoveDepartment(department)}
+                                    onRemove={() => handleRemoveDepartment(department.id!)}
                                 />
                             ))}
                         </div>
