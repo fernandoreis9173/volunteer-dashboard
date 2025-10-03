@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
@@ -12,7 +12,8 @@ import LoginPage from './components/LoginPage';
 import { AcceptInvitationPage } from './components/AcceptInvitationPage';
 import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
-import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer } from './types';
+import VolunteerProfile from './components/VolunteerProfile';
+import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer, DetailedVolunteer } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
 
@@ -33,8 +34,18 @@ interface DashboardData {
     todaySchedules?: DashboardEvent[];
     upcomingSchedules?: DashboardEvent[];
     activeVolunteers?: DashboardVolunteer[];
+    // For Volunteer view
     schedules?: VolunteerEvent[];
+    volunteerProfile?: DetailedVolunteer;
 }
+
+const getInitialAuthView = (): AuthView => {
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery') || hash.includes('type=invite')) {
+        return 'accept-invite';
+    }
+    return 'login';
+};
 
 const App: React.FC = () => {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
@@ -45,7 +56,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
-  const [authView, setAuthView] = useState<AuthView>('login');
+  const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
   const [isUserDisabled, setIsUserDisabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
@@ -58,17 +69,9 @@ const App: React.FC = () => {
         setIsInitializing(false);
         return;
     }
-    
-    const hash = window.location.hash;
-    if (hash.includes('type=recovery') || hash.includes('type=invite')) {
-      setAuthView('accept-invite');
-    }
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
         const newUserId = newSession?.user?.id ?? null;
-        // Only update the session state if the user has actually changed.
-        // This is the most reliable way to prevent re-renders and data fetches
-        // on background token refreshes when the user remains the same.
         if (newUserId !== sessionUserId.current) {
             setSession(newSession);
             sessionUserId.current = newUserId;
@@ -78,139 +81,134 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Effect for fetching ALL application data when session changes
-  useEffect(() => {
-    const fetchApplicationData = async () => {
-        if (session && supabase) {
-            setIsInitializing(true);
+  const fetchApplicationData = useCallback(async () => {
+    if (session && supabase) {
+        setIsInitializing(true);
 
-            // 1. Check user status from metadata first
-            const userStatus = session.user.user_metadata?.status;
-            if (userStatus === 'Inativo') {
-                setIsUserDisabled(true);
-                setUserProfile(null);
-                setDashboardData(null);
-                setIsInitializing(false);
-                return; 
+        const userStatus = session.user.user_metadata?.status;
+        if (userStatus === 'Inativo') {
+            setIsUserDisabled(true);
+            setUserProfile(null);
+            setDashboardData(null);
+            setIsInitializing(false);
+            return; 
+        }
+        setIsUserDisabled(false);
+
+        const userRole = session.user.user_metadata?.role;
+        if (!userRole) {
+            console.error("User role not found in metadata.");
+            setUserProfile(null);
+            setDashboardData(null);
+            setIsInitializing(false);
+            return;
+        }
+
+        if (userRole === 'volunteer') {
+            const { data: volunteerData, error: volunteerError } = await supabase
+                .from('volunteers')
+                .select('id, name, phone, initials, status, departments:departaments, skills, availability')
+                .eq('user_id', session.user.id)
+                .single();
+
+            if (volunteerError || !volunteerData) {
+                console.error("Error fetching volunteer profile by user_id:", volunteerError);
+                setUserProfile({ role: userRole, department_id: null, volunteer_id: null });
+                setDashboardData({ schedules: [] });
+            } else {
+                const profile: UserProfileState = {
+                    role: userRole,
+                    department_id: null,
+                    volunteer_id: volunteerData.id,
+                };
+                setUserProfile(profile);
+                
+                const today = new Date().toISOString().slice(0, 10);
+                const { data: scheduleQueryData } = await supabase
+                  .from('event_volunteers')
+                  .select('events(*, event_departments(departments(name)))')
+                  .eq('volunteer_id', profile.volunteer_id)
+                  .gte('events.date', today)
+                  .order('date', { referencedTable: 'events', ascending: true });
+
+                const schedules = (scheduleQueryData || []).flatMap(item => item.events || []).filter((event): event is VolunteerEvent => event !== null);
+                setDashboardData({ schedules, volunteerProfile: volunteerData as DetailedVolunteer });
             }
-            setIsUserDisabled(false);
+            // Ensure volunteer starts on dashboard, not another page from a previous session
+            if (activePage !== 'my-profile') {
+                setActivePage('dashboard');
+            }
 
-            // 2. Determine role from user metadata (the source of truth)
-            const userRole = session.user.user_metadata?.role;
-            if (!userRole) {
-                console.error("User role not found in metadata.");
+        } else { // Admin or Leader
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('role, department_id')
+                .eq('id', session.user.id)
+                .single();
+
+            if (profileError || !profileData) {
+                console.error("Error fetching admin/leader profile:", profileError);
                 setUserProfile(null);
                 setDashboardData(null);
                 setIsInitializing(false);
                 return;
             }
 
-            // 3. Based on role, fetch necessary data and build profile state
-            if (userRole === 'volunteer') {
-                const { data: volunteerData, error: volunteerError } = await supabase
-                    .from('volunteers')
-                    .select('id')
-                    .eq('user_id', session.user.id)
-                    .single();
+            const profile: UserProfileState = {
+                role: profileData.role,
+                department_id: profileData.department_id,
+                volunteer_id: null,
+            };
+            setUserProfile(profile);
 
-                if (volunteerError || !volunteerData) {
-                    console.error("Error fetching volunteer profile by user_id:", volunteerError);
-                    setUserProfile({ role: userRole, department_id: null, volunteer_id: null });
-                    setDashboardData({ schedules: [] });
-                } else {
-                    const profile: UserProfileState = {
-                        role: userRole,
-                        department_id: null, // Volunteers don't have a single assigned department in 'profiles'
-                        volunteer_id: volunteerData.id,
-                    };
-                    setUserProfile(profile);
-                    
-                    // Fetch volunteer's schedules
-                    const today = new Date().toISOString().slice(0, 10);
-                    const { data: scheduleQueryData } = await supabase
-                      .from('event_volunteers')
-                      .select('events(*, event_departments(departments(name)))')
-                      .eq('volunteer_id', profile.volunteer_id)
-                      .gte('events.date', today)
-                      .order('date', { referencedTable: 'events', ascending: true });
+            const getLocalYYYYMMDD = (d: Date) => new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+            const todayDate = new Date();
+            const today = getLocalYYYYMMDD(todayDate);
+            const tomorrowDate = new Date();
+            tomorrowDate.setDate(todayDate.getDate() + 1);
+            const tomorrow = getLocalYYYYMMDD(tomorrowDate);
+            const sevenDaysFromNow = new Date();
+            sevenDaysFromNow.setDate(todayDate.getDate() + 7);
+            const nextSevenDays = getLocalYYYYMMDD(sevenDaysFromNow);
 
-                    const schedules = (scheduleQueryData || []).flatMap(item => item.events || []).filter((event): event is VolunteerEvent => event !== null);
-                    setDashboardData({ schedules });
-                }
-                setActivePage('dashboard');
+            const [statsRes, todaySchedulesRes, upcomingSchedulesRes, activeVolunteersRes] = await Promise.all([
+                Promise.all([
+                    supabase.from('volunteers').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
+                    supabase.from('departments').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
+                    supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', today).eq('status', 'Confirmado'),
+                    supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', tomorrow).eq('status', 'Confirmado'),
+                ]),
+                supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').eq('date', today).eq('status', 'Confirmado').order('start_time').limit(10),
+                supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').gte('date', tomorrow).lte('date', nextSevenDays).eq('status', 'Confirmado').order('date').limit(5),
+                supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').order('created_at', { ascending: false }).limit(5)
+            ]);
 
-            } else { // Admin or Leader
-                const { data: profileData, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('role, department_id')
-                    .eq('id', session.user.id)
-                    .single();
-
-                if (profileError || !profileData) {
-                    console.error("Error fetching admin/leader profile:", profileError);
-                    setUserProfile(null);
-                    setDashboardData(null);
-                    setIsInitializing(false);
-                    return;
-                }
-
-                const profile: UserProfileState = {
-                    role: profileData.role,
-                    department_id: profileData.department_id,
-                    volunteer_id: null,
-                };
-                setUserProfile(profile);
-
-                // Fetch admin dashboard data in parallel
-                const getLocalYYYYMMDD = (d: Date) => new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-                const todayDate = new Date();
-                const today = getLocalYYYYMMDD(todayDate);
-                const tomorrowDate = new Date();
-                tomorrowDate.setDate(todayDate.getDate() + 1);
-                const tomorrow = getLocalYYYYMMDD(tomorrowDate);
-                const sevenDaysFromNow = new Date();
-                sevenDaysFromNow.setDate(todayDate.getDate() + 7);
-                const nextSevenDays = getLocalYYYYMMDD(sevenDaysFromNow);
-
-                const [statsRes, todaySchedulesRes, upcomingSchedulesRes, activeVolunteersRes] = await Promise.all([
-                    Promise.all([
-                        supabase.from('volunteers').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                        supabase.from('departments').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                        supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', today).eq('status', 'Confirmado'),
-                        supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', tomorrow).eq('status', 'Confirmado'),
-                    ]),
-                    supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').eq('date', today).eq('status', 'Confirmado').order('start_time').limit(10),
-                    supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').gte('date', tomorrow).lte('date', nextSevenDays).eq('status', 'Confirmado').order('date').limit(5),
-                    supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').order('created_at', { ascending: false }).limit(5)
-                ]);
-
-                setDashboardData({
-                    stats: {
-                        activeVolunteers: String(statsRes[0].count ?? 0),
-                        departments: String(statsRes[1].count ?? 0),
-                        schedulesToday: String(statsRes[2].count ?? 0),
-                        schedulesTomorrow: String(statsRes[3].count ?? 0),
-                    },
-                    // FIX: Cast through `unknown` to resolve complex type inference error from Supabase.
-                    // The runtime data structure is expected to match DashboardEvent[], and this avoids a wider refactor.
-                    todaySchedules: (todaySchedulesRes.data as unknown as DashboardEvent[]) || [],
-                    upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
-                    activeVolunteers: (activeVolunteersRes.data as DashboardVolunteer[]) || [],
-                });
-            }
-            setIsInitializing(false);
-
-        } else {
-            // No session, clear all user-related state
-            setUserProfile(null);
-            setDashboardData(null);
-            setIsUserDisabled(false);
-            setIsInitializing(false);
+            setDashboardData({
+                stats: {
+                    activeVolunteers: String(statsRes[0].count ?? 0),
+                    departments: String(statsRes[1].count ?? 0),
+                    schedulesToday: String(statsRes[2].count ?? 0),
+                    schedulesTomorrow: String(statsRes[3].count ?? 0),
+                },
+                todaySchedules: (todaySchedulesRes.data as unknown as DashboardEvent[]) || [],
+                upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
+                activeVolunteers: (activeVolunteersRes.data as DashboardVolunteer[]) || [],
+            });
         }
-    };
-    
+        setIsInitializing(false);
+
+    } else {
+        setUserProfile(null);
+        setDashboardData(null);
+        setIsUserDisabled(false);
+        setIsInitializing(false);
+    }
+}, [session, supabase, activePage]);
+
+  // Effect for fetching ALL application data when session changes
+  useEffect(() => {
     fetchApplicationData();
-}, [session, supabase]);
+}, [session, supabase]); // Removed activePage from deps to avoid re-fetches on nav
   
   const handleNavigate = (page: Page) => {
     setActivePage(page);
@@ -237,6 +235,9 @@ const App: React.FC = () => {
     const userRole = userProfile?.role;
     
     if (userRole === 'volunteer') {
+      if (activePage === 'my-profile') {
+        return <VolunteerProfile supabase={supabase} volunteerData={dashboardData?.volunteerProfile} onUpdate={fetchApplicationData} />;
+      }
       return <VolunteerDashboard initialData={dashboardData} />;
     }
 
@@ -303,7 +304,7 @@ const App: React.FC = () => {
               className="lg:hidden mb-4 p-2 rounded-md bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 shadow-sm flex items-center space-x-2"
               aria-label="Abrir menu"
             >
-                <svg xmlns="http://www.w.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                 </svg>
                 <span>Menu</span>

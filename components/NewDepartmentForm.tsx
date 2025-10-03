@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Department } from '../types';
 import { SupabaseClient, User } from '@supabase/supabase-js';
@@ -176,7 +177,7 @@ const getInitials = (name?: string): string => {
     return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
 };
 
-export const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
+const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
     const [formData, setFormData] = useState({ 
         name: '', 
         description: '', 
@@ -483,3 +484,5 @@ export const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, 
         </div>
     );
 };
+
+export default NewDepartmentForm;

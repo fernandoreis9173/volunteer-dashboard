@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AuthView, Department } from '../types';
@@ -220,23 +221,25 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
                 ).toUpperCase();
 
-                const volunteerUpdatePayload = {
-                    status: 'Ativo',
+                const volunteerInsertPayload = {
+                    user_id: user.id,
+                    email: user.email!,
+                    status: 'Ativo' as const,
                     name: fullName,
                     phone: phone.replace(/[^\d]/g, ''),
                     availability: JSON.stringify(selectedAvailabilityDays),
                     initials: calculatedInitials,
                     departaments: selectedDepartments.map(d => d.name),
+                    skills: [], // Skills are not collected on this form
                 };
 
-                const { error: volunteerUpdateError } = await supabase
+                const { error: volunteerInsertError } = await supabase
                     .from('volunteers')
-                    .update(volunteerUpdatePayload)
-                    .eq('user_id', user.id);
+                    .insert(volunteerInsertPayload);
 
-                if (volunteerUpdateError) {
-                    console.error("Volunteer update error:", volunteerUpdateError);
-                    throw new Error("Sua conta foi ativada, mas houve um erro ao atualizar seu perfil de voluntário. Por favor, contate um administrador.");
+                if (volunteerInsertError) {
+                    console.error("Volunteer insert error:", volunteerInsertError);
+                    throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil de voluntário. Por favor, contate um administrador.");
                 }
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
                 const { error: profileError } = await supabase

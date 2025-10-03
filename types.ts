@@ -45,7 +45,7 @@ export interface DashboardEvent {
   event_volunteers: { volunteers: { name: string } }[] | null; // Can be null from DB join
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'admin';
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'admin' | 'my-profile';
 
 export type AuthView = 'login' | 'accept-invite';
 
