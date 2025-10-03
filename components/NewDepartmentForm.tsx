@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Department } from '../types';
 import { SupabaseClient, User } from '@supabase/supabase-js';
@@ -174,7 +176,7 @@ const getInitials = (name?: string): string => {
     return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
 };
 
-const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
+export const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
     const [formData, setFormData] = useState({ 
         name: '', 
         description: '', 
@@ -347,8 +349,8 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initial
                 }
             `}</style>
             <div className="flex items-center space-x-3 mb-8">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 4h5m-5 4h5m-5-8h5" />
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18h16.5M5.25 6H18.75m-13.5 0V21m13.5-15V21m-10.5-9.75h.008v.008H8.25v-.008ZM8.25 15h.008v.008H8.25V15Zm3.75-9.75h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm3.75-9.75h.008v.008H15.75v-.008ZM15.75 15h.008v.008H15.75V15Z" />
                 </svg>
                 <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Departamento' : 'Novo Departamento'}</h2>
             </div>
@@ -422,19 +424,25 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initial
                                                     <p className="text-xs text-slate-500">{email}</p>
                                                 </div>
                                             </li>
-                                        )
+                                        );
                                     })}
                                 </ul>
                             )}
                         </div>
                     )}
-                     {leaderConflictError && (
-                        <p className="text-sm text-red-600 mt-1">{leaderConflictError}</p>
+                    {leaderConflictError && (
+                        <p className="text-sm text-red-500 mt-1">{leaderConflictError}</p>
                     )}
                 </div>
-
-                <TagInputField label="Habilidades Necessárias" placeholder="Ex: Comunicação, Ensino..." tags={skills} setTags={setSkills} color="blue" />
-
+                
+                <TagInputField 
+                    label="Habilidades Necessárias" 
+                    placeholder="Ex: Comunicação, Organização..." 
+                    tags={skills}
+                    setTags={setSkills}
+                    color="blue"
+                />
+                
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Dias de Reunião</label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -452,17 +460,26 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initial
                 
                 <div className="pt-6 border-t border-slate-200 flex flex-wrap justify-end items-center gap-3">
                     {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
-                    <button type="button" onClick={onCancel} disabled={isSaving} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50">Cancelar</button>
-                    <button type="submit" disabled={isSaving || !!leaderConflictError} className="px-4 py-2 bg-teal-500 text-white font-semibold rounded-lg hover:bg-teal-600 flex items-center space-x-2 disabled:bg-teal-300 disabled:cursor-not-allowed">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                           <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V4zm2 0v12h6V4H7zm3 1a.5.5 0 00-.5.5v2.5a.5.5 0 001 0V6a.5.5 0 00-.5-.5z" clipRule="evenodd" />
+                    <button 
+                        type="button" 
+                        onClick={onCancel}
+                        disabled={isSaving}
+                        className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        type="submit"
+                        disabled={isSaving}
+                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm disabled:bg-blue-400 disabled:cursor-not-allowed"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
-                        <span>{isSaving ? 'Salvando...' : 'Salvar Departamento'}</span>
+                        <span>{isSaving ? 'Salvando...' : (isEditing ? 'Atualizar Departamento' : 'Salvar Departamento')}</span>
                     </button>
                 </div>
             </form>
         </div>
     );
 };
-
-export default NewDepartmentForm;

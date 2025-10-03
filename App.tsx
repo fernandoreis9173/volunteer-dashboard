@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -8,7 +9,8 @@ import EventsPage from './components/SchedulesPage';
 import AdminPage from './components/AdminPage';
 import ApiConfigPage from './components/ApiConfigPage';
 import LoginPage from './components/LoginPage';
-import AcceptInvitationPage from './components/AcceptInvitationPage';
+// FIX: Changed to a named import because the module does not have a default export.
+import { AcceptInvitationPage } from './components/AcceptInvitationPage';
 import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
 import { Page, AuthView } from './types';
@@ -239,8 +241,8 @@ const App: React.FC = () => {
               className="lg:hidden mb-4 p-2 rounded-md bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 shadow-sm flex items-center space-x-2"
               aria-label="Abrir menu"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                 </svg>
                 <span>Menu</span>
             </button>

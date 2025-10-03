@@ -1,7 +1,10 @@
 
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import DepartmentCard from './DepartmentCard';
-import NewDepartmentForm from './NewDepartmentForm';
+// FIX: Changed to a named import to resolve module resolution error.
+import { NewDepartmentForm } from './NewDepartmentForm';
 import ConfirmationModal from './ConfirmationModal';
 import { Department } from '../types';
 import { SupabaseClient, User } from '@supabase/supabase-js';
@@ -180,7 +183,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
         <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
             <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
                 </div>
                 <input 
                     type="text"
@@ -220,21 +223,21 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole })
             onClick={() => { setEditingDepartment(null); showForm(); }}
             className="bg-teal-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-teal-600 transition-colors shadow-sm w-full md:w-auto justify-center"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
             <span>Novo Departamento</span>
           </button>
         )}
       </div>
 
       {isFormVisible ? (
-        <NewDepartmentForm 
-            supabase={supabase}
-            initialData={editingDepartment}
-            onCancel={hideForm} 
-            onSave={handleSaveDepartment}
-            isSaving={isSaving}
-            saveError={saveError}
-            leaders={leaders}
+        <NewDepartmentForm
+          supabase={supabase}
+          initialData={editingDepartment}
+          onCancel={hideForm}
+          onSave={handleSaveDepartment}
+          isSaving={isSaving}
+          saveError={saveError}
+          leaders={leaders}
         />
       ) : (
         renderContent()
