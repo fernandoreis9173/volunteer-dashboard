@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AuthView, Department } from '../types';
@@ -221,8 +220,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
                 ).toUpperCase();
 
-                const volunteerInsertPayload = {
-                    user_id: user.id,
+                const volunteerUpdatePayload = {
                     email: user.email!,
                     status: 'Ativo' as const,
                     name: fullName,
@@ -233,12 +231,13 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     skills: [], // Skills are not collected on this form
                 };
 
-                const { error: volunteerInsertError } = await supabase
+                const { error: volunteerUpdateError } = await supabase
                     .from('volunteers')
-                    .insert(volunteerInsertPayload);
+                    .update(volunteerUpdatePayload)
+                    .eq('user_id', user.id);
 
-                if (volunteerInsertError) {
-                    console.error("Volunteer insert error:", volunteerInsertError);
+                if (volunteerUpdateError) {
+                    console.error("Volunteer update error:", volunteerUpdateError);
                     throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil de voluntário. Por favor, contate um administrador.");
                 }
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
