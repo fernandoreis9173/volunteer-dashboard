@@ -28,8 +28,8 @@ Deno.serve(async (req) => {
     // 3. Safely handle the response data
     const users = authData?.users || [];
 
-    // FIX: Enhanced logic to correctly determine user status ('Pendente', 'Ativo', 'Inativo') on the backend.
-    // This makes the backend the single source of truth for user status and resolves frontend type errors.
+    // FIX: Refactored logic to determine user status based on metadata, making it the single source of truth.
+    // This ensures invited users remain 'Pendente' until they accept the invitation and prevents them from being marked 'Ativo' prematurely.
     const enrichedUsers = users
       .filter(u => {
         // Ensure user_metadata is an object before accessing properties
@@ -40,15 +40,14 @@ Deno.serve(async (req) => {
         return role === 'admin' || role === 'lider';
       })
       .map(user => {
-        let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Pendente';
-        // A user explicitly set to 'Inativo' in metadata should always be Inativo.
-        if (user.user_metadata?.status === 'Inativo') {
-          status = 'Inativo';
-        // A user who has signed in is 'Ativo'.
-        } else if (user.last_sign_in_at) {
-          status = 'Ativo';
+        const metadataStatus = user.user_metadata?.status;
+        let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Pendente'; // Default for legacy users or if status is somehow missing
+
+        // Directly use the status from metadata if it's a valid, expected value.
+        if (metadataStatus === 'Ativo' || metadataStatus === 'Inativo' || metadataStatus === 'Pendente') {
+            status = metadataStatus;
         }
-        // Otherwise, the user is 'Pendente' (invited but never signed in).
+
         return {
           ...user,
           app_status: status,

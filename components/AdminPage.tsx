@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from '@supabase/supabase-js';
@@ -9,6 +10,9 @@ interface AdminPageProps {
 }
 
 interface EnrichedUser extends User {
+    id: string;
+    email?: string;
+    invited_at?: string;
     app_status?: 'Ativo' | 'Inativo' | 'Pendente';
 }
 
@@ -47,7 +51,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         const { data, error: fetchError } = await supabase.functions.invoke('list-users');
 
         if (fetchError) {
-            setListError(`Falha ao carregar a lista de convidados: ${getDetailedError(fetchError)}`);
+            setListError(`Falha ao carregar la lista de convidados: ${getDetailedError(fetchError)}`);
             console.error('Error fetching invited users:', fetchError);
         } else if (data && data.error) {
             setListError(`Erro retornado pela função: ${data.error}`);
@@ -150,11 +154,11 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
     const getRoleForDisplay = (user: User) => {
         const userRole = user.user_metadata?.role || user.user_metadata?.papel;
         if (userRole === 'admin') return 'Admin';
-        if (userRole === 'leader' || userRole === 'líder' || userRole === 'lider') return 'Líder';
+        if (userRole === 'leader' || userRole === 'lider') return 'Líder';
+        if (userRole === 'volunteer') return 'Voluntário';
         return 'N/A';
     };
     
-    // FIX: Refactored to use the reliable `app_status` from the backend, removing the problematic dependency on `last_sign_in_at` and resolving the TypeScript error.
     const getStatusBadge = (user: EnrichedUser) => {
         switch (user.app_status) {
             case 'Inativo':
@@ -172,25 +176,26 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         <div className="space-y-8">
             <div>
                 <h1 className="text-3xl font-bold text-slate-800">Painel Administrativo</h1>
-                <p className="text-slate-500 mt-1">Gerencie o acesso e convide novos líderes para o sistema.</p>
+                <p className="text-slate-500 mt-1">Gerencie o acesso e convide novos usuários para o sistema.</p>
             </div>
             
             <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 max-w-2xl">
                  <div className="flex items-center space-x-3 mb-6">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                    <h2 className="text-2xl font-bold text-slate-800">Convidar Líder de Departamento</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">Convidar Usuários</h2>
                 </div>
-                <p className="text-sm text-slate-600 mb-6">Insira o e-mail do líder que você deseja convidar. Ele receberá um link para criar sua conta e definir uma senha.</p>
+                <p className="text-sm text-slate-600 mb-6">Insira o e-mail do usuário que você deseja convidar. Ele receberá um link para criar sua conta e definir uma senha.</p>
                 <form onSubmit={handleInviteSubmit} className="space-y-4">
-                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="sm:col-span-2">
-                            <label htmlFor="invite-email" className="block text-sm font-medium text-slate-700 mb-1">E-mail do Líder</label>
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="md:col-span-2">
+                            <label htmlFor="invite-email" className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
                             <input type="email" id="invite-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@igreja.com" required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
                         </div>
                         <div>
                             <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
                             <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
                                 <option value="lider">Líder de Departamento</option>
+                                <option value="volunteer">Voluntário</option>
                                 <option value="admin">Admin (Líder Geral)</option>
                             </select>
                         </div>
@@ -208,8 +213,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
             
             <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
                  <div className="flex items-center space-x-3 mb-6">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                    <h2 className="text-2xl font-bold text-slate-800">Líderes Convidados</h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    <h2 className="text-2xl font-bold text-slate-800">Usuários do Sistema</h2>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-200">
@@ -217,8 +222,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Data do Convite</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Permissão</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase w-1/5">Permissão</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase w-1/6">Status</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Ações</th>
                             </tr>
                         </thead>
@@ -228,11 +233,11 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                             ) : listError ? (
                                 <tr><td colSpan={5} className="px-6 py-4 text-center text-red-500">{listError}</td></tr>
                             ) : invitedUsers.length === 0 ? (
-                                <tr><td colSpan={5} className="px-6 py-4 text-center text-slate-500">Nenhum líder encontrado.</td></tr>
+                                <tr><td colSpan={5} className="px-6 py-4 text-center text-slate-500">Nenhum usuário encontrado.</td></tr>
                             ) : invitedUsers.map(user => {
                                 return (
-                                <tr key={user.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email}</td>
+                                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email ?? 'N/A'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{formatDate(user.invited_at)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-semibold">{getRoleForDisplay(user)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(user)}</td>
@@ -245,9 +250,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                                                 <div className="py-1" role="menu" aria-orientation="vertical">
                                                     <button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button>
                                                     {user.app_status === 'Inativo' ? (
-                                                        <button onClick={() => handleRequestAction(user, 'enable')} className="w-full text-left block px-4 py-2 text-sm text-green-700 hover:bg-green-50">Reativar Líder</button>
+                                                        <button onClick={() => handleRequestAction(user, 'enable')} className="w-full text-left block px-4 py-2 text-sm text-green-700 hover:bg-green-50">Reativar Usuário</button>
                                                     ) : (
-                                                        <button onClick={() => handleRequestAction(user, 'disable')} className="w-full text-left block px-4 py-2 text-sm text-red-700 hover:bg-red-50">Desativar Líder</button>
+                                                        <button onClick={() => handleRequestAction(user, 'disable')} className="w-full text-left block px-4 py-2 text-sm text-red-700 hover:bg-red-50">Desativar Usuário</button>
                                                     )}
                                                 </div>
                                             </div>
@@ -275,8 +280,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
                 title={actionType === 'disable' ? 'Confirmar Desativação' : 'Confirmar Reativação'}
                 message={
                     actionType === 'disable' 
-                    ? `Tem certeza que deseja desativar ${userToAction?.email}? Ele não poderá mais acessar o sistema.`
-                    : `Tem certeza que deseja reativar ${userToAction?.email}? Ele poderá acessar o sistema novamente.`
+                    ? `Tem certeza que deseja desativar ${userToAction?.email ?? 'este usuário'}? Ele não poderá mais acessar o sistema.`
+                    : `Tem certeza que deseja reativar ${userToAction?.email ?? 'este usuário'}? Ele poderá acessar o sistema novamente.`
                 }
             />
         </div>

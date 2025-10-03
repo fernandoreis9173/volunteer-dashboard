@@ -1,12 +1,13 @@
+
 import React from 'react';
-import type { Event } from '../types';
+import type { DashboardEvent } from '../types';
 
 interface UpcomingShiftsListProps {
-  schedules: Event[];
+  schedules: DashboardEvent[];
   loading: boolean;
 }
 
-const ScheduleCard: React.FC<{ schedule: Event }> = ({ schedule }) => {
+const ScheduleCard: React.FC<{ schedule: DashboardEvent }> = ({ schedule }) => {
   const formattedDate = new Date(schedule.date + 'T00:00:00').toLocaleDateString('pt-BR', {
     weekday: 'long',
     year: 'numeric',
@@ -14,8 +15,12 @@ const ScheduleCard: React.FC<{ schedule: Event }> = ({ schedule }) => {
     day: 'numeric',
   });
   
-  const volunteerNames = schedule.event_volunteers.map(sv => sv.volunteers?.name).filter(Boolean).join(', ');
-  const departmentNames = schedule.event_departments.map(ed => ed.departments?.name).filter(Boolean).join(', ');
+  const volunteerNames = Array.isArray(schedule.event_volunteers)
+    ? schedule.event_volunteers.map(sv => sv.volunteers?.name).filter(Boolean).join(', ')
+    : '';
+  const departmentNames = Array.isArray(schedule.event_departments)
+    ? schedule.event_departments.map(ed => ed.departments?.name).filter(Boolean).join(', ')
+    : '';
 
 
   return (
@@ -38,7 +43,7 @@ const ScheduleCard: React.FC<{ schedule: Event }> = ({ schedule }) => {
       </div>
       <div className="w-full h-px bg-slate-200 my-4"></div>
       <p className="text-sm text-slate-600">
-        {volunteerNames || 'Nenhum voluntário escalado'} • <span className="text-blue-600 font-medium">{departmentNames}</span>
+        {volunteerNames || 'Nenhum voluntário escalado'} • <span className="text-blue-600 font-medium">{departmentNames || 'Nenhum departamento'}</span>
       </p>
     </div>
   );

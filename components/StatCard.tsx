@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface StatCardProps {
@@ -5,7 +6,7 @@ interface StatCardProps {
   value: string;
   // FIX: Changed JSX.Element to React.ReactElement to resolve "Cannot find namespace 'JSX'" error.
   icon: React.ReactElement;
-  color: 'blue' | 'orange' | 'green' | 'purple';
+  color: 'blue' | 'orange' | 'green' | 'purple' | 'teal';
 }
 
 const colorClasses = {
@@ -28,6 +29,11 @@ const colorClasses = {
     bg: 'bg-purple-100',
     iconBg: 'bg-purple-200',
     iconText: 'text-purple-600',
+  },
+  teal: {
+    bg: 'bg-teal-100',
+    iconBg: 'bg-teal-200',
+    iconText: 'text-teal-600',
   },
 };
 

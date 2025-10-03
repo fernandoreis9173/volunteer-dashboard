@@ -3,16 +3,24 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
-import MinistriesPage from './components/MinistriesPage';
-import SchedulesPage from './components/SchedulesPage';
+import DepartmentsPage from './components/DepartmentsPage';
+import EventsPage from './components/SchedulesPage';
 import AdminPage from './components/AdminPage';
 import ApiConfigPage from './components/ApiConfigPage';
 import LoginPage from './components/LoginPage';
 import AcceptInvitationPage from './components/AcceptInvitationPage';
 import DisabledUserPage from './components/DisabledUserPage';
+import VolunteerDashboard from './components/VolunteerDashboard';
 import { Page, AuthView } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
+
+// This state now directly reflects the data we trust from the 'profiles' table.
+interface UserProfileState {
+  role: string | null;
+  department_id: number | null;
+  volunteer_id: number | null;
+}
 
 const App: React.FC = () => {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
@@ -21,17 +29,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
-  const [isScheduleFormOpen, setIsScheduleFormOpen] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [isUserDisabled, setIsUserDisabled] = useState(false);
-
-  const getRoleFromMetadata = (metadata: any): string | null => {
-    if (!metadata) return null;
-    const role = metadata.role || metadata.papel;
-    if (role === 'líder') return 'leader';
-    return role;
-  }
+  const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
 
   useEffect(() => {
     const client = getSupabaseClient();
@@ -47,25 +48,76 @@ const App: React.FC = () => {
       setAuthView('accept-invite');
     }
 
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      
-      if (newSession) {
-        const userStatus = newSession.user.user_metadata?.status;
-        const role = getRoleFromMetadata(newSession.user.user_metadata);
-        
-        setUserRole(role);
+    const { data: { subscription } } = client.auth.onAuthStateChange(async (_event, newSession) => {
+      try {
+          setSession(newSession);
+          
+          if (newSession) {
+            const userStatus = newSession.user.user_metadata?.status;
+            if (userStatus === 'Inativo') {
+              setIsUserDisabled(true);
+              setUserProfile(null);
+              return; 
+            }
+            setIsUserDisabled(false);
 
-        if (userStatus === 'Inativo') {
-          setIsUserDisabled(true);
-        } else {
+            // FIX: Simplified and robust profile fetching.
+            // We now fetch 'department_id' directly, as we've fixed the data integrity issue.
+            const { data: profileData, error: profileError } = await client
+              .from('profiles')
+              .select('role, department_id') 
+              .eq('id', newSession.user.id)
+              .single();
+
+            if (profileError) {
+              console.error("Error fetching user profile:", profileError);
+              setUserProfile(null);
+              return;
+            }
+
+            if (profileData) {
+              const profile: UserProfileState = {
+                role: profileData.role,
+                department_id: profileData.department_id, // Directly use the reliable data.
+                volunteer_id: null,
+              };
+
+              // Logic to find the volunteer ID for volunteer roles remains.
+              if (profile.role === 'volunteer' && newSession.user.email) {
+                  const { data: volunteerData, error: volError } = await client
+                    .from('volunteers')
+                    .select('id')
+                    .eq('email', newSession.user.email)
+                    .single();
+                  
+                  if (volError) {
+                    console.error("Could not find volunteer record for user.", volError);
+                  } else if (volunteerData) {
+                    profile.volunteer_id = volunteerData.id;
+                  }
+              }
+              
+              setUserProfile(profile);
+              if (profile.role === 'volunteer') {
+                setActivePage('dashboard');
+              }
+            } else {
+              setUserProfile(null);
+            }
+
+          } else {
+            setUserProfile(null);
+            setIsUserDisabled(false);
+          }
+      } catch (error) {
+          console.error("An unexpected error occurred during auth state change:", error);
+          setUserProfile(null);
           setIsUserDisabled(false);
-        }
-      } else {
-        setUserRole(null);
-        setIsUserDisabled(false);
+          setSession(null);
+      } finally {
+          // This block is guaranteed to run, solving the infinite loading screen.
+          setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
@@ -76,32 +128,41 @@ const App: React.FC = () => {
   const handleNavigate = (page: Page) => {
     setActivePage(page);
     setIsVolunteerFormOpen(false);
-    setIsScheduleFormOpen(false);
+    setIsEventFormOpen(false);
     setIsSidebarOpen(false);
   };
 
   const handleNewVolunteer = () => {
     setActivePage('volunteers');
-    setIsScheduleFormOpen(false);
+    setIsEventFormOpen(false);
     setIsVolunteerFormOpen(true);
     setIsSidebarOpen(false);
   };
 
-  const handleNewSchedule = () => {
-    setActivePage('schedules');
+  const handleNewEvent = () => {
+    setActivePage('events');
     setIsVolunteerFormOpen(false);
-    setIsScheduleFormOpen(true);
+    setIsEventFormOpen(true);
     setIsSidebarOpen(false);
   };
 
   const renderPage = () => {
+    const userRole = userProfile?.role;
+    
+    // Volunteer-specific view
+    if (userRole === 'volunteer') {
+      return <VolunteerDashboard supabase={supabase} volunteerId={userProfile?.volunteer_id ?? null} />;
+    }
+
+    // Admin and Leader views
     switch (activePage) {
       case 'volunteers':
         return <VolunteersPage supabase={supabase} isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} />;
       case 'departments':
-        return <MinistriesPage supabase={supabase} userRole={userRole} />;
-      case 'schedules':
-        return <SchedulesPage supabase={supabase} isFormOpen={isScheduleFormOpen} setIsFormOpen={setIsScheduleFormOpen} userRole={userRole} />;
+        return <DepartmentsPage supabase={supabase} userRole={userRole} />;
+      case 'events':
+        const roleForEvents = userRole === 'lider' ? 'leader' : userRole;
+        return <EventsPage supabase={supabase} isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={roleForEvents} leaderDepartmentId={userProfile?.department_id ?? null} />;
       case 'admin':
         if (userRole !== 'admin') {
             setActivePage('dashboard');
@@ -135,7 +196,7 @@ const App: React.FC = () => {
   }
 
   if (isUserDisabled) {
-    return <DisabledUserPage supabase={supabase} userRole={userRole} />;
+    return <DisabledUserPage supabase={supabase} userRole={userProfile?.role} />;
   }
 
   return (
@@ -144,11 +205,11 @@ const App: React.FC = () => {
         activePage={activePage} 
         onNavigate={handleNavigate} 
         onNewVolunteer={handleNewVolunteer}
-        onNewSchedule={handleNewSchedule}
+        onNewEvent={handleNewEvent}
         supabase={supabase}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
-        userRole={userRole}
+        userRole={userProfile?.role}
         session={session}
       />
       <main className="flex-1 overflow-y-auto">

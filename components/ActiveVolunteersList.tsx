@@ -1,12 +1,12 @@
 import React from 'react';
-import type { DetailedVolunteer } from '../types';
+import type { DashboardVolunteer } from '../types';
 
 interface ActiveVolunteersListProps {
-  volunteers: DetailedVolunteer[];
+  volunteers: DashboardVolunteer[];
   loading: boolean;
 }
 
-const VolunteerItem: React.FC<{ volunteer: DetailedVolunteer }> = ({ volunteer }) => (
+const VolunteerItem: React.FC<{ volunteer: DashboardVolunteer }> = ({ volunteer }) => (
   <div className="flex items-center space-x-4">
     <div className={`w-10 h-10 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold`}>
       {volunteer.initials}
@@ -14,8 +14,8 @@ const VolunteerItem: React.FC<{ volunteer: DetailedVolunteer }> = ({ volunteer }
     <div>
       <p className="font-semibold text-slate-800">{volunteer.name}</p>
       <p className="text-sm text-slate-500">{volunteer.email}</p>
-      {volunteer.ministries.length > 0 && (
-        <p className="text-sm text-blue-600">{volunteer.ministries.join(', ')}</p>
+      {(volunteer.departments || []).length > 0 && (
+        <p className="text-sm text-blue-600">{(volunteer.departments || []).join(', ')}</p>
       )}
     </div>
   </div>

@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import VolunteerCard from './VolunteerCard';
 import NewVolunteerForm from './NewVolunteerForm';
 import ConfirmationModal from './ConfirmationModal';
-import { DetailedVolunteer } from '../types';
+import { DetailedVolunteer, Department } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 interface VolunteersPageProps {
@@ -13,6 +14,7 @@ interface VolunteersPageProps {
 
 const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, setIsFormOpen }) => {
   const [allVolunteers, setAllVolunteers] = useState<DetailedVolunteer[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -34,7 +36,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
       
       const { data, error: fetchError } = await supabase
         .from('volunteers')
-        .select('*')
+        .select('id, name, email, phone, initials, status, departments:departaments, skills, availability, created_at')
         .order('created_at', { ascending: false });
 
       if (fetchError) {
@@ -42,13 +44,28 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
         setError("Não foi possível carregar os voluntários.");
         setAllVolunteers([]);
       } else {
-        setAllVolunteers(data || []);
+        setAllVolunteers(data as DetailedVolunteer[] || []);
       }
       setLoading(false);
   };
   
+  const fetchActiveDepartments = async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('status', 'Ativo')
+        .order('name', { ascending: true });
+    if (error) {
+        console.error('Error fetching active departments:', error);
+    } else {
+        setDepartments(data as Department[] || []);
+    }
+  };
+
   useEffect(() => {
     fetchAllVolunteers();
+    fetchActiveDepartments();
   }, [supabase]);
 
   const filteredVolunteers = useMemo(() => {
@@ -123,7 +140,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
       phone: volunteerData.phone,
       initials: volunteerData.initials,
       status: volunteerData.status,
-      ministries: volunteerData.ministries,
+      departaments: volunteerData.departments,
       skills: volunteerData.skills,
       availability: volunteerData.availability,
     };
@@ -133,12 +150,12 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
         .from('volunteers')
         .update(payload)
         .eq('id', volunteerData.id)
-        .select();
+        .select('id');
     } else {
       result = await supabase
         .from('volunteers')
         .insert([payload])
-        .select();
+        .select('id');
     }
 
     const { data, error } = result;
@@ -235,6 +252,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
           onSave={handleSaveVolunteer}
           isSaving={isSaving}
           saveError={saveError}
+          departments={departments}
         />
       ) : (
         renderContent()

@@ -1,3 +1,4 @@
+
 export interface Volunteer {
   name: string;
   email: string;
@@ -7,15 +8,12 @@ export interface Volunteer {
 }
 
 export interface EventVolunteer {
-  event_id: number;
   volunteer_id: number;
   department_id: number;
-  volunteers?: { id: number; name: string; email: string; initials: string; };
-  departments?: { id: number; name: string; };
+  volunteers?: { id: number; name: string; email: string; initials: string; departments: string[]; };
 }
 
 export interface EventDepartment {
-  event_id: number;
   department_id: number;
   departments: { id: number; name: string; leader?: string; };
 }
@@ -34,7 +32,19 @@ export interface Event {
   observations?: string;
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'schedules' | 'admin';
+// Added for Dashboard performance and type safety
+export interface DashboardEvent {
+  id: number;
+  name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  event_departments: { departments: { name: string } }[] | null; // Can be null from DB join
+  event_volunteers: { volunteers: { name: string } }[] | null; // Can be null from DB join
+}
+
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'admin';
 
 export type AuthView = 'login' | 'accept-invite';
 
@@ -45,11 +55,21 @@ export interface DetailedVolunteer {
     phone: string;
     initials: string;
     status: 'Ativo' | 'Inativo';
-    ministries: string[];
+    departments: string[];
     skills: string[];
     availability: string[];
     created_at?: string;
 }
+
+// Added for Dashboard performance and type safety
+export interface DashboardVolunteer {
+    id: number;
+    name: string;
+    email: string;
+    initials: string;
+    departments: string[];
+}
+
 
 export interface Department {
   id?: number;

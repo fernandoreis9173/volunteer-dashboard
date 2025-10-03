@@ -126,20 +126,20 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onDele
         )}
       </div>
   
-      {volunteer.ministries.length > 0 && (
+      {(volunteer.departments || []).length > 0 && (
         <div>
           <p className="text-sm font-semibold text-slate-500 mb-2">Departamentos:</p>
           <div className="flex flex-wrap gap-2">
-            {volunteer.ministries.map(m => <Tag key={m} color="yellow">{m}</Tag>)}
+            {(volunteer.departments || []).map(m => <Tag key={m} color="yellow">{m}</Tag>)}
           </div>
         </div>
       )}
       
-      {volunteer.skills.length > 0 && (
+      {(volunteer.skills || []).length > 0 && (
           <div>
           <p className="text-sm font-semibold text-slate-500 mb-2">Habilidades:</p>
           <div className="flex flex-wrap gap-2">
-              {volunteer.skills.map(s => <Tag key={s} color="blue">{s}</Tag>)}
+              {(volunteer.skills || []).map(s => <Tag key={s} color="blue">{s}</Tag>)}
           </div>
           </div>
       )}

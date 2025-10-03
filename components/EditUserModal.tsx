@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
 import { Page } from '../types';
@@ -12,9 +13,8 @@ interface EditUserModalProps {
 const allPages: { id: Page; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'volunteers', label: 'Voluntários' },
-    // FIX: Corrected page ID from 'ministries' to 'departments' to match Page type and updated label for consistency.
     { id: 'departments', label: 'Departamentos' },
-    { id: 'schedules', label: 'Eventos' },
+    { id: 'events', label: 'Eventos' },
     { id: 'admin', label: 'Admin' },
 ];
 
