@@ -25,6 +25,12 @@ interface UserProfileState {
   volunteer_id: number | null;
 }
 
+export interface ChartDataPoint {
+    date: string;
+    scheduledVolunteers: number;
+    involvedDepartments: number;
+}
+
 interface DashboardData {
     stats?: {
         activeVolunteers: string;
@@ -35,6 +41,7 @@ interface DashboardData {
     todaySchedules?: DashboardEvent[];
     upcomingSchedules?: DashboardEvent[];
     activeVolunteers?: DashboardVolunteer[];
+    chartData?: ChartDataPoint[];
     // For Volunteer view
     schedules?: VolunteerEvent[];
     volunteerProfile?: DetailedVolunteer;
@@ -64,6 +71,7 @@ const App: React.FC = () => {
   const sessionUserId = useRef<string | null>(null);
   const [activePage, setActivePage] = useState<Page>(getPageFromHash());
   const [isInitializing, setIsInitializing] = useState(true);
+  const [initialAuthCheckCompleted, setInitialAuthCheckCompleted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
@@ -152,7 +160,11 @@ const App: React.FC = () => {
             sevenDaysFromNow.setDate(todayDate.getDate() + 7);
             const nextSevenDays = getLocalYYYYMMDD(sevenDaysFromNow);
 
-            const [statsRes, todaySchedulesRes, upcomingSchedulesRes, activeVolunteersRes] = await Promise.all([
+            const oneYearAgo = new Date();
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+            const oneYearAgoISO = oneYearAgo.toISOString();
+
+            const [statsRes, todaySchedulesRes, upcomingSchedulesRes, activeVolunteersRes, chartEventsRes] = await Promise.all([
                 Promise.all([
                     supabase.from('volunteers').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
                     supabase.from('departments').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
@@ -161,8 +173,30 @@ const App: React.FC = () => {
                 ]),
                 supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').eq('date', today).eq('status', 'Confirmado').order('start_time').limit(10),
                 supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').gte('date', tomorrow).lte('date', nextSevenDays).eq('status', 'Confirmado').order('date').limit(5),
-                supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').order('created_at', { ascending: false }).limit(5)
+                supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').order('created_at', { ascending: false }).limit(5),
+                supabase.from('events').select('date, event_volunteers(volunteer_id), event_departments(department_id)').gte('date', oneYearAgoISO.slice(0, 10)).limit(10000),
             ]);
+            
+            // Process chart data
+            const dailyCounts: { [key: string]: { scheduledVolunteers: number; involvedDepartments: number } } = {};
+            
+            (chartEventsRes.data || []).forEach(event => {
+                const date = event.date;
+                if (date) {
+                    if (!dailyCounts[date]) {
+                        dailyCounts[date] = { scheduledVolunteers: 0, involvedDepartments: 0 };
+                    }
+                    // The nested select returns an array of objects, so .length is the count.
+                    dailyCounts[date].scheduledVolunteers += (event.event_volunteers || []).length;
+                    dailyCounts[date].involvedDepartments += (event.event_departments || []).length;
+                }
+            });
+        
+            const chartData: ChartDataPoint[] = Object.entries(dailyCounts).map(([date, counts]) => ({
+                date,
+                ...counts,
+            })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
 
             setDashboardData({
                 stats: {
@@ -174,6 +208,7 @@ const App: React.FC = () => {
                 todaySchedules: (todaySchedulesRes.data as unknown as DashboardEvent[]) || [],
                 upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
                 activeVolunteers: (activeVolunteersRes.data as DashboardVolunteer[]) || [],
+                chartData,
             });
         }
     } else {
@@ -189,12 +224,14 @@ const App: React.FC = () => {
     setSupabase(client);
     if (!client) {
         setIsInitializing(false);
+        setInitialAuthCheckCompleted(true);
         return;
     }
     
     client.auth.getSession().then(({ data: { session: initialSession } }) => {
         setSession(initialSession);
         sessionUserId.current = initialSession?.user?.id ?? null;
+        setInitialAuthCheckCompleted(true);
     });
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
@@ -211,6 +248,10 @@ const App: React.FC = () => {
   
   // Effect for fetching ALL application data when session changes, and controlling the initialization state.
   useEffect(() => {
+    if (!initialAuthCheckCompleted) {
+        return;
+    }
+      
     if (session) {
         fetchApplicationData().finally(() => {
             setIsInitializing(false);
@@ -222,7 +263,7 @@ const App: React.FC = () => {
         setIsUserDisabled(false);
         setIsInitializing(false);
     }
-  }, [session, fetchApplicationData]);
+  }, [session, fetchApplicationData, initialAuthCheckCompleted]);
 
   // Effect for hash-based routing (navigation)
   useEffect(() => {

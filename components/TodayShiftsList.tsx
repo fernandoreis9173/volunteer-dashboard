@@ -90,14 +90,14 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
 
 const TodayShiftsList: React.FC<TodayShiftsListProps> = ({ schedules, loading, onViewDetails }) => {
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm">
+    <div className="bg-white p-6 rounded-2xl shadow-sm flex flex-col h-full">
       <div className="flex items-center space-x-2 mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
         </svg>
         <h2 className="text-xl font-bold text-slate-800">Eventos de Hoje</h2>
       </div>
-      <div className="space-y-4">
+      <div className="space-y-4 flex-1 overflow-y-auto pr-2">
         {loading ? (
             Array.from({ length: 2 }).map((_, index) => (
                 <div key={index} className="bg-slate-50 p-5 rounded-xl border border-slate-200 animate-pulse">
