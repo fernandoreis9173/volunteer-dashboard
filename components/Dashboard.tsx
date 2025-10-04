@@ -1,11 +1,12 @@
 
 
-import React from 'react';
+import React, { useState } from 'react';
 import StatCard from './StatCard';
 import TodayShiftsList from './TodayShiftsList';
 import UpcomingShiftsList from './UpcomingShiftsList';
 import ActiveVolunteersList from './ActiveVolunteersList';
 import type { DashboardEvent, DashboardVolunteer } from '../types';
+import EventDetailsModal from './EventDetailsModal';
 
 interface DashboardProps {
   initialData: {
@@ -22,11 +23,17 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ initialData }) => {
+  const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
+  
   const stats = initialData?.stats;
   const todaySchedules = initialData?.todaySchedules ?? [];
   const upcomingSchedules = initialData?.upcomingSchedules ?? [];
   const activeVolunteers = initialData?.activeVolunteers ?? [];
   const loading = !initialData;
+
+  const handleViewDetails = (event: DashboardEvent) => {
+    setSelectedEvent(event);
+  };
 
   return (
     <div className="space-y-8">
@@ -42,18 +49,23 @@ const Dashboard: React.FC<DashboardProps> = ({ initialData }) => {
         <StatCard title="Eventos Amanhã" value={loading ? '...' : stats?.schedulesTomorrow ?? '0'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.898 20.562 16.25 21.75l-.648-1.188a2.25 2.25 0 0 1-1.423-1.423L13.125 18l1.188-.648a2.25 2.25 0 0 1 1.423-1.423L16.25 15l.648 1.188a2.25 2.25 0 0 1 1.423 1.423L19.5 18l-1.188.648a2.25 2.25 0 0 1-1.423 1.423Z" /></svg>} color="purple" />
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        <div className="flex-1 min-w-0">
-          <TodayShiftsList schedules={todaySchedules} loading={loading} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-1">
+            <TodayShiftsList schedules={todaySchedules} loading={loading} onViewDetails={handleViewDetails} />
         </div>
-        <div className="flex-1 min-w-0">
-          <UpcomingShiftsList schedules={upcomingSchedules} loading={loading} />
+        <div className="lg:col-span-1">
+            <UpcomingShiftsList schedules={upcomingSchedules} loading={loading} onViewDetails={handleViewDetails} />
         </div>
-        <div className="flex-1 min-w-0">
-          <ActiveVolunteersList volunteers={activeVolunteers} loading={loading} />
+        <div className="lg:col-span-1">
+            <ActiveVolunteersList volunteers={activeVolunteers} loading={loading} />
         </div>
       </div>
 
+      <EventDetailsModal 
+        isOpen={!!selectedEvent}
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+      />
     </div>
   );
 };

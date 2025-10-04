@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -47,11 +48,21 @@ const getInitialAuthView = (): AuthView => {
     return 'login';
 };
 
+const getPageFromHash = (): Page => {
+    const hash = window.location.hash.slice(2); // Remove #/
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'admin', 'my-profile'];
+    if (validPages.includes(hash as Page)) {
+        return hash as Page;
+    }
+    return 'dashboard'; // Default page
+};
+
+
 const App: React.FC = () => {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const sessionUserId = useRef<string | null>(null);
-  const [activePage, setActivePage] = useState<Page>('dashboard');
+  const [activePage, setActivePage] = useState<Page>(getPageFromHash());
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
@@ -61,36 +72,13 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
 
-  // Effect for initial session check and subscription
-  useEffect(() => {
-    const client = getSupabaseClient();
-    setSupabase(client);
-    if (!client) {
-        setIsInitializing(false);
-        return;
-    }
-
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
-        const newUserId = newSession?.user?.id ?? null;
-        if (newUserId !== sessionUserId.current) {
-            setSession(newSession);
-            sessionUserId.current = newUserId;
-        }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   const fetchApplicationData = useCallback(async () => {
     if (session && supabase) {
-        setIsInitializing(true);
-
         const userStatus = session.user.user_metadata?.status;
         if (userStatus === 'Inativo') {
             setIsUserDisabled(true);
             setUserProfile(null);
             setDashboardData(null);
-            setIsInitializing(false);
             return; 
         }
         setIsUserDisabled(false);
@@ -100,7 +88,6 @@ const App: React.FC = () => {
             console.error("User role not found in metadata.");
             setUserProfile(null);
             setDashboardData(null);
-            setIsInitializing(false);
             return;
         }
 
@@ -134,11 +121,6 @@ const App: React.FC = () => {
                 const schedules = (scheduleQueryData || []).flatMap(item => item.events || []).filter((event): event is VolunteerEvent => event !== null);
                 setDashboardData({ schedules, volunteerProfile: volunteerData as DetailedVolunteer });
             }
-            // Ensure volunteer starts on dashboard, not another page from a previous session
-            if (activePage !== 'my-profile') {
-                setActivePage('dashboard');
-            }
-
         } else { // Admin or Leader
             const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
@@ -150,7 +132,6 @@ const App: React.FC = () => {
                 console.error("Error fetching admin/leader profile:", profileError);
                 setUserProfile(null);
                 setDashboardData(null);
-                setIsInitializing(false);
                 return;
             }
 
@@ -195,67 +176,151 @@ const App: React.FC = () => {
                 activeVolunteers: (activeVolunteersRes.data as DashboardVolunteer[]) || [],
             });
         }
-        setIsInitializing(false);
-
     } else {
+        setUserProfile(null);
+        setDashboardData(null);
+        setIsUserDisabled(false);
+    }
+  }, [session, supabase]);
+
+  // Effect for initial session check and subscription
+  useEffect(() => {
+    const client = getSupabaseClient();
+    setSupabase(client);
+    if (!client) {
+        setIsInitializing(false);
+        return;
+    }
+    
+    client.auth.getSession().then(({ data: { session: initialSession } }) => {
+        setSession(initialSession);
+        sessionUserId.current = initialSession?.user?.id ?? null;
+    });
+
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
+        const newUserId = newSession?.user?.id ?? null;
+        if (newUserId !== sessionUserId.current) {
+            setIsInitializing(true); // Re-initialize on user change
+            setSession(newSession);
+            sessionUserId.current = newUserId;
+        }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+  
+  // Effect for fetching ALL application data when session changes, and controlling the initialization state.
+  useEffect(() => {
+    if (session) {
+        fetchApplicationData().finally(() => {
+            setIsInitializing(false);
+        });
+    } else {
+        // No session, so we're ready to show the login page.
         setUserProfile(null);
         setDashboardData(null);
         setIsUserDisabled(false);
         setIsInitializing(false);
     }
-}, [session, supabase, activePage]);
+  }, [session, fetchApplicationData]);
 
-  // Effect for fetching ALL application data when session changes
+  // Effect for hash-based routing (navigation)
   useEffect(() => {
-    fetchApplicationData();
-}, [session, supabase]); // Removed activePage from deps to avoid re-fetches on nav
+    const handleHashChange = () => {
+        setActivePage(getPageFromHash());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+        window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  // Effect for handling redirects based on auth state and current page
+  useEffect(() => {
+    if (isInitializing || !session) {
+        // Don't perform redirects until everything is loaded and user is logged in
+        return;
+    }
+
+    const currentHash = window.location.hash;
+    if (!currentHash || !currentHash.startsWith('#/')) {
+        window.location.hash = '#/dashboard';
+        return;
+    }
+
+    if (userProfile) {
+        const userRole = userProfile.role;
+        const currentPage = getPageFromHash();
+
+        if (userRole === 'volunteer' && currentPage !== 'dashboard' && currentPage !== 'my-profile') {
+            window.location.hash = '#/dashboard';
+            return;
+        }
+        
+        const normalizedRole = userRole === 'lider' ? 'leader' : userRole;
+        if (normalizedRole === 'leader' && currentPage === 'admin') {
+            window.location.hash = '#/dashboard';
+            return;
+        }
+
+        if (normalizedRole !== 'volunteer' && currentPage === 'my-profile') {
+             window.location.hash = '#/dashboard';
+             return;
+        }
+    }
+  }, [isInitializing, session, userProfile, activePage]);
   
   const handleNavigate = (page: Page) => {
-    setActivePage(page);
+    if (`#/${page}` !== window.location.hash) {
+      window.location.hash = `#/${page}`;
+    }
     setIsVolunteerFormOpen(false);
     setIsEventFormOpen(false);
     setIsSidebarOpen(false);
   };
 
   const handleNewVolunteer = () => {
-    setActivePage('volunteers');
+    window.location.hash = '#/volunteers';
     setIsEventFormOpen(false);
     setIsVolunteerFormOpen(true);
     setIsSidebarOpen(false);
   };
 
   const handleNewEvent = () => {
-    setActivePage('events');
+    window.location.hash = '#/events';
     setIsVolunteerFormOpen(false);
     setIsEventFormOpen(true);
     setIsSidebarOpen(false);
   };
 
   const renderPage = () => {
-    const userRole = userProfile?.role;
-    
-    if (userRole === 'volunteer') {
-      if (activePage === 'my-profile') {
-        return <VolunteerProfile supabase={supabase} volunteerData={dashboardData?.volunteerProfile} onUpdate={fetchApplicationData} />;
-      }
-      return <VolunteerDashboard initialData={dashboardData} />;
+    if (!userProfile) {
+        return null; // Don't render pages until profile is loaded
     }
+    
+    // Authorization checks to prevent rendering a page while a redirect is pending
+    const userRole = userProfile.role;
+    const normalizedRole = userRole === 'lider' ? 'leader' : userRole;
+    if (normalizedRole === 'volunteer' && activePage !== 'dashboard' && activePage !== 'my-profile') return null;
+    if (normalizedRole === 'leader' && activePage === 'admin') return null;
+    if (normalizedRole !== 'volunteer' && activePage === 'my-profile') return null;
 
     switch (activePage) {
       case 'volunteers':
-        return <VolunteersPage supabase={supabase} isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} />;
+        return <VolunteersPage supabase={supabase} isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} onDataChange={fetchApplicationData} />;
       case 'departments':
-        return <DepartmentsPage supabase={supabase} userRole={userRole} />;
+        return <DepartmentsPage supabase={supabase} userRole={userRole} onDataChange={fetchApplicationData} />;
       case 'events':
-        return <EventsPage supabase={supabase} isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userRole} leaderDepartmentId={userProfile?.department_id ?? null} />;
+        return <EventsPage supabase={supabase} isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userRole} leaderDepartmentId={userProfile?.department_id ?? null} onDataChange={fetchApplicationData} />;
       case 'admin':
-        if (userRole !== 'admin') {
-            setActivePage('dashboard');
-            return <Dashboard initialData={dashboardData} />;
-        }
-        return <AdminPage supabase={supabase} />;
+        return <AdminPage supabase={supabase} onDataChange={fetchApplicationData} />;
+       case 'my-profile':
+        return <VolunteerProfile supabase={supabase} volunteerData={dashboardData?.volunteerProfile} onUpdate={fetchApplicationData} />;
       case 'dashboard':
       default:
+        if (userRole === 'volunteer') {
+            return <VolunteerDashboard initialData={dashboardData} />;
+        }
         return <Dashboard initialData={dashboardData} />;
     }
   };
@@ -282,6 +347,22 @@ const App: React.FC = () => {
 
   if (isUserDisabled) {
     return <DisabledUserPage supabase={supabase} userRole={userProfile?.role} />;
+  }
+  
+  if (!userProfile) {
+    // This case handles a logged-in user whose profile failed to load.
+    // It prevents rendering a broken UI and avoids getting stuck on the loading screen.
+    return (
+       <div className="flex items-center justify-center min-h-screen bg-slate-100 text-center p-4">
+        <div>
+            <p className="text-lg text-red-600 font-semibold">Erro Crítico</p>
+            <p className="text-slate-500 mt-2">Não foi possível carregar os dados do seu perfil. Por favor, tente novamente.</p>
+            <button onClick={() => supabase?.auth.signOut()} className="mt-4 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg">
+                Sair
+            </button>
+        </div>
+      </div>
+    );
   }
 
   return (

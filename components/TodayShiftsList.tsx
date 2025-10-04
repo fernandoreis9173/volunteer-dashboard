@@ -1,14 +1,13 @@
-
-
 import React from 'react';
 import type { DashboardEvent } from '../types';
 
 interface TodayShiftsListProps {
   schedules: DashboardEvent[];
   loading: boolean;
+  onViewDetails: (event: DashboardEvent) => void;
 }
 
-const ScheduleCard: React.FC<{ schedule: DashboardEvent }> = ({ schedule }) => {
+const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: DashboardEvent) => void; }> = ({ schedule, onViewDetails }) => {
   const formattedDate = new Date(schedule.date + 'T00:00:00').toLocaleDateString('pt-BR', {
     weekday: 'long',
     year: 'numeric',
@@ -16,17 +15,32 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent }> = ({ schedule }) => {
     day: 'numeric',
   });
   
-  const volunteerNames = Array.isArray(schedule.event_volunteers)
-    ? schedule.event_volunteers.map(sv => sv.volunteers?.name).filter(Boolean).join(', ')
-    : '';
-  const departmentNames = Array.isArray(schedule.event_departments)
-    ? schedule.event_departments.map(ed => ed.departments?.name).filter(Boolean).join(', ')
-    : '';
+  const volunteerNames = schedule.event_volunteers?.map(v => v.volunteers?.name).filter(Boolean) as string[] ?? [];
+  const departmentNames = schedule.event_departments?.map(d => d.departments?.name).filter(Boolean) as string[] ?? [];
+
+  const MAX_DISPLAY = 2;
+
+  const visibleVolunteers = volunteerNames.slice(0, MAX_DISPLAY).join(', ');
+  const remainingVolunteers = volunteerNames.length - MAX_DISPLAY;
+
+  const visibleDepartments = departmentNames.slice(0, MAX_DISPLAY).join(', ');
+  const remainingDepartments = departmentNames.length - MAX_DISPLAY;
 
   return (
     <div className="bg-white p-5 rounded-xl border border-slate-200 relative">
       <span className={`absolute top-4 right-4 text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'Confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
-      <h3 className="font-bold text-slate-800 mb-2">{schedule.name}</h3>
+       <button 
+        onClick={() => onViewDetails(schedule)} 
+        className="absolute bottom-4 right-4 p-1.5 text-slate-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+        aria-label="Ver detalhes do evento"
+        title="Ver detalhes"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </button>
+
+      <h3 className="font-bold text-slate-800 mb-2 pr-24">{schedule.name}</h3>
       <div className="space-y-2 text-sm text-slate-500">
         <div className="flex items-center space-x-2">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -42,16 +56,41 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent }> = ({ schedule }) => {
         </div>
       </div>
       <div className="w-full h-px bg-slate-200 my-4"></div>
-      <p className="text-sm text-slate-600">
-        {volunteerNames || 'Nenhum voluntário escalado'} • <span className="text-blue-600 font-medium">{departmentNames || 'Nenhum departamento'}</span>
-      </p>
+      <div className="text-sm text-slate-600 space-y-2 pr-10">
+        <p>
+          <span className="font-semibold text-slate-500">Voluntários:</span>
+          {volunteerNames.length > 0 ? (
+            <>
+              <span className="ml-2 text-slate-700">{visibleVolunteers}</span>
+              {remainingVolunteers > 0 && (
+                <span className="ml-2 text-blue-600 text-sm font-semibold">
+                  e mais {remainingVolunteers}
+                </span>
+              )}
+            </>
+          ) : <span className="ml-2 text-slate-500 italic">Nenhum</span>}
+        </p>
+        <p>
+          <span className="font-semibold text-slate-500">Departamentos:</span>
+          {departmentNames.length > 0 ? (
+             <>
+              <span className="ml-2 text-blue-600 font-medium">{visibleDepartments}</span>
+              {remainingDepartments > 0 && (
+                 <span className="ml-2 text-blue-600 text-sm font-semibold">
+                  e mais {remainingDepartments}
+                </span>
+              )}
+            </>
+          ) : <span className="ml-2 text-slate-500 italic">Nenhum</span>}
+        </p>
+      </div>
     </div>
   );
 };
 
-const TodayShiftsList: React.FC<TodayShiftsListProps> = ({ schedules, loading }) => {
+const TodayShiftsList: React.FC<TodayShiftsListProps> = ({ schedules, loading, onViewDetails }) => {
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm h-full">
+    <div className="bg-white p-6 rounded-2xl shadow-sm">
       <div className="flex items-center space-x-2 mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -73,7 +112,7 @@ const TodayShiftsList: React.FC<TodayShiftsListProps> = ({ schedules, loading })
             ))
         ) : schedules.length > 0 ? (
           schedules.map((schedule) => (
-            <ScheduleCard key={schedule.id} schedule={schedule} />
+            <ScheduleCard key={schedule.id} schedule={schedule} onViewDetails={onViewDetails} />
           ))
         ) : (
           <p className="text-slate-500">Nenhum evento para hoje.</p>

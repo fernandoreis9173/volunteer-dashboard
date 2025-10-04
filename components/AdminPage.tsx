@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from '@supabase/supabase-js';
@@ -7,6 +8,7 @@ import ConfirmationModal from './ConfirmationModal';
 
 interface AdminPageProps {
   supabase: SupabaseClient | null;
+  onDataChange: () => void;
 }
 
 interface EnrichedUser extends User {
@@ -16,7 +18,7 @@ interface EnrichedUser extends User {
     app_status?: 'Ativo' | 'Inativo' | 'Pendente';
 }
 
-const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
+const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
     const [email, setEmail] = useState('');
     const [role, setRole] = useState('leader');
     const [loading, setLoading] = useState(false);
@@ -111,6 +113,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
             setEmail('');
             setRole('leader');
             await fetchInvitedUsers();
+            onDataChange();
 
         } catch (err) {
             console.error('Error inviting user:', err);
@@ -132,6 +135,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
         } else {
             await fetchInvitedUsers();
             setIsEditModalOpen(false);
+            onDataChange();
         }
     };
 
@@ -155,6 +159,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase }) => {
             alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getEdgeFunctionError(error)}`);
         } else {
             await fetchInvitedUsers();
+            onDataChange();
         }
 
         setIsActionModalOpen(false);

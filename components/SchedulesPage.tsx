@@ -30,9 +30,10 @@ interface EventsPageProps {
   setIsFormOpen: (isOpen: boolean) => void;
   userRole: string | null;
   leaderDepartmentId: number | null;
+  onDataChange: () => void;
 }
 
-const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsFormOpen, userRole, leaderDepartmentId }) => {
+const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsFormOpen, userRole, leaderDepartmentId, onDataChange }) => {
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +139,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
       alert(`Falha ao excluir evento: ${deleteError.message}`);
     } else {
       setAllEvents(prevEvents => prevEvents.filter(event => event.id !== eventToDeleteId));
+      onDataChange();
     }
     setIsDeleteModalOpen(false);
     setEventToDeleteId(null);
@@ -215,6 +217,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         }
 
         hideForm();
+        onDataChange();
     } catch (error: any) {
         setSaveError(`Falha ao salvar: ${error.message}`);
     } finally {
@@ -242,6 +245,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     } else {
         await fetchEvents(); // Fallback
     }
+    onDataChange();
   };
 
   const handleClearFilters = () => {

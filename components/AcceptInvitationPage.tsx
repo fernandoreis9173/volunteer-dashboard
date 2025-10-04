@@ -67,14 +67,41 @@ const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onC
     </div>
 );
 
-const RemovableTag: React.FC<{ text: string; onRemove: () => void; }> = ({ text, onRemove }) => {
+const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove: () => void; }> = ({ text, color, onRemove }) => {
+    const getInitials = (name: string): string => {
+        if (!name) return '??';
+        const parts = name.trim().split(' ').filter(p => p);
+        if (parts.length === 0) return '??';
+        if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+        return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
+    };
+
+    const initials = getInitials(text);
+
+    const colorClasses = {
+        blue: {
+            container: 'bg-blue-100 text-blue-800 border-blue-200',
+            avatar: 'bg-blue-500 text-white',
+            buttonHover: 'hover:bg-blue-200'
+        },
+        yellow: {
+            container: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+            avatar: 'bg-yellow-500 text-white',
+            buttonHover: 'hover:bg-yellow-200'
+        },
+    };
+    const classes = colorClasses[color];
+
     return (
-        <div className="inline-flex items-center pl-3 pr-1.5 py-1 rounded-full text-sm font-semibold border bg-yellow-100 text-yellow-800 border-yellow-200">
-            <span>{text}</span>
+        <div className={`inline-flex items-center pl-1 pr-1.5 py-1 rounded-full text-sm font-semibold border ${classes.container}`}>
+            <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${classes.avatar}`}>
+                {initials}
+            </div>
+            <span className="ml-2">{text}</span>
             <button
                 type="button"
                 onClick={onRemove}
-                className="ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit hover:bg-yellow-200"
+                className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover}`}
                 aria-label={`Remove ${text}`}
             >
                 <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={3}>
@@ -84,6 +111,64 @@ const RemovableTag: React.FC<{ text: string; onRemove: () => void; }> = ({ text,
         </div>
     );
 };
+
+const TagInputField: React.FC<{ 
+    label: string; 
+    placeholder: string; 
+    tags: string[]; 
+    setTags: React.Dispatch<React.SetStateAction<string[]>>;
+    color: 'blue' | 'yellow';
+}> = ({ label, placeholder, tags, setTags, color }) => {
+    const [inputValue, setInputValue] = useState('');
+
+    const handleAddTag = () => {
+        const trimmedInput = inputValue.trim();
+        if (trimmedInput && !tags.includes(trimmedInput)) {
+            setTags([...tags, trimmedInput]);
+            setInputValue('');
+        }
+    };
+
+    const handleRemoveTag = (tagToRemove: string) => {
+        setTags(tags.filter(tag => tag !== tagToRemove));
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAddTag();
+        }
+    };
+
+    return (
+    <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+        <div className="flex">
+            <input 
+                type="text" 
+                placeholder={placeholder}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
+            />
+            <button 
+                type="button"
+                onClick={handleAddTag}
+                className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300"
+            >
+                +
+            </button>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+                <RemovableTag key={tag} text={tag} color={color} onRemove={() => handleRemoveTag(tag)} />
+            ))}
+        </div>
+    </div>
+    );
+};
+
 
 // FIX: Define the props interface for the component to resolve the "Cannot find name" error.
 interface AcceptInvitationPageProps {
@@ -98,6 +183,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
     const [confirmPassword, setConfirmPassword] = useState('');
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
+    const [skills, setSkills] = useState<string[]>([]);
     const [availability, setAvailability] = useState({
         domingo: false, segunda: false, terca: false,
         quarta: false, quinta: false, sexta: false, sabado: false,
@@ -228,7 +314,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     availability: JSON.stringify(selectedAvailabilityDays),
                     initials: calculatedInitials,
                     departaments: selectedDepartments.map(d => d.name),
-                    skills: [], // Skills are not collected on this form
+                    skills: skills,
                 };
 
                 const { error: volunteerUpdateError } = await supabase
@@ -346,11 +432,20 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                                             <RemovableTag
                                                 key={department.id}
                                                 text={department.name}
+                                                color="yellow"
                                                 onRemove={() => handleRemoveDepartment(department.id!)}
                                             />
                                         ))}
                                     </div>
                                 </div>
+
+                                <TagInputField 
+                                    label="Habilidades e Talentos" 
+                                    placeholder="Ex: Música, Tecnologia, Liderança..." 
+                                    tags={skills}
+                                    setTags={setSkills}
+                                    color="blue"
+                                />
 
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>

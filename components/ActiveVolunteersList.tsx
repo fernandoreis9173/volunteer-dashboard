@@ -25,7 +25,7 @@ const VolunteerItem: React.FC<{ volunteer: DashboardVolunteer }> = ({ volunteer 
 
 const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ volunteers, loading }) => {
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm h-full">
+    <div className="bg-white p-6 rounded-2xl shadow-sm">
       <div className="flex items-center space-x-2 mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.226a3 3 0 0 0-4.682 2.72 9.094 9.094 0 0 0 3.741.479m7.5-2.226V18a2.25 2.25 0 0 1-2.25 2.25H12a2.25 2.25 0 0 1-2.25-2.25V18.226m3.75-10.5a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5ZM10.5 8.25a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5Z" />

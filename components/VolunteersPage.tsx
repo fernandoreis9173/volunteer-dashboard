@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import VolunteerCard from './VolunteerCard';
 import NewVolunteerForm from './NewVolunteerForm';
@@ -24,6 +25,8 @@ interface VolunteersPageProps {
   supabase: SupabaseClient | null;
   isFormOpen: boolean;
   setIsFormOpen: (isOpen: boolean) => void;
+  userRole: string | null;
+  onDataChange: () => void;
 }
 
 const getEdgeFunctionError = (error: any): string => {
@@ -49,7 +52,7 @@ const getEdgeFunctionError = (error: any): string => {
     return 'Ocorreu um erro desconhecido. Tente novamente.';
 };
 
-const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, setIsFormOpen }) => {
+const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, setIsFormOpen, userRole, onDataChange }) => {
   const [allVolunteers, setAllVolunteers] = useState<DetailedVolunteer[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,6 +158,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
         alert(`Falha ao excluir voluntário: ${deleteError.message}`);
     } else {
         setAllVolunteers(allVolunteers.filter(v => v.id !== volunteerToDeleteId));
+        onDataChange();
     }
 
     handleCancelDelete();
@@ -171,16 +175,23 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
     
     try {
         if (volunteerData.id) { // Update existing volunteer
-            const { id, user_id, ...updatePayload } = volunteerData;
+            const { id, user_id, departments, ...updatePayload } = volunteerData;
+            
             const dbPayload = {
                 ...updatePayload,
-                departaments: updatePayload.departments,
+                departaments: departments,
             };
 
-            const { data, error } = await supabase.from('volunteers').update(dbPayload).eq('id', volunteerData.id).select().single();
+            const { data, error } = await supabase
+                .from('volunteers')
+                .update(dbPayload)
+                .eq('id', volunteerData.id)
+                .select('id, user_id, name, email, phone, initials, status, departments:departaments, skills, availability, created_at')
+                .single();
+                
             if (error) throw error;
-            const updatedVolunteer = { ...data, departments: data.departaments, user_id: user_id };
-            setAllVolunteers(allVolunteers.map(v => v.id === updatedVolunteer.id ? updatedVolunteer : v));
+            
+            setAllVolunteers(allVolunteers.map(v => v.id === data.id ? (data as DetailedVolunteer) : v));
         } else { // Invite new volunteer
             const invitePayload = {
                 name: volunteerData.name,
@@ -195,12 +206,14 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
                 throw invokeError;
             }
             
-            // On successful invite, we don't refetch because the user won't be in the 'volunteers' table yet.
-            // The form closing indicates success. A more advanced implementation could use a success toast.
+            await fetchVolunteers(searchQuery);
         }
         hideForm();
+        onDataChange();
     } catch(error: any) {
-        const errorMessage = getEdgeFunctionError(error);
+        // The Supabase client may wrap PostgREST errors, which might not be caught by getEdgeFunctionError.
+        // We'll check for a message property first.
+        const errorMessage = error.message || getEdgeFunctionError(error);
         setSaveError(`Falha ao salvar: ${errorMessage}`);
         console.error("Error saving/inviting volunteer:", error);
     } finally {
@@ -221,7 +234,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
           <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2">
             <div className="relative flex-grow w-full">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg xmlns="http://www.w.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                 </svg>
               </div>
@@ -285,6 +298,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
           isSaving={isSaving}
           saveError={saveError}
           departments={departments}
+          userRole={userRole}
         />
       ) : (
         renderContent()
