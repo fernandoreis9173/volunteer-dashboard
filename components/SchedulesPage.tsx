@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
@@ -8,6 +6,7 @@ import { Event } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getErrorMessage } from '../lib/utils';
 
 // Debounce hook
 function useDebounce(value: string, delay: number) {
@@ -42,6 +41,9 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [eventToDeleteId, setEventToDeleteId] = useState<number | null>(null);
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+  const eventRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
+
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,6 +53,17 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const isLeader = userRole === 'leader' || userRole === 'lider';
   const [showOnlyMyDepartmentEvents, setShowOnlyMyDepartmentEvents] = useState(false);
+
+  useEffect(() => {
+    const idToHighlight = sessionStorage.getItem('highlightEventId');
+    if (idToHighlight) {
+        const eventId = parseInt(idToHighlight, 10);
+        if (!isNaN(eventId)) {
+            setHighlightId(eventId);
+        }
+        sessionStorage.removeItem('highlightEventId');
+    }
+  }, []);
 
   const fetchEvents = useCallback(async () => {
     if (!supabase) {
@@ -103,8 +116,9 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
       setAllEvents((data as unknown as Event[]) || []);
 
     } catch (error: any) {
+      const errorMessage = getErrorMessage(error);
       console.error('Error fetching events data:', error);
-      setError(`Não foi possível carregar os dados dos eventos: ${error.message}`);
+      setError(`Não foi possível carregar os dados dos eventos: ${errorMessage}`);
       setAllEvents([]);
     } finally {
       setLoading(false);
@@ -115,6 +129,17 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     fetchEvents();
   }, [fetchEvents]);
   
+  useEffect(() => {
+    if (highlightId && allEvents.length > 0 && eventRefs.current[highlightId]) {
+        setTimeout(() => {
+            eventRefs.current[highlightId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+        
+        const timer = setTimeout(() => setHighlightId(null), 3000);
+        return () => clearTimeout(timer);
+    }
+  }, [highlightId, allEvents]);
+
   const showForm = (event: Event | null = null) => {
     setEditingEvent(event);
     setSaveError(null);
@@ -136,7 +161,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     const { error: deleteError } = await supabase.from('events').delete().eq('id', eventToDeleteId);
 
     if (deleteError) {
-      alert(`Falha ao excluir evento: ${deleteError.message}`);
+      alert(`Falha ao excluir evento: ${getErrorMessage(deleteError)}`);
     } else {
       setAllEvents(prevEvents => prevEvents.filter(event => event.id !== eventToDeleteId));
       onDataChange();
@@ -149,7 +174,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
       if (!supabase) return null;
       const { data, error } = await supabase.from('events').select(`*, event_departments (department_id, departments (id, name, leader)), event_volunteers (volunteer_id, department_id, volunteers (*))`).eq('id', eventId).single();
       if (error) {
-          console.error("Failed to refetch event", error);
+          console.error("Failed to refetch event", getErrorMessage(error));
           return null;
       }
       return data as unknown as Event;
@@ -161,6 +186,8 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     setSaveError(null);
 
     const { volunteer_ids, ...upsertData } = eventPayload;
+    let broadcastPayload: any = null;
+    let notificationPayloads: any[] = [];
 
     try {
         let eventIdToUpdate: number | undefined = upsertData.id;
@@ -168,6 +195,11 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         if (userRole === 'admin') {
             if (!upsertData.date || !upsertData.start_time || !upsertData.end_time) throw new Error("Data e horários são obrigatórios.");
             if (upsertData.start_time >= upsertData.end_time) throw new Error("O horário de início deve ser anterior ao horário de fim.");
+            
+            let originalEvent: Event | undefined;
+            if (upsertData.id) {
+                originalEvent = allEvents.find(e => e.id === upsertData.id);
+            }
             
             // Conflict check
             let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', upsertData.date);
@@ -178,26 +210,138 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
             const conflict = potentialConflicts?.find(event => (upsertData.start_time < event.end_time) && (upsertData.end_time > event.start_time));
             if (conflict) throw new Error(`Conflito de horário com o evento "${conflict.name}" (${conflict.start_time} - ${conflict.end_time}).`);
             
-            const { data: savedEvent, error: eventError } = await supabase.from('events').upsert(upsertData).select('id').single();
+            const { data: savedEvent, error: eventError } = await supabase.from('events').upsert(upsertData).select('id, name').single();
             if (eventError) throw eventError;
-            if (!upsertData.id) eventIdToUpdate = savedEvent.id;
+
+            eventIdToUpdate = savedEvent.id;
+
+            if (originalEvent) { // This is an UPDATE
+                let updateMessage = '';
+                if(originalEvent.status !== upsertData.status) updateMessage += `Status alterado para ${upsertData.status}. `;
+                if(originalEvent.date !== upsertData.date) updateMessage += `Data alterada para ${new Date(upsertData.date + 'T00:00:00').toLocaleDateString('pt-BR')}. `;
+                if(originalEvent.start_time !== upsertData.start_time || originalEvent.end_time !== upsertData.end_time) updateMessage += `Horário alterado para ${upsertData.start_time}-${upsertData.end_time}. `;
+                
+                if (updateMessage.trim()) {
+                    const departmentIdsInvolved = originalEvent.event_departments.map(ed => ed.department_id);
+                    broadcastPayload = { type: 'event_update', eventId: eventIdToUpdate, eventName: savedEvent.name, updateMessage, departmentIds: departmentIdsInvolved };
+
+                    // Get volunteers already scheduled
+                    // FIX: Using an inner join `!inner` with a singular alias `volunteer` helps TypeScript correctly infer the shape of the joined data as an object instead of an array, which resolves the type error.
+                    const { data: scheduledVolunteers } = await supabase.from('event_volunteers').select('volunteer:volunteers!inner(user_id)').eq('event_id', eventIdToUpdate);
+                    const volunteerUserIds = (scheduledVolunteers || []).map(v => (v as { volunteer: { user_id: string | null } }).volunteer?.user_id).filter(Boolean) as string[];
+                    
+                    // Get leaders of involved departments
+                    let leaderUserIds: string[] = [];
+                    if (departmentIdsInvolved.length > 0) {
+                        const { data: leaders } = await supabase
+                            .from('profiles')
+                            .select('id') // this is the user_id
+                            .in('department_id', departmentIdsInvolved)
+                            .or('role.eq.leader,role.eq.lider');
+                        leaderUserIds = (leaders || []).map(l => l.id);
+                    }
+
+                    // Combine and deduplicate user IDs
+                    const allUserIdsToNotify = new Set([...volunteerUserIds, ...leaderUserIds]);
+                    
+                    notificationPayloads = Array.from(allUserIdsToNotify).map(userId => ({
+                        user_id: userId,
+                        message: `Atualização no evento "${savedEvent.name}": ${updateMessage.trim()}`,
+                        type: 'event_update',
+                        related_event_id: eventIdToUpdate,
+                    }));
+                }
+            } else { // This is a NEW event, notify all leaders.
+                const { data: leaders, error: leadersError } = await supabase
+                    .from('profiles')
+                    .select('id') // This is the user_id
+                    .or('role.eq.leader,role.eq.lider');
+
+                if (leadersError) {
+                    console.error("Could not fetch leaders to notify about new event:", getErrorMessage(leadersError));
+                } else if (leaders && leaders.length > 0) {
+                    const leaderNotifications = leaders.map(leader => ({
+                        user_id: leader.id,
+                        message: `O novo evento "${savedEvent.name}" foi criado. Verifique se o seu departamento é necessário.`,
+                        type: 'new_event_for_leader',
+                        related_event_id: savedEvent.id,
+                    }));
+                    notificationPayloads.push(...leaderNotifications);
+
+                    const channel = supabase.channel('global-notifications');
+                    await channel.send({
+                        type: 'broadcast',
+                        event: 'new_event_for_leader',
+                        payload: { eventName: savedEvent.name, eventId: savedEvent.id },
+                    });
+                    supabase.removeChannel(channel);
+                }
+            }
 
         } else if (isLeader && upsertData.id && leaderDepartmentId) {
-            const { error: statusError } = await supabase.from('events').update({ status: upsertData.status }).eq('id', upsertData.id);
+            const eventId = upsertData.id;
+            const { error: statusError } = await supabase.from('events').update({ status: upsertData.status }).eq('id', eventId);
             if (statusError) throw statusError;
 
-            await supabase.from('event_volunteers').delete().eq('event_id', upsertData.id).eq('department_id', leaderDepartmentId);
+            await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', leaderDepartmentId);
             
             if (volunteer_ids?.length > 0) {
-                const newRelations = volunteer_ids.map((volId: number) => ({ event_id: upsertData.id, volunteer_id: volId, department_id: leaderDepartmentId }));
+                const newRelations = volunteer_ids.map((volId: number) => ({ event_id: eventId, volunteer_id: volId, department_id: leaderDepartmentId }));
                 const { error: insertVolError } = await supabase.from('event_volunteers').insert(newRelations);
                 if (insertVolError) throw insertVolError;
+
+                const { data: deptData } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
+                const departmentName = deptData?.name || 'seu departamento';
+                const eventNameForBroadcast = allEvents.find(e => e.id === eventId)?.name || 'um evento';
+                
+                const { data: volunteerDetails, error: volunteerDetailsError } = await supabase
+                    .from('volunteers')
+                    .select('id, user_id, name')
+                    .in('id', volunteer_ids);
+
+                if (volunteerDetailsError) throw volunteerDetailsError;
+
+                const notifiableVolunteers: { id: number; user_id: string; name: string; }[] = [];
+                const unnotifiableVolunteers: { id: number; user_id: string | null; name: string; }[] = [];
+
+                (volunteerDetails || []).forEach(vol => {
+                    if (vol.user_id) {
+                        notifiableVolunteers.push(vol as { id: number; user_id: string; name: string; });
+                    } else {
+                        unnotifiableVolunteers.push(vol);
+                    }
+                });
+
+                if (unnotifiableVolunteers.length > 0) {
+                    const unnotifiedNames = unnotifiableVolunteers.map(v => v.name).join(', ');
+                    setTimeout(() => {
+                        alert(`A escala foi salva com sucesso. No entanto, os seguintes voluntários não puderam ser notificados pois ainda não ativaram suas contas: ${unnotifiedNames}. Eles verão a escala ao acessar o sistema.`);
+                    }, 100);
+                }
+
+                const notifiableVolunteerIds = notifiableVolunteers.map(v => v.id);
+
+                if (notifiableVolunteerIds.length > 0) {
+                    broadcastPayload = { 
+                        type: 'new_schedule', 
+                        eventId: eventId, 
+                        eventName: eventNameForBroadcast, 
+                        volunteerIds: notifiableVolunteerIds,
+                        departmentName 
+                    };
+                    
+                    notificationPayloads = notifiableVolunteers.map(vol => ({
+                        user_id: vol.user_id,
+                        message: `Você foi escalado para o evento "${eventNameForBroadcast}" no departamento de ${departmentName}.`,
+                        type: 'new_schedule',
+                        related_event_id: eventId,
+                    }));
+                }
             }
         } else {
              throw new Error("Ação não permitida ou dados insuficientes.");
         }
         
-        // Refetch just the single event that was changed and update state
         if (eventIdToUpdate) {
             const updatedEvent = await refetchEvent(eventIdToUpdate);
             if (updatedEvent) {
@@ -210,7 +354,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
                     }
                 });
             } else {
-                await fetchEvents(); // Fallback to full refresh if single refetch fails
+                await fetchEvents(); 
             }
         } else {
             await fetchEvents();
@@ -218,8 +362,30 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
 
         hideForm();
         onDataChange();
+        
+        if (notificationPayloads.length > 0) {
+            const { error: notificationError } = await supabase.functions.invoke('create-notifications', {
+                body: { notifications: notificationPayloads },
+            });
+
+            if (notificationError) {
+                console.error("Erro ao criar notificações via Edge Function:", getErrorMessage(notificationError));
+                alert("A escala foi salva, mas ocorreu um erro ao enviar as notificações. Os usuários verão a escala ao acessar o sistema.");
+            }
+        }
+
+        if (broadcastPayload) {
+            const channel = supabase.channel('global-notifications');
+            await channel.send({
+                type: 'broadcast',
+                event: broadcastPayload.type,
+                payload: broadcastPayload,
+            });
+            supabase.removeChannel(channel);
+        }
+
     } catch (error: any) {
-        setSaveError(`Falha ao salvar: ${error.message}`);
+        setSaveError(`Falha ao salvar: ${getErrorMessage(error)}`);
     } finally {
         setIsSaving(false);
     }
@@ -234,16 +400,30 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     });
 
     if (insertError) {
-        alert(`Falha ao adicionar departamento ao evento: ${insertError.message}`);
+        alert(`Falha ao adicionar departamento ao evento: ${getErrorMessage(insertError)}`);
         return;
     }
     
-    // Optimistically update the UI
     const updatedEvent = await refetchEvent(event.id);
     if (updatedEvent) {
         setAllEvents(allEvents.map(e => e.id === event.id ? updatedEvent : e));
+        
+        const { data: deptData } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
+        const departmentName = deptData?.name;
+        if (departmentName) {
+            const channel = supabase.channel('global-notifications');
+            await channel.send({
+                type: 'broadcast',
+                event: 'new_event_for_department',
+                payload: {
+                    eventName: updatedEvent.name,
+                    departmentName: departmentName
+                }
+            });
+             supabase.removeChannel(channel);
+        }
     } else {
-        await fetchEvents(); // Fallback
+        await fetchEvents(); 
     }
     onDataChange();
   };
@@ -343,15 +523,17 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         <div className="space-y-6">
             {error && <p className="text-center text-yellow-600 bg-yellow-50 p-3 rounded-lg">{error}</p>}
             {allEvents.map(event => (
-                <EventCard 
-                    key={event.id} 
-                    event={event} 
-                    userRole={userRole === 'lider' ? 'leader' : userRole} 
-                    leaderDepartmentId={leaderDepartmentId} 
-                    onEdit={showForm} 
-                    onDelete={handleDeleteRequest}
-                    onAddDepartment={handleAddDepartmentToEvent}
-                />
+                <div key={event.id} ref={el => { if(event.id) eventRefs.current[event.id] = el; }}>
+                    <EventCard 
+                        event={event} 
+                        userRole={userRole === 'lider' ? 'leader' : userRole} 
+                        leaderDepartmentId={leaderDepartmentId} 
+                        onEdit={showForm} 
+                        onDelete={handleDeleteRequest}
+                        onAddDepartment={handleAddDepartmentToEvent}
+                        isHighlighted={highlightId === event.id}
+                    />
+                </div>
             ))}
         </div>
     );

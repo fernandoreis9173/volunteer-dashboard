@@ -1,11 +1,10 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import VolunteerCard from './VolunteerCard';
 import NewVolunteerForm from './NewVolunteerForm';
 import ConfirmationModal from './ConfirmationModal';
 import { DetailedVolunteer, Department } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { getErrorMessage } from '../lib/utils';
 
 // Debounce hook
 function useDebounce(value: string, delay: number) {
@@ -28,29 +27,6 @@ interface VolunteersPageProps {
   userRole: string | null;
   onDataChange: () => void;
 }
-
-const getEdgeFunctionError = (error: any): string => {
-    // Case 1: The function returns a JSON object with an 'error' property (our standard)
-    // error.context.error = { error: "My error message" }
-    if (typeof error?.context?.error?.error === 'string') {
-        return error.context.error.error;
-    }
-    // Case 2: The function returns a simple string error
-    // error.context.error = "My error message"
-    if (typeof error?.context?.error === 'string') {
-        return error.context.error;
-    }
-    // Case 3: The function returns a JSON object with a 'message' property
-    // error.context.error = { message: "My error message" }
-    if (typeof error?.context?.error?.message === 'string') {
-        return error.context.error.message;
-    }
-    // Fallback to the generic invoke error message or a default
-    if (typeof error?.message === 'string') {
-        return error.message;
-    }
-    return 'Ocorreu um erro desconhecido. Tente novamente.';
-};
 
 const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, setIsFormOpen, userRole, onDataChange }) => {
   const [allVolunteers, setAllVolunteers] = useState<DetailedVolunteer[]>([]);
@@ -91,8 +67,9 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
 
         setAllVolunteers(data as DetailedVolunteer[] || []);
       } catch (error: any) {
-        console.error('Error fetching volunteers:', error);
-        setError(`Falha ao carregar voluntários: ${error.message || 'Erro desconhecido'}`);
+        const errorMessage = getErrorMessage(error);
+        console.error('Error fetching volunteers:', errorMessage);
+        setError(`Falha ao carregar voluntários: ${errorMessage}`);
         setAllVolunteers([]);
       } finally {
         setLoading(false);
@@ -107,7 +84,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
         .eq('status', 'Ativo')
         .order('name', { ascending: true });
     if (error) {
-        console.error('Error fetching active departments:', error);
+        console.error('Error fetching active departments:', getErrorMessage(error));
     } else {
         setDepartments(data as Department[] || []);
     }
@@ -155,7 +132,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
     const { error: deleteError } = await supabase.from('volunteers').delete().eq('id', volunteerToDeleteId);
 
     if (deleteError) {
-        alert(`Falha ao excluir voluntário: ${deleteError.message}`);
+        alert(`Falha ao excluir voluntário: ${getErrorMessage(deleteError)}`);
     } else {
         setAllVolunteers(allVolunteers.filter(v => v.id !== volunteerToDeleteId));
         onDataChange();
@@ -211,9 +188,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
         hideForm();
         onDataChange();
     } catch(error: any) {
-        // The Supabase client may wrap PostgREST errors, which might not be caught by getEdgeFunctionError.
-        // We'll check for a message property first.
-        const errorMessage = error.message || getEdgeFunctionError(error);
+        const errorMessage = getErrorMessage(error);
         setSaveError(`Falha ao salvar: ${errorMessage}`);
         console.error("Error saving/inviting volunteer:", error);
     } finally {

@@ -1,55 +1,74 @@
 
-
 import React from 'react';
-import type { DashboardVolunteer } from '../types';
+import { ResponsiveContainer, AreaChart, Area } from 'recharts';
+import type { Stat } from '../types';
+
+// Dummy data for the small trend chart
+const chartData = [
+  { value: 65 }, { value: 68 }, { value: 64 }, { value: 70 },
+  { value: 90 }, { value: 85 }, { value: 88 }, { value: 82 },
+  { value: 80 }, { value: 78 }, { value: 75 }, { value: 70 },
+];
 
 interface ActiveVolunteersListProps {
-  volunteers: DashboardVolunteer[];
+  stats: {
+    activeVolunteers: Stat;
+    departments: Stat;
+    schedulesToday: Stat;
+    schedulesTomorrow: Stat;
+  } | undefined;
   loading: boolean;
 }
 
-const VolunteerItem: React.FC<{ volunteer: DashboardVolunteer }> = ({ volunteer }) => (
-  <div className="flex items-center space-x-4">
-    <div className={`w-10 h-10 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold`}>
-      {volunteer.initials}
-    </div>
-    <div>
-      <p className="font-semibold text-slate-800">{volunteer.name}</p>
-      <p className="text-sm text-slate-500">{volunteer.email}</p>
-      {(volunteer.departments || []).length > 0 && (
-        <p className="text-sm text-blue-600">{(volunteer.departments || []).join(', ')}</p>
-      )}
-    </div>
+const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) => (
+  <div className="text-center px-2">
+    <p className="text-2xl font-bold text-slate-800">{value}</p>
+    <p className="text-xs text-slate-500">{label}</p>
   </div>
 );
 
-const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ volunteers, loading }) => {
+
+const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ stats, loading }) => {
+  const activeCount = loading ? '...' : stats?.activeVolunteers?.value ?? '0';
+  const departmentsCount = loading ? '...' : stats?.departments?.value ?? '0';
+  const todayCount = loading ? '...' : stats?.schedulesToday?.value ?? '0';
+  const tomorrowCount = loading ? '...' : stats?.schedulesTomorrow?.value ?? '0';
+
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm flex flex-col h-full">
-      <div className="flex items-center space-x-2 mb-6">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.226a3 3 0 0 0-4.682 2.72 9.094 9.094 0 0 0 3.741.479m7.5-2.226V18a2.25 2.25 0 0 1-2.25 2.25H12a2.25 2.25 0 0 1-2.25-2.25V18.226m3.75-10.5a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5ZM10.5 8.25a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5Z" />
-        </svg>
-        <h2 className="text-xl font-bold text-slate-800">Voluntários Ativos</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold text-slate-800">Voluntários Ativos</h2>
       </div>
-      <div className="space-y-5 flex-1 overflow-y-auto pr-2">
-        {loading ? (
-            Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="flex items-center space-x-4 animate-pulse">
-                    <div className="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0"></div>
-                    <div className="flex-1 space-y-2 py-1">
-                        <div className="h-3 bg-slate-200 rounded w-3/4"></div>
-                        <div className="h-3 bg-slate-200 rounded w-1/2"></div>
-                    </div>
-                </div>
-            ))
-        ) : volunteers.length > 0 ? (
-            volunteers.map((volunteer) => (
-                <VolunteerItem key={volunteer.id} volunteer={volunteer} />
-            ))
-        ) : (
-            <p className="text-slate-500">Nenhum voluntário ativo encontrado.</p>
-        )}
+
+      <div className="flex items-center space-x-2 mb-4">
+        <span className="flex h-3 w-3 relative">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+        </span>
+        <p className="text-4xl font-bold text-slate-800">{activeCount}</p>
+        <p className="text-slate-500 pt-2">ativos no sistema</p>
+      </div>
+      
+      <div className="flex-grow h-24 -mx-6">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+            <defs>
+              <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2.5} fill="url(#chartGradient)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-slate-200 flex justify-around items-center">
+        <StatItem value={departmentsCount} label="Departamentos" />
+        <div className="h-10 w-px bg-slate-200"></div>
+        <StatItem value={todayCount} label="Eventos Hoje" />
+        <div className="h-10 w-px bg-slate-200"></div>
+        <StatItem value={tomorrowCount} label="Eventos Amanhã" />
       </div>
     </div>
   );

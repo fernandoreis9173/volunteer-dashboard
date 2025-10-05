@@ -1,11 +1,10 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import DepartmentCard from './DepartmentCard';
 import NewDepartmentForm from './NewDepartmentForm';
 import ConfirmationModal from './ConfirmationModal';
 import { Department } from '../types';
 import { SupabaseClient, User } from '@supabase/supabase-js';
+import { getErrorMessage } from '../lib/utils';
 
 // Debounce hook
 function useDebounce(value: string, delay: number) {
@@ -63,8 +62,9 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
     const { data, error: fetchError } = await queryBuilder;
 
     if (fetchError) {
-      console.error('Error fetching departments:', fetchError.message);
-      setError("Não foi possível carregar os departamentos.");
+      const errorMessage = getErrorMessage(fetchError);
+      console.error('Error fetching departments:', errorMessage);
+      setError(`Não foi possível carregar os departamentos: ${errorMessage}`);
       setDepartments([]);
     } else {
       setDepartments(data || []);
@@ -76,7 +76,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
     if (!supabase) return;
     const { data, error: invokeError } = await supabase.functions.invoke('list-users');
     if (invokeError) {
-        console.error('Error fetching leaders:', invokeError);
+        console.error('Error fetching leaders:', getErrorMessage(invokeError));
     } else if (data.users) {
         const potentialLeaders = data.users.filter((user: any) => {
             const role = user.user_metadata?.role;
@@ -124,7 +124,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
     const { error: deleteError } = await supabase.from('departments').delete().eq('id', departmentToDeleteId);
 
     if (deleteError) {
-      alert(`Falha ao excluir departamento: ${deleteError.message}`);
+      alert(`Falha ao excluir departamento: ${getErrorMessage(deleteError)}`);
     } else {
       setDepartments(departments.filter(m => m.id !== departmentToDeleteId));
       onDataChange();
@@ -166,7 +166,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
             if (profileError) {
                 // This is a partial success, the department was saved but leader link failed.
                 // We should still update the UI and maybe show a different message.
-                console.error(`Departamento salvo, mas falha ao vincular o líder: ${profileError.message}`);
+                console.error(`Departamento salvo, mas falha ao vincular o líder: ${getErrorMessage(profileError)}`);
             }
         }
         
@@ -179,7 +179,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
         hideForm();
         onDataChange();
     } catch (error: any) {
-        const errorMessage = error.message || "A operação falhou.";
+        const errorMessage = getErrorMessage(error);
         setSaveError(`Falha ao salvar: ${errorMessage}`);
         console.error("Error saving department:", error);
     } finally {

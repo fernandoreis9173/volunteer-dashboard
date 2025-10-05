@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -14,9 +12,12 @@ import { AcceptInvitationPage } from './components/AcceptInvitationPage';
 import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
 import VolunteerProfile from './components/VolunteerProfile';
-import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer, DetailedVolunteer } from './types';
+import NotificationsPage from './components/NotificationsPage';
+import NotificationToast, { Notification } from './components/NotificationToast';
+import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer, DetailedVolunteer, Stat, EnrichedUser } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
+import { getErrorMessage } from './lib/utils';
 
 // This state now directly reflects the data we trust from the 'profiles' table.
 interface UserProfileState {
@@ -29,19 +30,21 @@ export interface ChartDataPoint {
     date: string;
     scheduledVolunteers: number;
     involvedDepartments: number;
+    eventNames: string[];
 }
 
 interface DashboardData {
     stats?: {
-        activeVolunteers: string;
-        departments: string;
-        schedulesToday: string;
-        schedulesTomorrow: string;
+        activeVolunteers: Stat;
+        departments: Stat;
+        schedulesToday: Stat;
+        schedulesTomorrow: Stat;
     };
     todaySchedules?: DashboardEvent[];
     upcomingSchedules?: DashboardEvent[];
     activeVolunteers?: DashboardVolunteer[];
     chartData?: ChartDataPoint[];
+    activeLeaders?: EnrichedUser[];
     // For Volunteer view
     schedules?: VolunteerEvent[];
     volunteerProfile?: DetailedVolunteer;
@@ -57,7 +60,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2); // Remove #/
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'admin', 'my-profile'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'admin', 'my-profile', 'notifications'];
     if (validPages.includes(hash as Page)) {
         return hash as Page;
     }
@@ -79,6 +82,8 @@ const App: React.FC = () => {
   const [isUserDisabled, setIsUserDisabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchApplicationData = useCallback(async () => {
     if (session && supabase) {
@@ -98,6 +103,14 @@ const App: React.FC = () => {
             setDashboardData(null);
             return;
         }
+        
+        // Fetch unread notifications count for all logged-in users
+        const { count: unreadNotificationsCount } = await supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', session.user.id)
+            .eq('is_read', false);
+        setUnreadCount(unreadNotificationsCount ?? 0);
 
         if (userRole === 'volunteer') {
             const { data: volunteerData, error: volunteerError } = await supabase
@@ -107,7 +120,7 @@ const App: React.FC = () => {
                 .single();
 
             if (volunteerError || !volunteerData) {
-                console.error("Error fetching volunteer profile by user_id:", volunteerError);
+                console.error("Error fetching volunteer profile by user_id:", getErrorMessage(volunteerError));
                 setUserProfile({ role: userRole, department_id: null, volunteer_id: null });
                 setDashboardData({ schedules: [] });
             } else {
@@ -137,7 +150,7 @@ const App: React.FC = () => {
                 .single();
 
             if (profileError || !profileData) {
-                console.error("Error fetching admin/leader profile:", profileError);
+                console.error("Error fetching admin/leader profile:", getErrorMessage(profileError));
                 setUserProfile(null);
                 setDashboardData(null);
                 return;
@@ -164,7 +177,7 @@ const App: React.FC = () => {
             oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
             const oneYearAgoISO = oneYearAgo.toISOString();
 
-            const [statsRes, todaySchedulesRes, upcomingSchedulesRes, activeVolunteersRes, chartEventsRes] = await Promise.all([
+            const [statsRes, todaySchedulesRes, upcomingSchedulesRes, activeVolunteersRes, chartEventsRes, usersRes] = await Promise.all([
                 Promise.all([
                     supabase.from('volunteers').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
                     supabase.from('departments').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
@@ -172,23 +185,27 @@ const App: React.FC = () => {
                     supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', tomorrow).eq('status', 'Confirmado'),
                 ]),
                 supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').eq('date', today).eq('status', 'Confirmado').order('start_time').limit(10),
-                supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').gte('date', tomorrow).lte('date', nextSevenDays).eq('status', 'Confirmado').order('date').limit(5),
+                supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').gte('date', tomorrow).lte('date', nextSevenDays).eq('status', 'Confirmado').order('date').limit(10),
                 supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').order('created_at', { ascending: false }).limit(5),
-                supabase.from('events').select('date, event_volunteers(volunteer_id), event_departments(department_id)').gte('date', oneYearAgoISO.slice(0, 10)).limit(10000),
+                supabase.from('events').select('date, name, event_volunteers(volunteer_id), event_departments(department_id)').gte('date', oneYearAgoISO.slice(0, 10)).limit(10000),
+                supabase.functions.invoke('list-users'),
             ]);
             
             // Process chart data
-            const dailyCounts: { [key: string]: { scheduledVolunteers: number; involvedDepartments: number } } = {};
+            const dailyCounts: { [key: string]: { scheduledVolunteers: number; involvedDepartments: number, eventNames: string[] } } = {};
             
             (chartEventsRes.data || []).forEach(event => {
                 const date = event.date;
                 if (date) {
                     if (!dailyCounts[date]) {
-                        dailyCounts[date] = { scheduledVolunteers: 0, involvedDepartments: 0 };
+                        dailyCounts[date] = { scheduledVolunteers: 0, involvedDepartments: 0, eventNames: [] };
                     }
                     // The nested select returns an array of objects, so .length is the count.
                     dailyCounts[date].scheduledVolunteers += (event.event_volunteers || []).length;
                     dailyCounts[date].involvedDepartments += (event.event_departments || []).length;
+                    if(event.name) {
+                        dailyCounts[date].eventNames.push(event.name);
+                    }
                 }
             });
         
@@ -197,18 +214,26 @@ const App: React.FC = () => {
                 ...counts,
             })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+            // FIX: Cast the user object to EnrichedUser to inform TypeScript of its shape, resolving the property access error.
+            const activeLeaders = (usersRes.data?.users || []).filter((user: any) => {
+                const enrichedUser = user as EnrichedUser;
+                const role = enrichedUser.user_metadata?.role;
+                return (role === 'leader' || role === 'lider') && enrichedUser.app_status === 'Ativo';
+            });
+
 
             setDashboardData({
                 stats: {
-                    activeVolunteers: String(statsRes[0].count ?? 0),
-                    departments: String(statsRes[1].count ?? 0),
-                    schedulesToday: String(statsRes[2].count ?? 0),
-                    schedulesTomorrow: String(statsRes[3].count ?? 0),
+                    activeVolunteers: { value: String(statsRes[0].count ?? 0), change: 9.5 },
+                    departments: { value: String(statsRes[1].count ?? 0), change: 3.5 },
+                    schedulesToday: { value: String(statsRes[2].count ?? 0), change: -1.6 },
+                    schedulesTomorrow: { value: String(statsRes[3].count ?? 0), change: 2.5 },
                 },
                 todaySchedules: (todaySchedulesRes.data as unknown as DashboardEvent[]) || [],
                 upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
                 activeVolunteers: (activeVolunteersRes.data as DashboardVolunteer[]) || [],
                 chartData,
+                activeLeaders,
             });
         }
     } else {
@@ -293,12 +318,16 @@ const App: React.FC = () => {
         const userRole = userProfile.role;
         const currentPage = getPageFromHash();
 
-        if (userRole === 'volunteer' && currentPage !== 'dashboard' && currentPage !== 'my-profile') {
+        if (userRole === 'volunteer' && currentPage !== 'dashboard' && currentPage !== 'my-profile' && currentPage !== 'notifications') {
             window.location.hash = '#/dashboard';
             return;
         }
         
         const normalizedRole = userRole === 'lider' ? 'leader' : userRole;
+        if (normalizedRole === 'admin' && currentPage === 'notifications') {
+            window.location.hash = '#/dashboard';
+            return;
+        }
         if (normalizedRole === 'leader' && currentPage === 'admin') {
             window.location.hash = '#/dashboard';
             return;
@@ -310,6 +339,80 @@ const App: React.FC = () => {
         }
     }
   }, [isInitializing, session, userProfile, activePage]);
+
+    // Effect for real-time notifications
+  useEffect(() => {
+    if (!supabase || !session || !userProfile) {
+        return;
+    }
+
+    const handleNewNotification = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
+        const newNotification: Notification = {
+            id: Date.now(),
+            message,
+            type,
+        };
+        setNotifications(prev => [...prev, newNotification]);
+    };
+
+    const channel = supabase.channel('global-notifications');
+    
+    channel.on('broadcast', { event: 'new_schedule' }, ({ payload }) => {
+        if (userProfile.volunteer_id && payload.volunteerIds?.includes(userProfile.volunteer_id)) {
+            handleNewNotification(`Você foi escalado para o evento "${payload.eventName}" no departamento de ${payload.departmentName}.`, 'success');
+            fetchApplicationData();
+        }
+    });
+
+    channel.on('broadcast', { event: 'event_update' }, ({ payload }) => {
+        let shouldNotify = false;
+
+        // For Volunteers: check if they are scheduled
+        const isScheduledVolunteer = userProfile.volunteer_id && dashboardData?.schedules?.some(s => s.id === payload.eventId);
+        if (isScheduledVolunteer) {
+            shouldNotify = true;
+        }
+
+        // For Leaders: check if their department is involved
+        const userRole = userProfile?.role;
+        const isAffectedLeader = (userRole === 'leader' || userRole === 'lider') && 
+                                 userProfile.department_id && 
+                                 payload.departmentIds?.includes(userProfile.department_id);
+        if (isAffectedLeader) {
+            shouldNotify = true;
+        }
+
+        if (shouldNotify) {
+            handleNewNotification(`Atualização no evento "${payload.eventName}": ${payload.updateMessage}`, 'info');
+            fetchApplicationData();
+        }
+    });
+
+    channel.on('broadcast', { event: 'new_event_for_department' }, ({ payload }) => {
+        const volunteerDepts = dashboardData?.volunteerProfile?.departments as string[] | undefined;
+        if (volunteerDepts && volunteerDepts.includes(payload.departmentName)) {
+            handleNewNotification(`Novo evento para o seu departamento (${payload.departmentName}): "${payload.eventName}"!`, 'info');
+        }
+    });
+
+    channel.on('broadcast', { event: 'new_event_for_leader' }, ({ payload }) => {
+        const userRole = userProfile?.role;
+        if (userRole === 'leader' || userRole === 'lider') {
+            handleNewNotification(`Novo evento criado: "${payload.eventName}". Verifique se é necessário escalar seu departamento.`, 'info');
+        }
+    });
+
+    channel.subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+
+  }, [supabase, session, userProfile, dashboardData, fetchApplicationData]);
+
+  const removeNotification = (id: number) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
   
   const handleNavigate = (page: Page) => {
     if (`#/${page}` !== window.location.hash) {
@@ -342,8 +445,9 @@ const App: React.FC = () => {
     // Authorization checks to prevent rendering a page while a redirect is pending
     const userRole = userProfile.role;
     const normalizedRole = userRole === 'lider' ? 'leader' : userRole;
-    if (normalizedRole === 'volunteer' && activePage !== 'dashboard' && activePage !== 'my-profile') return null;
+    if (normalizedRole === 'volunteer' && activePage !== 'dashboard' && activePage !== 'my-profile' && activePage !== 'notifications') return null;
     if (normalizedRole === 'leader' && activePage === 'admin') return null;
+    if (normalizedRole === 'admin' && activePage === 'notifications') return null;
     if (normalizedRole !== 'volunteer' && activePage === 'my-profile') return null;
 
     switch (activePage) {
@@ -357,6 +461,8 @@ const App: React.FC = () => {
         return <AdminPage supabase={supabase} onDataChange={fetchApplicationData} />;
        case 'my-profile':
         return <VolunteerProfile supabase={supabase} volunteerData={dashboardData?.volunteerProfile} onUpdate={fetchApplicationData} />;
+      case 'notifications':
+        return <NotificationsPage supabase={supabase} session={session} onDataChange={fetchApplicationData} onNavigate={handleNavigate} />;
       case 'dashboard':
       default:
         if (userRole === 'volunteer') {
@@ -418,6 +524,7 @@ const App: React.FC = () => {
         setIsOpen={setIsSidebarOpen}
         userRole={userProfile?.role}
         session={session}
+        unreadCount={unreadCount}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="p-4 md:p-8">
@@ -434,6 +541,13 @@ const App: React.FC = () => {
             {renderPage()}
         </div>
       </main>
+      <div aria-live="assertive" className="fixed inset-0 flex items-end px-4 py-6 pointer-events-none sm:p-6 sm:items-start z-50">
+        <div className="w-full flex flex-col items-center space-y-4 sm:items-end">
+          {notifications.map((notification) => (
+            <NotificationToast key={notification.id} notification={notification} onClose={removeNotification} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 };

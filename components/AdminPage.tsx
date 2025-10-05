@@ -1,21 +1,14 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { User } from '@supabase/supabase-js';
 import EditUserModal from './EditUserModal';
 import ConfirmationModal from './ConfirmationModal';
+import { EnrichedUser } from '../types';
+import { getErrorMessage } from '../lib/utils';
 
 interface AdminPageProps {
   supabase: SupabaseClient | null;
   onDataChange: () => void;
-}
-
-interface EnrichedUser extends User {
-    id: string;
-    email?: string;
-    invited_at?: string;
-    app_status?: 'Ativo' | 'Inativo' | 'Pendente';
 }
 
 const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
@@ -37,29 +30,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
     const [userToAction, setUserToAction] = useState<User | null>(null);
     const [actionType, setActionType] = useState<'disable' | 'enable' | null>(null);
 
-    const getEdgeFunctionError = (error: any): string => {
-        // Case 1: The function returns a JSON object with an 'error' property (our standard)
-        // error.context.error = { error: "My error message" }
-        if (typeof error?.context?.error?.error === 'string') {
-            return error.context.error.error;
-        }
-        // Case 2: The function returns a simple string error
-        // error.context.error = "My error message"
-        if (typeof error?.context?.error === 'string') {
-            return error.context.error;
-        }
-        // Case 3: The function returns a JSON object with a 'message' property
-        // error.context.error = { message: "My error message" }
-        if (typeof error?.context?.error?.message === 'string') {
-            return error.context.error.message;
-        }
-        // Fallback to the generic invoke error message or a default
-        if (typeof error?.message === 'string') {
-            return error.message;
-        }
-        return 'Ocorreu um erro desconhecido. Tente novamente.';
-    };
-
     const fetchInvitedUsers = async () => {
         if (!supabase) return;
         setListLoading(true);
@@ -68,7 +38,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
         const { data, error: fetchError } = await supabase.functions.invoke('list-users');
 
         if (fetchError) {
-            setListError(`Falha ao carregar a lista de convidados: ${getEdgeFunctionError(fetchError)}`);
+            const errorMessage = getErrorMessage(fetchError);
+            setListError(`Falha ao carregar a lista de convidados: ${errorMessage}`);
             console.error('Error fetching invited users:', fetchError);
         } else if (data && data.error) {
             setListError(`Erro retornado pela função: ${data.error}`);
@@ -116,8 +87,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
             onDataChange();
 
         } catch (err) {
+            const errorMessage = getErrorMessage(err);
             console.error('Error inviting user:', err);
-            setError(`Falha ao enviar convite: ${getEdgeFunctionError(err)}`);
+            setError(`Falha ao enviar convite: ${errorMessage}`);
         } finally {
             setLoading(false);
         }
@@ -131,7 +103,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
         });
 
         if (error) {
-            alert(`Falha ao atualizar permissões: ${getEdgeFunctionError(error)}`);
+            alert(`Falha ao atualizar permissões: ${getErrorMessage(error)}`);
         } else {
             await fetchInvitedUsers();
             setIsEditModalOpen(false);
@@ -156,7 +128,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
         });
 
         if (error) {
-            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getEdgeFunctionError(error)}`);
+            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
         } else {
             await fetchInvitedUsers();
             onDataChange();

@@ -1,6 +1,6 @@
 
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { ChartDataPoint } from '../App';
 import { ResponsiveContainer, AreaChart, XAxis, YAxis, Tooltip, Area, CartesianGrid } from 'recharts';
 
@@ -26,9 +26,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
       const scheduledData = payload.find(p => p.dataKey === 'scheduledVolunteers');
       const departmentsData = payload.find(p => p.dataKey === 'involvedDepartments');
+      const eventNames = pointData.eventNames;
+      const eventCount = pointData.eventCount;
 
       return (
-        <div className="bg-white p-3 shadow-lg rounded-lg border border-slate-200">
+        <div className="bg-white p-3 shadow-lg rounded-lg border border-slate-200 w-64">
           <p className="font-bold text-slate-700 mb-2">{formattedLabel}</p>
           <div className="space-y-1">
             {scheduledData && (
@@ -44,14 +46,49 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                 </p>
             )}
           </div>
+           {(eventNames?.length > 0 || eventCount > 0) && (
+            <div className="mt-2 pt-2 border-t border-slate-200">
+                <h4 className="font-semibold text-slate-600 text-sm mb-1">
+                    {timeframe === 'yearly' ? 'Total de Eventos' : 'Eventos no Dia'}
+                </h4>
+                {timeframe === 'yearly' ? (
+                    <p className="text-sm text-slate-500">{eventCount} eventos</p>
+                ) : (
+                    <ul className="text-sm text-slate-500 list-disc list-inside space-y-0.5 max-h-24 overflow-y-auto">
+                        {eventNames.slice(0, 3).map((name: string, index: number) => (
+                            <li key={index} className="truncate" title={name}>{name}</li>
+                        ))}
+                        {eventNames.length > 3 && (
+                            <li className="font-semibold text-slate-400">e mais {eventNames.length - 3}...</li>
+                        )}
+                    </ul>
+                )}
+            </div>
+        )}
         </div>
       );
     }
     return null;
 };
+
+// Custom hook to detect screen size
+const useIsMobile = (breakpoint = 768) => {
+    const [isMobile, setIsMobile] = useState(window.innerWidth < breakpoint);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < breakpoint);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [breakpoint]);
+
+    return isMobile;
+};
   
 const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
   const [timeframe, setTimeframe] = useState<Timeframe>('monthly');
+  const isMobile = useIsMobile();
 
   const { chartData, subtitle } = useMemo(() => {
     const today = new Date();
@@ -76,6 +113,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
                 timeframe: 'weekly',
                 scheduledVolunteers: existingData?.scheduledVolunteers || 0,
                 involvedDepartments: existingData?.involvedDepartments || 0,
+                eventNames: existingData?.eventNames || [],
             });
         }
         return { 
@@ -101,6 +139,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
                 timeframe: 'monthly',
                 scheduledVolunteers: existingData?.scheduledVolunteers || 0,
                 involvedDepartments: existingData?.involvedDepartments || 0,
+                eventNames: existingData?.eventNames || [],
             });
         }
         return { 
@@ -112,15 +151,16 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
     // Default: 'yearly'
     const currentYear = today.getFullYear();
 
-    const aggregatedData = new Map<number, { scheduledVolunteers: number; involvedDepartments: number }>();
+    const aggregatedData = new Map<number, { scheduledVolunteers: number; involvedDepartments: number; eventCount: number }>();
     data.forEach(d => {
         const recordDate = new Date(d.date + "T00:00:00");
         if (recordDate.getFullYear() === currentYear) {
             const monthIndex = recordDate.getMonth();
-            const currentCounts = aggregatedData.get(monthIndex) || { scheduledVolunteers: 0, involvedDepartments: 0 };
+            const currentCounts = aggregatedData.get(monthIndex) || { scheduledVolunteers: 0, involvedDepartments: 0, eventCount: 0 };
             aggregatedData.set(monthIndex, {
                 scheduledVolunteers: currentCounts.scheduledVolunteers + d.scheduledVolunteers,
-                involvedDepartments: currentCounts.involvedDepartments + (d.involvedDepartments || 0)
+                involvedDepartments: currentCounts.involvedDepartments + (d.involvedDepartments || 0),
+                eventCount: currentCounts.eventCount + (d.eventNames?.length || 0),
             });
         }
     });
@@ -136,6 +176,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
             fullDate: monthKey,
             scheduledVolunteers: aggregatedData.get(i)?.scheduledVolunteers || 0,
             involvedDepartments: aggregatedData.get(i)?.involvedDepartments || 0,
+            eventCount: aggregatedData.get(i)?.eventCount || 0,
             timeframe: 'yearly',
         });
     }
@@ -157,11 +198,14 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
     </button>
   );
 
+  // Dynamically set interval based on screen size
+  const xAxisInterval = isMobile ? 'preserveStartEnd' : 0;
+
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full">
         <div className="flex flex-col sm:flex-row justify-between items-start mb-6">
             <div>
-                <h2 className="text-2xl font-bold text-slate-800">Análise</h2>
+                <h2 className="text-2xl font-bold text-slate-800">Análise Eventos</h2>
                 <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
             </div>
             <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl mt-4 sm:mt-0">
@@ -175,7 +219,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
             <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                     data={chartData}
-                    margin={{ top: 10, right: 20, left: -20, bottom: 0 }}
+                    margin={{ top: 10, right: 20, left: -20, bottom: 5 }}
                 >
                     <defs>
                         <linearGradient id="colorScheduledVolunteers" x1="0" y1="0" x2="0" y2="1">
@@ -188,7 +232,7 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} stroke="#e2e8f0" axisLine={false} tickLine={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} stroke="#e2e8f0" axisLine={false} tickLine={false} interval={xAxisInterval} />
                     <YAxis tick={{ fontSize: 12, fill: '#64748b' }} stroke="#e2e8f0" axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' }} />
                     <Area type="monotone" dataKey="scheduledVolunteers" name="Voluntários nos Eventos" stroke="#3b82f6" fill="url(#colorScheduledVolunteers)" strokeWidth={2.5} activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }} />

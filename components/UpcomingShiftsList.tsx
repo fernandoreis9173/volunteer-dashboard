@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import type { DashboardEvent } from '../types';
 
 interface UpcomingShiftsListProps {
-  schedules: DashboardEvent[];
+  todaySchedules: DashboardEvent[];
+  upcomingSchedules: DashboardEvent[];
   loading: boolean;
   onViewDetails: (event: DashboardEvent) => void;
 }
+
+type EventFilter = 'today' | 'upcoming';
 
 const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: DashboardEvent) => void; }> = ({ schedule, onViewDetails }) => {
   const formattedDate = new Date(schedule.date + 'T00:00:00').toLocaleDateString('pt-BR', {
@@ -28,7 +31,7 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
 
 
   return (
-    <div className="bg-white p-5 rounded-xl border border-slate-200 relative">
+    <div className="bg-white p-5 rounded-xl border border-slate-200 relative w-80 flex-shrink-0 flex flex-col">
       <span className={`absolute top-4 right-4 text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'Confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
        <button 
         onClick={() => onViewDetails(schedule)} 
@@ -89,19 +92,43 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
   );
 };
 
-const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ schedules, loading, onViewDetails }) => {
+const FilterButton: React.FC<{ label: string; value: EventFilter; activeValue: EventFilter; onClick: (value: EventFilter) => void }> = ({ label, value, activeValue, onClick }) => (
+    <button
+        onClick={() => onClick(value)}
+        className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+            activeValue === value ? 'bg-white text-slate-900 shadow-sm' : 'bg-transparent text-slate-500 hover:text-slate-900'
+        }`}
+    >
+        {label}
+    </button>
+);
+
+
+const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules, upcomingSchedules, loading, onViewDetails }) => {
+  const [activeFilter, setActiveFilter] = useState<EventFilter>('upcoming');
+  
+  const displayedSchedules = useMemo(() => {
+    return activeFilter === 'today' ? todaySchedules : upcomingSchedules;
+  }, [activeFilter, todaySchedules, upcomingSchedules]);
+
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm flex flex-col h-full">
-      <div className="flex items-center space-x-2 mb-6">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
-        </svg>
-        <h2 className="text-xl font-bold text-slate-800">Próximos Eventos</h2>
+    <div className="bg-white p-6 rounded-2xl shadow-sm h-full flex flex-col">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="flex items-center space-x-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
+            </svg>
+            <h2 className="text-xl font-bold text-slate-800">Próximos Eventos</h2>
+        </div>
+        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl self-start sm:self-center">
+            <FilterButton label="Hoje" value="today" activeValue={activeFilter} onClick={setActiveFilter} />
+            <FilterButton label="Próximos" value="upcoming" activeValue={activeFilter} onClick={setActiveFilter} />
+        </div>
       </div>
-      <div className="space-y-4 flex-1 overflow-y-auto pr-2">
+      <div className="flex space-x-4 overflow-x-auto pb-4">
         {loading ? (
-            Array.from({ length: 2 }).map((_, index) => (
-                <div key={index} className="bg-slate-50 p-5 rounded-xl border border-slate-200 animate-pulse">
+            Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="bg-slate-50 p-5 rounded-xl border border-slate-200 animate-pulse w-80 flex-shrink-0">
                     <div className="h-4 bg-slate-200 rounded w-3/4 mb-4"></div>
                     <div className="space-y-2">
                         <div className="h-3 bg-slate-200 rounded w-1/2"></div>
@@ -111,12 +138,16 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ schedules, load
                     <div className="h-3 bg-slate-200 rounded w-full"></div>
                 </div>
             ))
-        ) : schedules.length > 0 ? (
-          schedules.map((schedule) => (
+        ) : displayedSchedules.length > 0 ? (
+          displayedSchedules.map((schedule) => (
             <ScheduleCard key={schedule.id} schedule={schedule} onViewDetails={onViewDetails} />
           ))
         ) : (
-          <p className="text-slate-500">Nenhum evento futuro encontrado.</p>
+          <div className="w-full flex items-center justify-center h-48">
+            <p className="text-slate-500">
+                {activeFilter === 'today' ? 'Nenhum evento para hoje.' : 'Nenhum evento encontrado para os próximos dias.'}
+            </p>
+          </div>
         )}
       </div>
     </div>

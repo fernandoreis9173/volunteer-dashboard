@@ -1,10 +1,7 @@
-
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Department } from '../types';
 import { SupabaseClient, User } from '@supabase/supabase-js';
+import { getErrorMessage } from '../lib/utils';
 
 interface InputFieldProps {
     label: string;
@@ -202,7 +199,7 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initial
             if (!supabase) return;
             const { data: departmentsData, error: departmentsError } = await supabase.from('departments').select('*');
             if (departmentsError) {
-                console.error('Error fetching departments for conflict check:', departmentsError);
+                console.error('Error fetching departments for conflict check:', getErrorMessage(departmentsError));
             } else {
                 setAllDepartments(departmentsData || []);
             }

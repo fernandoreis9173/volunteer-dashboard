@@ -68,10 +68,10 @@ Deno.serve(async (req) => {
         throw updateError;
     }
 
-    // Step 3: Create the user's profile in the 'profiles' table.
+    // Step 3: Create or update the user's profile in the 'profiles' table.
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert({ id: user.id, role: role });
+      .upsert({ id: user.id, role: role }, { onConflict: 'id' });
 
     if (profileError) {
       // Rollback auth user if profile creation fails

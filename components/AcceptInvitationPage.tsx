@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { AuthView, Department } from '../types';
 import SmartSearch, { SearchItem } from './SmartSearch';
+import { getErrorMessage } from '../lib/utils';
 
 // --- Helper Components & Functions ---
 
@@ -225,7 +226,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
               .eq('status', 'Ativo')
               .order('name');
             if (deptError) {
-              console.error("Could not fetch departments for volunteer", deptError);
+              console.error("Could not fetch departments for volunteer", getErrorMessage(deptError));
             } else {
               setDepartments(deptData as Department[] || []);
             }
@@ -345,8 +346,9 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
             }, 3000);
 
         } catch (error: any) {
+            const errorMessage = getErrorMessage(error);
             console.error("Error accepting invitation:", error);
-            setError(error.message || 'Falha ao ativar sua conta. O link pode ter expirado ou já ter sido usado.');
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }

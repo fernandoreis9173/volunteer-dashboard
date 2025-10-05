@@ -1,4 +1,5 @@
 
+import { User } from '@supabase/supabase-js';
 
 export interface Volunteer {
   name: string;
@@ -45,7 +46,7 @@ export interface DashboardEvent {
   event_volunteers: { volunteers: { name: string } }[] | null; // Can be null from DB join
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'admin' | 'my-profile';
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'admin' | 'my-profile' | 'notifications';
 
 export type AuthView = 'login' | 'accept-invite';
 
@@ -83,4 +84,28 @@ export interface Department {
   meeting_days: string[];
   status: 'Ativo' | 'Inativo';
   created_at?: string;
+}
+
+export interface Stat {
+    value: string;
+    change: number;
+}
+
+
+// Shared user type for Admin pages and dashboard feeds
+// FIX: The `EnrichedUser` interface was not correctly inheriting properties from the base Supabase `User` type.
+// This has been resolved by changing the interface to a type alias using an intersection (`&`),
+// which is a more robust way to extend complex types and ensures all properties from `User` are included.
+export type EnrichedUser = User & {
+    app_status?: 'Ativo' | 'Inativo' | 'Pendente';
+};
+
+export interface NotificationRecord {
+    id: number;
+    created_at: string;
+    user_id: string;
+    message: string;
+    type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader';
+    is_read: boolean;
+    related_event_id: number | null;
 }

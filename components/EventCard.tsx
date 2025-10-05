@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { Event } from '../types';
 
@@ -10,9 +8,10 @@ interface EventCardProps {
     onEdit: (event: Event) => void;
     onDelete: (id: number) => void;
     onAddDepartment: (event: Event) => void;
+    isHighlighted?: boolean;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartmentId, onEdit, onDelete, onAddDepartment }) => {
+const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartmentId, onEdit, onDelete, onAddDepartment, isHighlighted = false }) => {
     const [expanded, setExpanded] = useState(false);
     
     const isLeader = userRole === 'leader' || userRole === 'lider';
@@ -21,7 +20,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
     const canLeaderSchedule = isLeader && event.status === 'Confirmado';
 
     return (
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <div className={`bg-white p-5 rounded-xl shadow-sm border border-slate-200 transition-all duration-300 ${isHighlighted ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}>
             <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
                 <div>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full capitalize mb-2 inline-block ${event.status === 'Confirmado' ? 'bg-green-100 text-green-800' : event.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{event.status}</span>
