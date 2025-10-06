@@ -1,3 +1,9 @@
+
+
+
+
+
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -7,8 +13,8 @@ import EventsPage from './components/SchedulesPage';
 import AdminPage from './components/AdminPage';
 import ApiConfigPage from './components/ApiConfigPage';
 import LoginPage from './components/LoginPage';
-// FIX: Changed to a named import because the module does not have a default export.
 import { AcceptInvitationPage } from './components/AcceptInvitationPage';
+import ResetPasswordPage from './components/ResetPasswordPage';
 import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
 import VolunteerProfile from './components/VolunteerProfile';
@@ -52,7 +58,10 @@ interface DashboardData {
 
 const getInitialAuthView = (): AuthView => {
     const hash = window.location.hash;
-    if (hash.includes('type=recovery') || hash.includes('type=invite')) {
+    if (hash.includes('type=recovery')) {
+        return 'reset-password';
+    }
+    if (hash.includes('type=invite')) {
         return 'accept-invite';
     }
     return 'login';
@@ -67,6 +76,25 @@ const getPageFromHash = (): Page => {
     return 'dashboard'; // Default page
 };
 
+
+// ATENÇÃO: Substitua esta chave pela sua VAPID Public Key gerada.
+// Esta chave é segura para ser exposta no lado do cliente.
+const VAPID_PUBLIC_KEY = 'BKUlwcNry90zG0LMcB2srpjR2r344L6gkxOA5C_Ce-rsPJceN5pirwg3tmKXeetiJLElbJo7DDwLj_ZzBSD5c-A';
+
+function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
 
 const App: React.FC = () => {
   const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
@@ -84,6 +112,7 @@ const App: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
 
   const fetchApplicationData = useCallback(async () => {
     if (session && supabase) {
@@ -265,6 +294,8 @@ const App: React.FC = () => {
             setIsInitializing(true); // Re-initialize on user change
             setSession(newSession);
             sessionUserId.current = newUserId;
+        } else if (!session && newSession) { // Handle the invite link case where user id is the same but session appears
+            setSession(newSession);
         }
     });
 
@@ -273,22 +304,49 @@ const App: React.FC = () => {
   
   // Effect for fetching ALL application data when session changes, and controlling the initialization state.
   useEffect(() => {
+    // Block 1: Wait for initial Supabase client check.
     if (!initialAuthCheckCompleted) {
+        return; 
+    }
+
+    const isAcceptFlow = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
+
+    // Block 2: Handle the invitation flow specifically.
+    // The key is to keep showing the loading screen (`isInitializing`=true) until the session
+    // is established by Supabase after processing the URL hash.
+    if (isAcceptFlow) {
+        if (session) {
+            // Session is ready, we can stop loading and render the AcceptInvitationPage.
+            setIsInitializing(false);
+        }
+        // If session is NOT ready, we do nothing and return. `isInitializing` remains true.
         return;
     }
-      
+
+    // Block 3: Handle logged-in users who are NOT in the invite flow.
     if (session) {
-        fetchApplicationData().finally(() => {
+        // If their profile is still pending, they shouldn't be here.
+        // Stop loading and let the render logic show the "Conta Pendente" page.
+        if (session.user.user_metadata?.status === 'Pendente') {
             setIsInitializing(false);
-        });
-    } else {
-        // No session, so we're ready to show the login page.
-        setUserProfile(null);
-        setDashboardData(null);
-        setIsUserDisabled(false);
-        setIsInitializing(false);
+        } else {
+            // This is a normal, active user. Fetch data then stop loading.
+            fetchApplicationData().finally(() => {
+                setIsInitializing(false);
+            });
+        }
+        return;
     }
+    
+    // Block 4: Handle logged-out users.
+    // If we reach here, there's no session and it's not an invite flow.
+    setUserProfile(null);
+    setDashboardData(null);
+    setIsUserDisabled(false);
+    setIsInitializing(false);
+
   }, [session, fetchApplicationData, initialAuthCheckCompleted]);
+
 
   // Effect for hash-based routing (navigation)
   useEffect(() => {
@@ -409,6 +467,69 @@ const App: React.FC = () => {
     };
 
   }, [supabase, session, userProfile, dashboardData, fetchApplicationData]);
+  
+  // --- Push Notification Logic ---
+
+  useEffect(() => {
+    if (typeof Notification !== 'undefined') {
+        setPushPermissionStatus(Notification.permission);
+    } else {
+        setPushPermissionStatus('unsupported');
+    }
+  }, []);
+
+  const subscribeUserToPush = useCallback(async () => {
+    if (!supabase || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log("Push messaging is not supported");
+        return;
+    }
+
+    try {
+        const swRegistration = await navigator.serviceWorker.ready;
+        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        
+        let existingSubscription = await swRegistration.pushManager.getSubscription();
+        if (existingSubscription) {
+            console.log('User is already subscribed.');
+            // Optionally, re-send to backend to ensure it's synced
+            await supabase.functions.invoke('save-push-subscription', {
+                body: { subscription: existingSubscription },
+            });
+            return;
+        }
+
+        const subscription = await swRegistration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey
+        });
+
+        const { error } = await supabase.functions.invoke('save-push-subscription', {
+            body: { subscription },
+        });
+
+        if (error) throw error;
+        
+        console.log('User is subscribed.');
+
+    } catch (err) {
+        console.error('Failed to subscribe the user: ', err);
+// FIX: Removed obsolete check for a placeholder VAPID key. The key is hardcoded, so this condition was always false and caused a TypeScript error.
+    }
+  }, [supabase]);
+
+
+  useEffect(() => {
+    if (pushPermissionStatus === 'granted' && session) {
+        subscribeUserToPush();
+    }
+  }, [pushPermissionStatus, session, subscribeUserToPush]);
+
+  const handleRequestPushPermission = async () => {
+    if (pushPermissionStatus !== 'default') return;
+    const permission = await Notification.requestPermission();
+    setPushPermissionStatus(permission);
+  };
+
 
   const removeNotification = (id: number) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -479,11 +600,41 @@ const App: React.FC = () => {
       </div>
     );
   }
+
+  // Handle users who are logged in but haven't completed the invitation flow.
+  if (session && session.user.user_metadata?.status === 'Pendente') {
+    const isAcceptFlow = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
+    if (!isAcceptFlow) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 text-center p-4">
+          <div className="w-full max-w-lg p-8 space-y-6 bg-white rounded-2xl shadow-lg">
+             <div className="flex justify-center mb-4">
+                  <div className="p-3 bg-amber-500 text-white rounded-xl">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+              </div>
+            <h1 className="text-3xl font-bold text-slate-800">Conta Pendente</h1>
+            <p className="text-slate-600">Sua conta ainda não foi ativada. Por favor, use o link de convite enviado para o seu e-mail para completar o cadastro.</p>
+            <div className="pt-4">
+              <button onClick={() => supabase?.auth.signOut()} className="w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-slate-600 text-base font-semibold text-white shadow-sm hover:bg-slate-700">
+                  Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
   
   if (!supabase) {
     return <ApiConfigPage />;
   }
   
+  if (authView === 'reset-password') {
+      return <ResetPasswordPage supabase={supabase} setAuthView={setAuthView} />;
+  }
   if (authView === 'accept-invite') {
       return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
   }
@@ -525,6 +676,8 @@ const App: React.FC = () => {
         userRole={userProfile?.role}
         session={session}
         unreadCount={unreadCount}
+        pushPermissionStatus={pushPermissionStatus}
+        onRequestPushPermission={handleRequestPushPermission}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="p-4 md:p-8">

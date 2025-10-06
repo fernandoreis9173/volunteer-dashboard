@@ -1,22 +1,20 @@
 {
-  "name": "volunteer-dashboard",
+  "name": "volunteers",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "start": "sirv dist --port 3000 --single --host 0.0.0.0"
+    "preview": "vite preview"
   },
   "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "@supabase/supabase-js": "2.44.4",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "recharts": "^3.2.1",
-    "sirv-cli": "^2.0.2"
+    "recharts": "2.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

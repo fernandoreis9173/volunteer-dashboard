@@ -12,9 +12,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, role } = await req.json();
-    if (!email || !role) {
-      throw new Error("Email and role are required in the request body.");
+    const { email, role, name } = await req.json();
+    if (!email || !role || !name) {
+      throw new Error("Email, nome e função são obrigatórios no corpo da requisição.");
     }
     
     const supabaseAdmin = createClient(
@@ -22,8 +22,32 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
-    // Step 1: Invite the user.
-    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email);
+    // Define metadata, including page permissions based on role, BEFORE inviting.
+    let page_permissions: string[];
+    switch (role) {
+        case 'admin':
+            page_permissions = ['dashboard', 'volunteers', 'departments', 'events', 'admin'];
+            break;
+        case 'leader':
+        case 'lider':
+            page_permissions = ['dashboard', 'volunteers', 'departments', 'events', 'notifications'];
+            break;
+        default:
+            // This case should not be hit from the frontend, but provides a safe default.
+            page_permissions = ['dashboard'];
+    }
+
+    const metadata = {
+        name: name,
+        status: 'Pendente',
+        role,
+        page_permissions
+    };
+
+    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      email,
+      { data: metadata }
+    );
 
     if (inviteError) {
         if (inviteError.message && inviteError.message.includes('User already registered')) {
@@ -33,53 +57,8 @@ Deno.serve(async (req) => {
     }
 
     if (!inviteData.user) throw new Error("User invitation failed, no user object was returned.");
-    const user = inviteData.user;
-
-    // Step 2: Define metadata, including page permissions based on role.
-    let page_permissions: string[];
-    switch (role) {
-        case 'admin':
-            page_permissions = ['dashboard', 'volunteers', 'departments', 'events', 'admin'];
-            break;
-        case 'leader':
-        case 'lider':
-            page_permissions = ['dashboard', 'volunteers', 'departments', 'events'];
-            break;
-        case 'volunteer':
-            page_permissions = ['dashboard']; // Volunteers only see their dashboard
-            break;
-        default:
-            page_permissions = ['dashboard']; // Safest default
-    }
-
-    const metadata = {
-        status: 'Pendente',
-        role,
-        page_permissions
-    };
-
-    const { data: updateData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      user.id,
-      { user_metadata: metadata }
-    );
     
-    if (updateError) {
-        await supabaseAdmin.auth.admin.deleteUser(user.id);
-        throw updateError;
-    }
-
-    // Step 3: Create or update the user's profile in the 'profiles' table.
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .upsert({ id: user.id, role: role }, { onConflict: 'id' });
-
-    if (profileError) {
-      // Rollback auth user if profile creation fails
-      await supabaseAdmin.auth.admin.deleteUser(user.id);
-      throw new Error(`User was invited, but profile creation failed: ${profileError.message}`);
-    }
-    
-    return new Response(JSON.stringify({ user: updateData.user }), {
+    return new Response(JSON.stringify({ user: inviteData.user }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });

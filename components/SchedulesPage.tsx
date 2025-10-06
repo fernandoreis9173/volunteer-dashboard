@@ -226,9 +226,9 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
                     broadcastPayload = { type: 'event_update', eventId: eventIdToUpdate, eventName: savedEvent.name, updateMessage, departmentIds: departmentIdsInvolved };
 
                     // Get volunteers already scheduled
-                    // FIX: Using an inner join `!inner` with a singular alias `volunteer` helps TypeScript correctly infer the shape of the joined data as an object instead of an array, which resolves the type error.
+                    // FIX: The Supabase client was incorrectly inferring a one-to-many relationship (array) for the `volunteers` join, causing a type error. The code has been updated to cast the result to `any` to bypass the faulty type inference and correctly access the `user_id` from what is expected to be a single object at runtime, aligning with the developer's intent as noted in the original comment.
                     const { data: scheduledVolunteers } = await supabase.from('event_volunteers').select('volunteer:volunteers!inner(user_id)').eq('event_id', eventIdToUpdate);
-                    const volunteerUserIds = (scheduledVolunteers || []).map(v => (v as { volunteer: { user_id: string | null } }).volunteer?.user_id).filter(Boolean) as string[];
+                    const volunteerUserIds = (scheduledVolunteers || []).map(v => (v as any).volunteer?.user_id).filter(Boolean) as string[];
                     
                     // Get leaders of involved departments
                     let leaderUserIds: string[] = [];

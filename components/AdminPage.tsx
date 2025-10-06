@@ -12,6 +12,7 @@ interface AdminPageProps {
 }
 
 const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
+    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [role, setRole] = useState('leader');
     const [loading, setLoading] = useState(false);
@@ -58,8 +59,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
 
     const handleInviteSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email) {
-            setError('Por favor, insira um endereço de e-mail válido.');
+        if (!email || !name) {
+            setError('Por favor, insira um nome e um endereço de e-mail válido.');
             return;
         }
         if (!supabase) {
@@ -73,7 +74,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
 
         try {
             const { error: invokeError } = await supabase.functions.invoke('invite-user', {
-                body: { email, role },
+                body: { email, role, name },
             });
 
             if (invokeError) {
@@ -82,6 +83,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
             
             setSuccessMessage(`Convite enviado com sucesso para ${email}!`);
             setEmail('');
+            setName('');
             setRole('leader');
             await fetchInvitedUsers();
             onDataChange();
@@ -185,12 +187,16 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
                 </div>
                 <p className="text-sm text-slate-600 mb-6">Insira o e-mail do usuário que você deseja convidar. Ele receberá um link para criar sua conta e definir uma senha.</p>
                 <form onSubmit={handleInviteSubmit} className="space-y-4">
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="md:col-span-2">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="invite-name" className="block text-sm font-medium text-slate-700 mb-1">Nome Completo</label>
+                            <input type="text" id="invite-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do líder" required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
+                        </div>
+                        <div>
                             <label htmlFor="invite-email" className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
                             <input type="email" id="invite-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@igreja.com" required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
                         </div>
-                        <div>
+                        <div className="md:col-span-2">
                             <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
                             <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
                                 <option value="leader">Líder de Departamento</option>

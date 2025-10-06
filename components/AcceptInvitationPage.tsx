@@ -282,7 +282,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
         try {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !session) {
-                throw new Error("Sessão de convite inválida ou expirada. Por favor, use o link do seu e--mail novamente.");
+                throw new Error("Sessão de convite inválida ou expirada. Por favor, use o link do seu e-mail novamente.");
             }
 
             const { data: authData, error: updateError } = await supabase.auth.updateUser({
@@ -307,7 +307,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
                 ).toUpperCase();
 
-                const volunteerUpdatePayload = {
+                const volunteerUpsertPayload = {
+                    user_id: user.id,
                     email: user.email!,
                     status: 'Ativo' as const,
                     name: fullName,
@@ -318,13 +319,12 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     skills: skills,
                 };
 
-                const { error: volunteerUpdateError } = await supabase
+                const { error: volunteerUpsertError } = await supabase
                     .from('volunteers')
-                    .update(volunteerUpdatePayload)
-                    .eq('user_id', user.id);
+                    .upsert(volunteerUpsertPayload, { onConflict: 'user_id' });
 
-                if (volunteerUpdateError) {
-                    console.error("Volunteer update error:", volunteerUpdateError);
+                if (volunteerUpsertError) {
+                    console.error("Volunteer upsert error:", volunteerUpsertError);
                     throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil de voluntário. Por favor, contate um administrador.");
                 }
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
@@ -335,15 +335,29 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                 if (profileError) {
                     throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil. Por favor, contate um administrador.");
                 }
+
+                // Cleanup: Delete the record from the 'volunteers' table if it exists.
+                // This handles cases where a trigger might have incorrectly created a volunteer record.
+                const { error: deleteError } = await supabase
+                    .from('volunteers')
+                    .delete()
+                    .eq('user_id', user.id);
+
+                if (deleteError) {
+                    // Log the error but don't block the user, as this is a cleanup operation.
+                    console.error("Cleanup error: Failed to delete potential volunteer record for admin/leader:", deleteError);
+                }
             }
             
-            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login...');
+            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para o painel...');
             
-            setTimeout(async () => {
-                await supabase.auth.signOut();
-                window.location.hash = '';
-                setAuthView('login');
-            }, 3000);
+            setTimeout(() => {
+                // The user is logged in after setting the password.
+                // We just need to change the hash and let the App component take over.
+                window.location.hash = '#/dashboard';
+                // A full reload ensures the App's state is completely fresh.
+                window.location.reload();
+            }, 2000);
 
         } catch (error: any) {
             const errorMessage = getErrorMessage(error);

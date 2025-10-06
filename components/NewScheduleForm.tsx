@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Event } from '../types';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -86,8 +87,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
     const [allVolunteers, setAllVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [volunteerSearch, setVolunteerSearch] = useState('');
     const [leaderDepartmentName, setLeaderDepartmentName] = useState('');
-    
-    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [isStatusChangeModalOpen, setIsStatusChangeModalOpen] = useState(false);
     const [pendingStatus, setPendingStatus] = useState<string | null>(null);
 
     const isEditing = !!initialData;
@@ -160,27 +160,27 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        if (name === 'status' && value !== formData.status) {
+        if (name === 'status' && isEditing && value === 'Confirmado' && formData.status !== 'Confirmado') {
             setPendingStatus(value);
-            setIsStatusModalOpen(true);
+            setIsStatusChangeModalOpen(true);
         } else {
-            setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+            setFormData(prev => ({ ...prev, [e.target.name]: value }));
         }
     };
-
+    
     const handleConfirmStatusChange = () => {
         if (pendingStatus) {
             setFormData(prev => ({ ...prev, status: pendingStatus }));
         }
-        setIsStatusModalOpen(false);
+        setIsStatusChangeModalOpen(false);
         setPendingStatus(null);
     };
 
     const handleCancelStatusChange = () => {
-        setIsStatusModalOpen(false);
+        setIsStatusChangeModalOpen(false);
         setPendingStatus(null);
     };
-    
+
     const addVolunteer = (volunteer: ProcessedVolunteerOption) => {
         if (!selectedVolunteers.some(v => v.id === volunteer.id)) {
             setSelectedVolunteers([...selectedVolunteers, volunteer]);
@@ -316,14 +316,15 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
                     {isSaving ? 'Salvando...' : `Salvar ${isSchedulingMode ? 'Escala' : 'Evento'}`}
                 </button>
             </div>
-            <ConfirmationModal
-                isOpen={isStatusModalOpen}
-                onClose={handleCancelStatusChange}
-                onConfirm={handleConfirmStatusChange}
-                title="Confirmar Alteração de Status"
-                message={`Tem certeza que deseja alterar o status do evento para "${pendingStatus}"? Esta ação pode afetar a escalação de voluntários.`}
-            />
         </form>
+
+        <ConfirmationModal
+            isOpen={isStatusChangeModalOpen}
+            onClose={handleCancelStatusChange}
+            onConfirm={handleConfirmStatusChange}
+            title="Confirmar Alteração de Status"
+            message='Tem certeza que deseja alterar o status do evento para "Confirmado"? Esta ação pode afetar a escalação de voluntários.'
+        />
     </div>
     );
 };

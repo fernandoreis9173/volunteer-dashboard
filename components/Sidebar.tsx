@@ -44,6 +44,8 @@ interface SidebarProps {
   userRole: string | null;
   session: Session | null;
   unreadCount: number;
+  pushPermissionStatus: string | null;
+  onRequestPushPermission: () => void;
 }
 
 interface NavItemData {
@@ -63,7 +65,7 @@ const allNavItems: NavItemData[] = [
     { page: 'admin', label: 'Admin', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>, roles: ['admin'] },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewEvent, supabase, isOpen, setIsOpen, userRole, session, unreadCount }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewEvent, supabase, isOpen, setIsOpen, userRole, session, unreadCount, pushPermissionStatus, onRequestPushPermission }) => {
     const handleLogout = async () => {
         if (supabase) {
             const { error } = await supabase.auth.signOut();
@@ -91,7 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
         return item.roles.includes(normalizedRole);
     });
     
-    const canPerformQuickActions = normalizedRole === 'admin' || normalizedRole === 'leader';
+    const canPerformQuickActions = normalizedRole === 'admin' || normalizedRole === 'leader' || pushPermissionStatus === 'default';
 
     const getRoleDisplayName = () => {
         switch(normalizedRole) {
@@ -144,12 +146,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
             <div>
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ações Rápidas</h2>
               <div className="space-y-1">
-                 <button onClick={onNewVolunteer} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-slate-600 hover:bg-slate-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-                    </svg>
-                    <span>Novo Voluntário</span>
-                </button>
+                 {(normalizedRole === 'admin' || normalizedRole === 'leader') && (
+                    <button onClick={onNewVolunteer} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-slate-600 hover:bg-slate-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                        </svg>
+                        <span>Novo Voluntário</span>
+                    </button>
+                 )}
                  {userRole === 'admin' && (
                   <button onClick={onNewEvent} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-slate-600 hover:bg-slate-100">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -157,6 +161,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                     </svg>
                     <span>Novo Evento</span>
                   </button>
+                 )}
+                 {pushPermissionStatus === 'default' && (
+                    <button onClick={onRequestPushPermission} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-amber-800 bg-amber-100 hover:bg-amber-200 font-semibold">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                        </svg>
+                        <span>Ativar Notificações</span>
+                    </button>
                  )}
               </div>
             </div>

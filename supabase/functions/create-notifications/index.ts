@@ -2,8 +2,64 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { corsHeaders } from '../_shared/cors.ts';
+import { sendNotification, type PushSubscription } from "https://deno.land/x/web_push@0.2.1/mod.ts";
 
 declare const Deno: any;
+
+const sendPushNotifications = async (supabaseAdmin: any, userIds: string[], payload: { title: string, body: string }) => {
+    // Obtenha as chaves VAPID das variáveis de ambiente
+    const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
+    const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
+
+    if (!vapidPublicKey || !vapidPrivateKey) {
+        console.error("As chaves VAPID não estão configuradas. Pulando notificações push.");
+        return;
+    }
+    
+    // 1. Busque as inscrições para os IDs de usuário fornecidos
+    const { data: subscriptions, error: subError } = await supabaseAdmin
+        .from('push_subscriptions')
+        .select('subscription_data, endpoint')
+        .in('user_id', userIds);
+
+    if (subError) {
+        console.error('Erro ao buscar inscrições push:', subError);
+        return;
+    }
+    
+    if (!subscriptions || subscriptions.length === 0) {
+        return; // Nenhuma inscrição para enviar
+    }
+    
+    // 2. Envie uma notificação para cada inscrição
+    const promises = subscriptions.map(async (sub) => {
+        try {
+            const subscription = sub.subscription_data as PushSubscription;
+            await sendNotification(
+                subscription,
+                JSON.stringify(payload),
+                {
+                    vapidPublicKey,
+                    vapidPrivateKey,
+                    contact: "mailto:admin@example.com", // Opcional
+                }
+            );
+        } catch (pushError) {
+            console.error(`Falha ao enviar notificação push para ${sub.endpoint}:`, pushError);
+            // Lida com inscrições expiradas ou inválidas
+            if (pushError.status === 404 || pushError.status === 410) {
+                console.log('Inscrição expirou ou não é mais válida. Deletando.');
+                await supabaseAdmin
+                    .from('push_subscriptions')
+                    .delete()
+                    .eq('endpoint', sub.endpoint);
+            }
+        }
+    });
+
+    await Promise.all(promises);
+};
+
 
 Deno.serve(async (req) => {
   // Lida com as requisições de preflight do CORS
@@ -18,13 +74,11 @@ Deno.serve(async (req) => {
       throw new Error("O array 'notifications' é obrigatório no corpo da requisição.");
     }
 
-    // Cria um cliente de admin do Supabase para contornar a RLS
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Insere as notificações no banco de dados
     const { error: insertError } = await supabaseAdmin
       .from('notifications')
       .insert(notifications);
@@ -32,6 +86,30 @@ Deno.serve(async (req) => {
     if (insertError) {
       throw insertError;
     }
+
+    // ---- INÍCIO: Lógica de Notificação Push ----
+    // Agrupa notificações por usuário para enviar um único push por usuário
+    const notificationsByUser = new Map<string, any[]>();
+    notifications.forEach(n => {
+        if (!notificationsByUser.has(n.user_id)) {
+            notificationsByUser.set(n.user_id, []);
+        }
+        notificationsByUser.get(n.user_id)!.push(n);
+    });
+
+    const userIds = Array.from(notificationsByUser.keys());
+    
+    // Dispara notificações push para os usuários afetados
+    for (const userId of userIds) {
+        const userNotifications = notificationsByUser.get(userId)!;
+        const title = 'Nova Notificação do App Voluntários';
+        const body = userNotifications.length > 1
+            ? `Você tem ${userNotifications.length} novas notificações.`
+            : userNotifications[0].message;
+        
+        await sendPushNotifications(supabaseAdmin, [userId], { title, body });
+    }
+    // ---- FIM: Lógica de Notificação Push ----
 
     return new Response(JSON.stringify({ success: true, message: 'Notificações criadas com sucesso.' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

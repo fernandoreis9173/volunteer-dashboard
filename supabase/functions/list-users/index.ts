@@ -25,18 +25,31 @@ Deno.serve(async (req) => {
 
     if (authError) throw authError;
 
-    // 3. Safely handle the response data
-    const users = authData?.users || [];
+    // 3. Safely handle the response data and filter out volunteers
+    const users = (authData?.users || []).filter(user => user.user_metadata?.role !== 'volunteer');
 
-    // FIX: Refactored logic to determine user status based on metadata, making it the single source of truth.
-    // This ensures invited users remain 'Pendente' until they accept the invitation and prevents them from being marked 'Ativo' prematurely.
+
+    // Enriched user logic to determine a definitive status.
     const enrichedUsers = users.map(user => {
+        // A user who has been invited but has never signed in is always 'Pendente'.
+        // This is a more robust check than relying solely on metadata.
+        if (user.invited_at && !user.last_sign_in_at) {
+            return {
+                ...user,
+                app_status: 'Pendente',
+            };
+        }
+        
+        // For users who have signed in, their status is determined by metadata.
         const metadataStatus = user.user_metadata?.status;
-        let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Pendente'; // Default for legacy users or if status is somehow missing
+        let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Ativo'; // Default to 'Ativo' for any user who has signed in.
 
-        // Directly use the status from metadata if it's a valid, expected value.
-        if (metadataStatus === 'Ativo' || metadataStatus === 'Inativo' || metadataStatus === 'Pendente') {
+        if (metadataStatus === 'Ativo' || metadataStatus === 'Inativo') {
             status = metadataStatus;
+        } else if (metadataStatus === 'Pendente') {
+            // This is an edge case where a user signed in, but activation failed.
+            // We keep the status as 'Pendente' to signal an issue.
+            status = 'Pendente';
         }
 
         return {

@@ -362,7 +362,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             <form className="space-y-6" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <InputField label="Nome Completo" type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} required readOnly={canOnlyEditDepartments} />
-                    <InputField label="Email" type="email" name="email" value={formData.email} onChange={handleInputChange} required readOnly={isEditing} className={isEditing ? 'cursor-not-allowed bg-slate-100' : ''} />
+                    <InputField label="Email" type="email" name="email" value={formData.email} onChange={handleInputChange} required readOnly={isEditing} />
                 </div>
 
                 {isEditing && (
