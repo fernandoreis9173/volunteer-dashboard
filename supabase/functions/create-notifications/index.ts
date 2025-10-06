@@ -2,11 +2,22 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { corsHeaders } from '../_shared/cors.ts';
-import { sendNotification, type PushSubscription } from "https://deno.land/x/web_push@0.2.1/mod.ts";
+// Switched to esm.sh version of web-push for better stability in Deno Deploy.
+import webpush from 'https://esm.sh/web-push@3.6.7';
 
 declare const Deno: any;
 
-const sendPushNotifications = async (supabaseAdmin: any, userIds: string[], payload: { title: string, body: string }) => {
+// Define the PushSubscription type locally as it's no longer imported.
+interface PushSubscription {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
+
+const sendPushNotifications = async (supabaseAdmin: any, userIds: string[], payload: { title: string, body: string, url: string }) => {
     // Obtenha as chaves VAPID das variáveis de ambiente
     const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
     const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
@@ -35,19 +46,26 @@ const sendPushNotifications = async (supabaseAdmin: any, userIds: string[], payl
     const promises = subscriptions.map(async (sub) => {
         try {
             const subscription = sub.subscription_data as PushSubscription;
-            await sendNotification(
+            
+            // Adapt the call to match the web-push (Node.js) library API
+            const options = {
+                vapidDetails: {
+                    subject: "mailto:admin@example.com",
+                    publicKey: vapidPublicKey,
+                    privateKey: vapidPrivateKey,
+                },
+            };
+
+            await webpush.sendNotification(
                 subscription,
                 JSON.stringify(payload),
-                {
-                    vapidPublicKey,
-                    vapidPrivateKey,
-                    contact: "mailto:admin@example.com", // Opcional
-                }
+                options
             );
         } catch (pushError) {
             console.error(`Falha ao enviar notificação push para ${sub.endpoint}:`, pushError);
             // Lida com inscrições expiradas ou inválidas
-            if (pushError.status === 404 || pushError.status === 410) {
+            // The node library returns an error object with a statusCode property
+            if (pushError.statusCode === 404 || pushError.statusCode === 410) {
                 console.log('Inscrição expirou ou não é mais válida. Deletando.');
                 await supabaseAdmin
                     .from('push_subscriptions')
@@ -107,7 +125,13 @@ Deno.serve(async (req) => {
             ? `Você tem ${userNotifications.length} novas notificações.`
             : userNotifications[0].message;
         
-        await sendPushNotifications(supabaseAdmin, [userId], { title, body });
+        // Determina a URL de destino com base no conteúdo da notificação
+        let targetUrl = '/#/notifications'; // URL padrão
+        if (userNotifications.length === 1 && userNotifications[0].related_event_id) {
+            targetUrl = '/#/events';
+        }
+        
+        await sendPushNotifications(supabaseAdmin, [userId], { title, body, url: targetUrl });
     }
     // ---- FIM: Lógica de Notificação Push ----
 

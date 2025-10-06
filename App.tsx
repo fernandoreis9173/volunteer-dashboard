@@ -20,6 +20,7 @@ import VolunteerDashboard from './components/VolunteerDashboard';
 import VolunteerProfile from './components/VolunteerProfile';
 import NotificationsPage from './components/NotificationsPage';
 import NotificationToast, { Notification as ToastNotification } from './components/NotificationToast';
+import PushNotificationModal from './components/PushNotificationModal';
 import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer, DetailedVolunteer, Stat, EnrichedUser } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
@@ -113,6 +114,8 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
+  const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
+  const prevSessionRef = useRef<Session | null>(null);
 
   const fetchApplicationData = useCallback(async () => {
     if (session && supabase) {
@@ -477,6 +480,18 @@ const App: React.FC = () => {
         setPushPermissionStatus('unsupported');
     }
   }, []);
+  
+  // Effect to trigger the push notification prompt after a user logs in.
+  useEffect(() => {
+    // Check for a login event (transition from null to a session).
+    if (!prevSessionRef.current && session && pushPermissionStatus === 'default') {
+      // Use a timeout to ensure the UI has settled before showing the modal.
+      setTimeout(() => {
+        setIsPushPromptOpen(true);
+      }, 1500);
+    }
+    prevSessionRef.current = session;
+  }, [session, pushPermissionStatus]);
 
   const subscribeUserToPush = useCallback(async () => {
     if (!supabase || !('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -525,6 +540,7 @@ const App: React.FC = () => {
   }, [pushPermissionStatus, session, subscribeUserToPush]);
 
   const handleRequestPushPermission = async () => {
+    setIsPushPromptOpen(false);
     if (pushPermissionStatus !== 'default') return;
     const permission = await Notification.requestPermission();
     setPushPermissionStatus(permission);
@@ -701,6 +717,11 @@ const App: React.FC = () => {
           ))}
         </div>
       </div>
+      <PushNotificationModal
+        isOpen={isPushPromptOpen}
+        onConfirm={handleRequestPushPermission}
+        onClose={() => setIsPushPromptOpen(false)}
+      />
     </div>
   );
 };

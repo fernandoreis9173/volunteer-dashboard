@@ -83,6 +83,9 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: '/icon.svg',
       badge: '/icon.svg',
+      data: {
+        url: data.url || '/'
+      }
     };
     event.waitUntil(
       self.registration.showNotification(data.title, options)
@@ -93,9 +96,41 @@ self.addEventListener('push', (event) => {
       body: event.data.text(),
       icon: '/icon.svg',
       badge: '/icon.svg',
+      data: {
+          url: '/'
+      }
     };
     event.waitUntil(
       self.registration.showNotification("Nova Notificação", options)
     );
   }
+});
+
+// Listener para cliques em notificações
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  
+  const notificationData = event.notification.data;
+  const urlToOpen = new URL(notificationData.url || '/', self.location.origin).href;
+
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    }).then((clientList) => {
+      // Se um cliente (aba) já estiver aberto, foque nele e navegue.
+      if (clientList.length > 0) {
+        let client = clientList[0];
+        // Tenta encontrar um cliente que já esteja focado.
+        for (let i = 0; i < clientList.length; i++) {
+          if (clientList[i].focused) {
+            client = clientList[i];
+          }
+        }
+        return client.focus().then(c => c.navigate(urlToOpen));
+      }
+      // Se nenhum cliente estiver aberto, abra uma nova janela.
+      return clients.openWindow(urlToOpen);
+    })
+  );
 });
