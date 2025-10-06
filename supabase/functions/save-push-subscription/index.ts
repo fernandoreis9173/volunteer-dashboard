@@ -16,8 +16,7 @@ Deno.serve(async (req) => {
       throw new Error('O objeto de inscrição (subscription) é obrigatório.');
     }
 
-    // Cria um cliente Supabase com o contexto de autenticação do usuário que chamou a função.
-    // Isso permite que a RLS autorize a inserção.
+    // Cria um cliente Supabase com o contexto de autenticação do usuário para identificá-lo.
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -35,9 +34,14 @@ Deno.serve(async (req) => {
       subscription_data: subscription, // Armazena o objeto inteiro para as chaves
     };
     
-    // Faz um "upsert" na tabela push_subscriptions.
-    // É crucial que esta tabela tenha RLS habilitada para permitir que os usuários insiram/atualizem suas próprias linhas.
-    const { error } = await supabaseClient
+    // Cria um cliente admin com a service role key para contornar a RLS e garantir a escrita.
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+    
+    // Faz um "upsert" na tabela push_subscriptions usando o cliente admin.
+    const { error } = await supabaseAdmin
       .from('push_subscriptions')
       .upsert(subscriptionData, { onConflict: 'user_id, endpoint' });
 
@@ -51,7 +55,8 @@ Deno.serve(async (req) => {
     })
   } catch (error) {
     console.error('Erro ao salvar inscrição push:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro inesperado na função.';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     })
