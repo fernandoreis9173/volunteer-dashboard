@@ -19,7 +19,7 @@ import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
 import VolunteerProfile from './components/VolunteerProfile';
 import NotificationsPage from './components/NotificationsPage';
-import NotificationToast, { Notification } from './components/NotificationToast';
+import NotificationToast, { Notification as ToastNotification } from './components/NotificationToast';
 import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer, DetailedVolunteer, Stat, EnrichedUser } from './types';
 import { getSupabaseClient } from './lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
@@ -110,7 +110,7 @@ const App: React.FC = () => {
   const [isUserDisabled, setIsUserDisabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
 
@@ -405,7 +405,7 @@ const App: React.FC = () => {
     }
 
     const handleNewNotification = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
-        const newNotification: Notification = {
+        const newNotification: ToastNotification = {
             id: Date.now(),
             message,
             type,

@@ -1,4 +1,5 @@
 
+
 import { User } from '@supabase/supabase-js';
 
 export interface Volunteer {
@@ -48,7 +49,7 @@ export interface DashboardEvent {
 
 export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'admin' | 'my-profile' | 'notifications';
 
-export type AuthView = 'login' | 'accept-invite';
+export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 
 export interface DetailedVolunteer {
     id?: number;
