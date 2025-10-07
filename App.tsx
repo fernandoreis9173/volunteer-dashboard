@@ -1,9 +1,4 @@
 
-
-
-
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -628,7 +623,7 @@ const App: React.FC = () => {
                   <div className="p-3 bg-amber-500 text-white rounded-xl">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    7
+                    </svg>
                   </div>
               </div>
             <h1 className="text-3xl font-bold text-slate-800">Conta Pendente</h1>
