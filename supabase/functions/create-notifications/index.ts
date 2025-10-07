@@ -1,6 +1,7 @@
 // supabase/functions/create-notifications/index.ts
 import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
-import * as webpush from 'npm:web-push@3.6.7';
+// MANTIDO: O Deno/VSCode vai reclamar disso, mas é a sintaxe mais robusta para Node.js Push.
+import * as webpush from 'npm:web-push@3.6.7'; 
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,9 +36,8 @@ Deno.serve(async (req) => {
       throw insertError;
     }
 
-    // --- LÓGICA DE PUSH NOTIFICATION RESTAURADA ---
-    
-    // 2. Obter os VAPID keys das variáveis de ambiente.
+    // --- LÓGICA DE PUSH NOTIFICATION CORRIGIDA E RESTAURADA ---
+
     const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
     const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
 
@@ -48,17 +48,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    webpush.setVapidDetails(
-      'mailto:your-email@example.com', // Substitua pelo seu e-mail de contato
+    // Configuração VAPID
+    (webpush as any).setVapidDetails( // FORÇANDO 'any' para evitar erro de TS com importação npm:
+      'mailto:seu-email@exemplo.com', // Substitua pelo seu e-mail
       vapidPublicKey,
       vapidPrivateKey
     );
 
+    // 2. Agrupar notificações por usuário (Lógica Restaurada)
+    const notificationsByUser = new Map<string, any[]>();
+    notifications.forEach((n: any) => {
+        if (!notificationsByUser.has(n.user_id)) {
+            notificationsByUser.set(n.user_id, []);
+        }
+        notificationsByUser.get(n.user_id)!.push(n);
+    });
+
+    const userIds = Array.from(notificationsByUser.keys());
+
     // 3. Buscar as inscrições de push para todos os usuários a serem notificados.
-    const userIds = [...new Set(notifications.map((n: any) => n.user_id))];
     const { data: subscriptions, error: subsError } = await supabaseAdmin
       .from('push_subscriptions')
-      .select('endpoint, subscription_data')
+      .select('endpoint, subscription_data, user_id') // Adicionado user_id
       .in('user_id', userIds);
 
     if (subsError) throw subsError;
@@ -70,19 +81,28 @@ Deno.serve(async (req) => {
 
     // 4. Enviar as notificações.
     const pushPromises = subscriptions.map(sub => {
-      const payload = JSON.stringify({
-        title: "Nova Notificação",
-        body: notifications.find((n: any) => userIds.includes(n.user_id))?.message || "Você tem uma nova atualização.",
-      });
+      // Usar o user_id da subscrição para encontrar as notificações corretas
+      const userNotifications = notificationsByUser.get(sub.user_id) || []; 
+      
+      const title = 'Nova Notificação do App Voluntários';
+      const body = userNotifications.length > 1 
+                   ? `Você tem ${userNotifications.length} novas notificações.` 
+                   : userNotifications[0]?.message || 'Você tem uma nova notificação.';
+      
+      let targetUrl = '/#/notifications';
+      if (userNotifications.length === 1 && userNotifications[0].related_event_id) {
+        targetUrl = '/#/events';
+      }
 
-      return webpush.sendNotification(sub.subscription_data, payload)
-        .catch(async (error) => {
-          // Se a inscrição expirou (410 Gone), remove do banco de dados.
-          if (error.statusCode === 410) {
+      const payload = JSON.stringify({ title, body, url: targetUrl });
+      
+      return (webpush as any).sendNotification(sub.subscription_data, payload) // FORÇANDO 'any'
+        .catch(async (error: any) => { // FORÇANDO 'any'
+          if (error.statusCode === 410 || error.statusCode === 404) {
             console.log(`Inscrição ${sub.endpoint} expirada. Removendo...`);
             await supabaseAdmin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
           } else {
-            console.error('Falha ao enviar push notification:', error.body);
+            console.error('Falha ao enviar push notification:', error.body || error.message);
           }
         });
     });
