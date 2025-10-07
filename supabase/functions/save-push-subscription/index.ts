@@ -47,9 +47,11 @@ Deno.serve(async (req) => {
     );
     
     // Faz um "upsert" na tabela push_subscriptions usando o cliente admin.
+    // O conflito é baseado no 'endpoint', pois ele é o identificador único de uma inscrição de navegador.
+    // Se outro usuário fizer login no mesmo navegador, o endpoint será o mesmo, e nós atualizaremos o user_id.
     const { error } = await supabaseAdmin
       .from('push_subscriptions')
-      .upsert(subscriptionData, { onConflict: 'user_id, endpoint' });
+      .upsert(subscriptionData, { onConflict: 'endpoint' });
 
     if (error) {
       throw error;
