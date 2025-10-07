@@ -17,19 +17,22 @@ Deno.serve(async (req) => {
   try {
     const { subscription, user_id } = await req.json();
 
-    if (!subscription || !subscription.endpoint) {
-      throw new Error('O objeto de inscrição (subscription) é obrigatório.');
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      throw new Error('O objeto de inscrição (subscription) com endpoint e keys é obrigatório.');
     }
 
     if (!user_id) {
       throw new Error('O user_id é obrigatório para salvar a subscription.');
     }
 
-    // Prepara dados para upsert
-    const subscriptionData = {
+    // Prepara dados para upsert, salvando apenas as partes essenciais no JSONB.
+    const subscriptionPayload = {
       user_id,
       endpoint: subscription.endpoint,
-      subscription_data: subscription
+      subscription_data: {
+        keys: subscription.keys,
+        expirationTime: subscription.expirationTime || null,
+      }
     };
 
     // Cliente admin para contornar RLS
@@ -41,7 +44,7 @@ Deno.serve(async (req) => {
     // Upsert na tabela usando endpoint como conflito
     const { error } = await supabaseAdmin
       .from('push_subscriptions')
-      .upsert(subscriptionData, { onConflict: 'endpoint' });
+      .upsert(subscriptionPayload, { onConflict: 'endpoint' });
 
     if (error) throw error;
 

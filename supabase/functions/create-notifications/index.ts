@@ -35,19 +35,14 @@ Deno.serve(async (req) => {
     const { error: insertError } = await supabaseAdmin.from('notifications').insert(notifications);
     if (insertError) throw insertError;
 
-    // Carregar VAPID keys
+    // Carregar e validar VAPID keys
     const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
     const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
 
     if (!vapidPublicKey || !vapidPrivateKey) {
-      console.warn("VAPID keys não configuradas. Pulando envio de push.");
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Notificações criadas, mas envio de push pulado (VAPID keys ausentes).'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      });
+      // Lança um erro claro se as chaves não estiverem configuradas.
+      // Isso garante que o problema de configuração seja visível no lado do cliente.
+      throw new Error("Configuração de servidor incompleta: As chaves VAPID (VAPID_PUBLIC_KEY e/ou VAPID_PRIVATE_KEY) não foram definidas nas 'secrets' da Edge Function no painel do Supabase.");
     }
 
     webpush.setVapidDetails('mailto:leovieiradefreitas@gmail.com', vapidPublicKey, vapidPrivateKey);
@@ -82,9 +77,15 @@ Deno.serve(async (req) => {
     // Enviar notificações push
     const pushPromises = subscriptions.map(async (sub) => {
       try {
-        const subscription = typeof sub.subscription_data === 'string'
+        const subscriptionData = typeof sub.subscription_data === 'string'
           ? JSON.parse(sub.subscription_data)
           : sub.subscription_data;
+          
+        // Reconstruir o objeto de inscrição completo para garantir que o endpoint esteja presente.
+        const fullSubscription = {
+            endpoint: sub.endpoint,
+            keys: subscriptionData.keys,
+        };
 
         const userNotifications = notificationsByUser.get(sub.user_id) || [];
 
@@ -100,7 +101,7 @@ Deno.serve(async (req) => {
 
         const payload = JSON.stringify({ title, body, url: targetUrl });
 
-        await webpush.sendNotification(subscription, payload);
+        await webpush.sendNotification(fullSubscription, payload);
 
       } catch (error: any) {
         if (error.statusCode === 410 || error.statusCode === 404) {
