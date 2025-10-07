@@ -364,7 +364,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
         onDataChange();
         
         if (notificationPayloads.length > 0) {
-            const { error: notificationError } = await supabase.functions.invoke('create-notifications', {
+            const { error: notificationError } = await supabase.functions.invoke('push-notifications', {
                 body: { notifications: notificationPayloads },
             });
 

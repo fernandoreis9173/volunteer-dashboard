@@ -1,72 +1,61 @@
 // supabase/functions/save-push-subscription/index.ts
-
 import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
 
-// Inlined CORS headers to avoid relative path issues in deployment
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
 declare const Deno: any;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { subscription } = await req.json();
+    const { subscription, user_id } = await req.json();
+
     if (!subscription || !subscription.endpoint) {
       throw new Error('O objeto de inscrição (subscription) é obrigatório.');
     }
 
-    // Cria um cliente Supabase com o contexto de autenticação do usuário para identificá-lo.
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    )
-
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        throw new Error('Usuário não autenticado.');
+    if (!user_id) {
+      throw new Error('O user_id é obrigatório para salvar a subscription.');
     }
 
+    // Prepara dados para upsert
     const subscriptionData = {
-      user_id: user.id,
+      user_id,
       endpoint: subscription.endpoint,
-      subscription_data: subscription, // Armazena o objeto inteiro para as chaves
+      subscription_data: subscription
     };
-    
-    // Cria um cliente admin com a service role key para contornar a RLS e garantir a escrita.
+
+    // Cliente admin para contornar RLS
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-    
-    // Faz um "upsert" na tabela push_subscriptions usando o cliente admin.
-    // O conflito é baseado no 'endpoint', pois ele é o identificador único de uma inscrição de navegador.
-    // Se outro usuário fizer login no mesmo navegador, o endpoint será o mesmo, e nós atualizaremos o user_id.
+
+    // Upsert na tabela usando endpoint como conflito
     const { error } = await supabaseAdmin
       .from('push_subscriptions')
       .upsert(subscriptionData, { onConflict: 'endpoint' });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
-  } catch (error) {
+      status: 200
+    });
+
+  } catch (error: any) {
     console.error('Erro ao salvar inscrição push:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro inesperado na função.';
+    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    })
+      status: 500
+    });
   }
-})
+});

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -372,24 +373,20 @@ const App: React.FC = () => {
 
     if (userProfile) {
         const userRole = userProfile.role;
-        const currentPage = getPageFromHash();
-
-        if (userRole === 'volunteer' && currentPage !== 'dashboard' && currentPage !== 'my-profile' && currentPage !== 'notifications') {
-            window.location.hash = '#/dashboard';
-            return;
-        }
-        
         const normalizedRole = userRole === 'lider' ? 'leader' : userRole;
-        if (normalizedRole === 'admin' && currentPage === 'notifications') {
+        if (normalizedRole === 'volunteer' && activePage !== 'dashboard' && activePage !== 'my-profile' && activePage !== 'notifications') {
             window.location.hash = '#/dashboard';
             return;
         }
-        if (normalizedRole === 'leader' && currentPage === 'admin') {
+        if (normalizedRole === 'leader' && activePage === 'admin') {
             window.location.hash = '#/dashboard';
             return;
         }
-
-        if (normalizedRole !== 'volunteer' && currentPage === 'my-profile') {
+        if (normalizedRole === 'admin' && activePage === 'notifications') {
+            window.location.hash = '#/dashboard';
+            return;
+        }
+        if (normalizedRole !== 'volunteer' && activePage === 'my-profile') {
              window.location.hash = '#/dashboard';
              return;
         }
@@ -489,21 +486,21 @@ const App: React.FC = () => {
   }, [session, pushPermissionStatus]);
 
   const subscribeUserToPush = useCallback(async () => {
-    if (!supabase || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.log("Push messaging is not supported");
+    if (!supabase || !session || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log("Push messaging is not supported or user is not logged in");
         return;
     }
 
     try {
         const swRegistration = await navigator.serviceWorker.ready;
         const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        const user_id = session.user.id;
         
         let existingSubscription = await swRegistration.pushManager.getSubscription();
         if (existingSubscription) {
-            console.log('User is already subscribed.');
-            // Optionally, re-send to backend to ensure it's synced
-            await supabase.functions.invoke('save-push-subscription', {
-                body: { subscription: existingSubscription },
+            console.log('User is already subscribed. Syncing with backend.');
+            await supabase.functions.invoke('push-notifications', {
+                body: { subscription: existingSubscription, user_id },
             });
             return;
         }
@@ -513,8 +510,8 @@ const App: React.FC = () => {
             applicationServerKey
         });
 
-        const { error } = await supabase.functions.invoke('save-push-subscription', {
-            body: { subscription },
+        const { error } = await supabase.functions.invoke('push-notifications', {
+            body: { subscription, user_id },
         });
 
         if (error) throw error;
@@ -523,9 +520,8 @@ const App: React.FC = () => {
 
     } catch (err) {
         console.error('Failed to subscribe the user: ', err);
-// FIX: Removed obsolete check for a placeholder VAPID key. The key is hardcoded, so this condition was always false and caused a TypeScript error.
     }
-  }, [supabase]);
+  }, [supabase, session]);
 
 
   useEffect(() => {
