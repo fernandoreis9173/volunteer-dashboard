@@ -1,6 +1,6 @@
 // supabase/functions/create-notifications/index.ts
 import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
-// MANTIDO: Tentativa final de usar a sintaxe NPM, que é a mais robusta.
+// MANTIDO: O Deno/VSCode vai reclamar disso, mas é a sintaxe mais robusta para Node.js Push.
 import * as webpush from 'npm:web-push@3.6.7'; 
 
 const corsHeaders = {
@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       throw insertError;
     }
 
-    // --- LÓGICA DE PUSH NOTIFICATION ---
+    // --- LÓGICA DE PUSH NOTIFICATION CORRIGIDA E RESTAURADA ---
 
     const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
     const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
@@ -49,13 +49,13 @@ Deno.serve(async (req) => {
     }
 
     // Configuração VAPID
-    (webpush as any).setVapidDetails(
+    (webpush as any).setVapidDetails( // FORÇANDO 'any' para evitar erro de TS com importação npm:
       'mailto:seu-email@exemplo.com', // Substitua pelo seu e-mail
       vapidPublicKey,
       vapidPrivateKey
     );
 
-    // 2. Agrupar notificações por usuário
+    // 2. Agrupar notificações por usuário (Lógica Restaurada)
     const notificationsByUser = new Map<string, any[]>();
     notifications.forEach((n: any) => {
         if (!notificationsByUser.has(n.user_id)) {
@@ -66,10 +66,10 @@ Deno.serve(async (req) => {
 
     const userIds = Array.from(notificationsByUser.keys());
 
-    // 3. Buscar as inscrições de push
+    // 3. Buscar as inscrições de push para todos os usuários a serem notificados.
     const { data: subscriptions, error: subsError } = await supabaseAdmin
       .from('push_subscriptions')
-      .select('endpoint, subscription_data, user_id') 
+      .select('endpoint, subscription_data, user_id') // Adicionado user_id
       .in('user_id', userIds);
 
     if (subsError) throw subsError;
@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
 
     // 4. Enviar as notificações.
     const pushPromises = subscriptions.map(sub => {
+      // Usar o user_id da subscrição para encontrar as notificações corretas
       const userNotifications = notificationsByUser.get(sub.user_id) || []; 
       
       const title = 'Nova Notificação do App Voluntários';
@@ -95,8 +96,8 @@ Deno.serve(async (req) => {
 
       const payload = JSON.stringify({ title, body, url: targetUrl });
       
-      return (webpush as any).sendNotification(sub.subscription_data, payload)
-        .catch(async (error: any) => {
+      return (webpush as any).sendNotification(sub.subscription_data, payload) // FORÇANDO 'any'
+        .catch(async (error: any) => { // FORÇANDO 'any'
           if (error.statusCode === 410 || error.statusCode === 404) {
             console.log(`Inscrição ${sub.endpoint} expirada. Removendo...`);
             await supabaseAdmin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
