@@ -1,5 +1,6 @@
 // supabase/functions/create-notifications/index.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
+// MUDANÇA: Usando o formato npm: que é mais robusto (e que o Deno prefere).
+import { createClient } from 'npm:@supabase/supabase-js@2.44.4'; 
 
 // Inlined CORS headers to avoid relative path issues in deployment
 const corsHeaders = {
@@ -41,11 +42,10 @@ Deno.serve(async (req)=>{
       throw insertError;
     }
     
-    // LÓGICA DE PUSH NOTIFICATION REMOVIDA PARA GARANTIR O DEPLOY
-
+    // LÓGICA DE PUSH NOTIFICATION REMOVIDA
+    
     return new Response(JSON.stringify({
       success: true,
-      // Mensagem clara para indicar que a inserção no DB funcionou, mas o Push não foi tentado
       message: 'Notifications created successfully. Push skipped.' 
     }), {
       headers: {

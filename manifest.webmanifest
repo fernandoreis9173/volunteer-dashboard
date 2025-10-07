@@ -28,7 +28,7 @@
       "short_name": "Dashboard",
       "description": "Acesse a tela principal de visualização de dados.",
       "url": "/",
-      // Se não houver PNG, use o SVG também aqui.
+      
       "icons": [
         {
           "src": "/icon.svg",
