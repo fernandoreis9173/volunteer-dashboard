@@ -2,11 +2,17 @@
   "compilerOptions": {
     "lib": ["deno.ns", "deno.window", "dom", "es2020"]
   },
-  "lint": {
-    "exclude": ["node_modules", "vendor", "dist"]
-  },
-  "imports": { // <--- NOVO BLOCO
+  "imports": {
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.44.4",
     "web-push": "npm:web-push@3.6.7"
+  },
+  "lint": { // <-- ESTA SEÇÃO
+    "exclude": ["node_modules", "vendor", "dist"],
+    "rules": { // <-- ADICIONE ESTE BLOCO
+      "tags": ["recommended"],
+      "disable": [
+        "no-explicit-any" // <--- DESATIVA O AVISO 'any'
+      ]
+    }
   }
 }

@@ -80,7 +80,7 @@ const getPageFromHash = (): Page => {
 
 // ATENÇÃO: Substitua esta chave pela sua VAPID Public Key gerada.
 // Esta chave é segura para ser exposta no lado do cliente.
-const VAPID_PUBLIC_KEY = 'BKUlwcNry90zG0LMcB2srpjR2r344L6gkxOA5C_Ce-rsPJceN5pirwg3tmKXeetiJLElbJo7DDwLj_ZzBSD5c-A';
+const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
 
 function urlBase64ToUint8Array(base64String: string) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);

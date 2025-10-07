@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
 
     // Configuração VAPID
     (webpush as any).setVapidDetails( // FORÇANDO 'any' para evitar erro de TS com importação npm:
-      'mailto:seu-email@exemplo.com', // Substitua pelo seu e-mail
+      'mailto:leovieiradefreitas@gmail.com', // Substitua pelo seu e-mail
       vapidPublicKey,
       vapidPrivateKey
     );
