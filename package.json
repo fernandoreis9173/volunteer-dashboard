@@ -10,9 +10,9 @@
     "start": "sirv dist --port 3000 --single --host 0.0.0.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.44.4",
-    "jspdf": "2.5.1",
-    "jspdf-autotable": "3.8.2",
+    "@supabase/supabase-js": "^2.74.0",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "recharts": "^3.2.1",
