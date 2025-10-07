@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
+import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
 
 // Inlined CORS headers to avoid relative path issues in deployment
 const corsHeaders = {
