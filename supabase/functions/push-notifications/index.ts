@@ -34,8 +34,11 @@ Deno.serve(async (req) => {
         .from('push_subscriptions')
         .upsert(subscriptionData, { onConflict: 'endpoint' });
 
-      // Log a warning but don't fail the entire function if only saving fails
-      if (subError) console.warn('Falha ao salvar subscription:', subError.message);
+      // If saving the subscription fails, throw an error to notify the client.
+      if (subError) {
+        console.error('Falha ao salvar subscription dentro de push-notifications:', subError);
+        throw subError;
+      }
     }
 
     // --- 2. Inserir e Enviar notificações (se enviadas) ---

@@ -499,7 +499,7 @@ const App: React.FC = () => {
         let existingSubscription = await swRegistration.pushManager.getSubscription();
         if (existingSubscription) {
             console.log('User is already subscribed. Syncing with backend.');
-            await supabase.functions.invoke('push-notifications', {
+            await supabase.functions.invoke('save-push-subscription', {
                 body: { subscription: existingSubscription, user_id },
             });
             return;
@@ -510,7 +510,7 @@ const App: React.FC = () => {
             applicationServerKey
         });
 
-        const { error } = await supabase.functions.invoke('push-notifications', {
+        const { error } = await supabase.functions.invoke('save-push-subscription', {
             body: { subscription, user_id },
         });
 
