@@ -6,17 +6,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Volunteer Dashboard</title>
 
-    <!-- PWA -->
+    <!-- PWA Tags -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#2563EB" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Voluntários" />
-
-    <!-- CSS compilado pelo Tailwind -->
-    <link rel="stylesheet" href="/index.css" />
-  </head>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.44.4",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2",
+    "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
   <body class="bg-slate-50">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
