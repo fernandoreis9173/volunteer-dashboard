@@ -1,19 +1,25 @@
+import React from 'react'; 
+import * as _ from 'react/jsx-runtime';
+import App from './App.tsx';
 
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-
+// Verifica se o Service Worker é suportado
 if ('serviceWorker' in navigator) {
-  // Constrói uma URL absoluta para o service worker usando a origem da página
-  // para garantir que seja registrado corretamente, mesmo em ambientes com URLs complexas.
-  const swUrl = new URL('/sw.js', window.location.origin);
-  navigator.serviceWorker.register(swUrl.href).then(registration => {
-    console.log('Service Worker registered: ', registration);
-  }).catch(registrationError => {
-    console.log('Service Worker registration failed: ', registrationError);
+  // O evento 'DOMContentLoaded' é o ponto ideal para iniciar o registro.
+  // Ele dispara assim que o DOM é carregado, o que resolve o erro "invalid state".
+  window.addEventListener('DOMContentLoaded', () => {
+    const swUrl = new URL('/sw.js', window.location.origin);
+    
+    // Registra o Service Worker
+    navigator.serviceWorker.register(swUrl.href).then(registration => {
+      console.log('Service Worker registered: ', registration);
+    }).catch(registrationError => {
+      console.error('Service Worker registration failed: ', registrationError);
+    });
   });
 }
 
+// INÍCIO DO MONTAGEM DO REACT:
+// Esta parte do código deve ficar fora de qualquer listener de evento.
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
