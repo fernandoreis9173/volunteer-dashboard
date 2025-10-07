@@ -3,13 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": {
+"scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "serve -s dist -l 3000"  // <-- ADICIONADO: Script para EasyPanel
-    // Se quiser usar o 'sirv-cli' em vez do 'serve':
-    // "start": "sirv dist --port 3000"
+    "start": "serve -s dist -l 3000" 
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.74.0",
@@ -21,14 +19,8 @@
     "serve": "^14.2.5",
     "sirv-cli": "^2.0.2"
   },
-  "devDependencies": {
-    // REMOVIDO: '@tailwindcss/postcss' e 'tailwindcss' duplicados
-    // O Vite moderno geralmente só precisa do Tailwind na config do PostCSS,
-    // mas se for para manter, simplifique.
-    // O '@tailwindcss/postcss' é necessário SE você usa a v4.x, então o mantive!
-    // Se você não usa o "@tailwindcss/postcss" no postcss.config.cjs, remova-o.
-    // O tailwindcss na v4.x funciona bem.
-    "@tailwindcss/postcss": "^4.1.14", 
+"devDependencies": {
+    "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
