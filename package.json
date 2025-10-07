@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "start": "sirv dist --port 3000 --single --host 0.0.0.0"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.74.0",
@@ -19,8 +18,11 @@
     "sirv-cli": "^2.0.2"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

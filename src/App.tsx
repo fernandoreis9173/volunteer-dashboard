@@ -1,26 +1,26 @@
 
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import VolunteersPage from './components/VolunteersPage';
-import DepartmentsPage from './components/DepartmentsPage';
-import EventsPage from './components/SchedulesPage';
-import AdminPage from './components/AdminPage';
-import ApiConfigPage from './components/ApiConfigPage';
-import LoginPage from './components/LoginPage';
-import { AcceptInvitationPage } from './components/AcceptInvitationPage';
-import ResetPasswordPage from './components/ResetPasswordPage';
-import DisabledUserPage from './components/DisabledUserPage';
-import VolunteerDashboard from './components/VolunteerDashboard';
-import VolunteerProfile from './components/VolunteerProfile';
-import NotificationsPage from './components/NotificationsPage';
-import NotificationToast, { Notification as ToastNotification } from './components/NotificationToast';
-import PushNotificationModal from './components/PushNotificationModal';
+import Sidebar from '../components/Sidebar';
+import Dashboard from '../components/Dashboard';
+import VolunteersPage from '../components/VolunteersPage';
+import DepartmentsPage from '../components/DepartmentsPage';
+import EventsPage from '../components/SchedulesPage';
+import AdminPage from '../components/AdminPage';
+import ApiConfigPage from '../components/ApiConfigPage';
+import LoginPage from '../components/LoginPage';
+import { AcceptInvitationPage } from '../components/AcceptInvitationPage';
+import ResetPasswordPage from '../components/ResetPasswordPage';
+import DisabledUserPage from '../components/DisabledUserPage';
+import VolunteerDashboard from '../components/VolunteerDashboard';
+import VolunteerProfile from '../components/VolunteerProfile';
+import NotificationsPage from '../components/NotificationsPage';
+import NotificationToast, { Notification as ToastNotification } from '../components/NotificationToast';
+import PushNotificationModal from '../components/PushNotificationModal';
 import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer, DetailedVolunteer, Stat, EnrichedUser } from './types';
-import { getSupabaseClient } from './lib/supabaseClient';
+import { getSupabaseClient } from '../lib/supabaseClient';
 import { SupabaseClient, Session } from '@supabase/supabase-js';
-import { getErrorMessage } from './lib/utils';
+import { getErrorMessage } from '../lib/utils';
 
 // This state now directly reflects the data we trust from the 'profiles' table.
 interface UserProfileState {
