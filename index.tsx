@@ -3,19 +3,21 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-if ('serviceWorker' in navigator) {
-  // Wrap the registration in a 'load' event listener.
-  // This ensures the page is fully loaded before we try to register the service worker,
-  // preventing the "The document is in an invalid state" error.
-  window.addEventListener('load', () => {
-    const swUrl = new URL('/sw.js', window.location.origin);
-    navigator.serviceWorker.register(swUrl.href).then(registration => {
+// This function handles the service worker registration.
+const registerServiceWorker = () => {
+  if ('serviceWorker' in navigator) {
+    // Register the service worker. Using a root-relative path is clean and effective.
+    navigator.serviceWorker.register('/sw.js').then(registration => {
       console.log('Service Worker registered: ', registration);
     }).catch(registrationError => {
       console.log('Service Worker registration failed: ', registrationError);
     });
-  });
-}
+  }
+};
+
+// We wrap the registration in a 'load' event listener.
+// This ensures the page is fully loaded, preventing the "document is in an invalid state" error.
+window.addEventListener('load', registerServiceWorker);
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

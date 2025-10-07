@@ -1,8 +1,9 @@
+
 const CACHE_NAME = 'volunteer-dashboard-v1';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/index.tsx',
+  // '/index.tsx', // This is a source file, not a browser-ready asset. It will be cached by the fetch handler.
   '/icon.svg',
   '/manifest.webmanifest',
   'https://cdn.tailwindcss.com',
