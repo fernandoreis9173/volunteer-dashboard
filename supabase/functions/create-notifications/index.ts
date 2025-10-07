@@ -1,9 +1,19 @@
 // supabase/functions/create-notifications/index.ts
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
-import { corsHeaders } from '../_shared/cors.ts';
-import webpush from 'https://esm.sh/web-push@3.6.7';
+// Using Deno's native npm specifier for better compatibility with Node.js modules.
+import webpush from 'npm:web-push@3.6.7';
+
+// Inlined CORS headers to avoid relative path issues in deployment
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+};
+
+declare const Deno: any;
+
 Deno.serve(async (req)=>{
-  // Lida com as requisições de preflight do CORS
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
       headers: corsHeaders
@@ -12,16 +22,15 @@ Deno.serve(async (req)=>{
   try {
     const { notifications } = await req.json();
     if (!notifications || !Array.isArray(notifications) || notifications.length === 0) {
-      throw new Error("O array 'notifications' é obrigatório no corpo da requisição.");
+      throw new Error("The 'notifications' array is required in the request body.");
     }
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-    // 1. Insere as notificações no banco de dados.
+    // 1. Insert notifications into the database.
     const { error: insertError } = await supabaseAdmin.from('notifications').insert(notifications);
     if (insertError) {
       throw insertError;
     }
-    // ---- INÍCIO: Lógica Otimizada de Notificação Push ----
-    // 2. Agrupa as notificações por usuário.
+    // ---- START: Optimized Push Notification Logic ----
     const notificationsByUser = new Map();
     notifications.forEach((n)=>{
       if (!notificationsByUser.has(n.user_id)) {
@@ -31,29 +40,21 @@ Deno.serve(async (req)=>{
     });
     const allUserIds = Array.from(notificationsByUser.keys());
     if (allUserIds.length > 0) {
-      // 3. Busca todas as inscrições para todos os usuários de uma só vez.
       const { data: subscriptions, error: subError } = await supabaseAdmin.from('push_subscriptions').select('user_id, subscription_data, endpoint').in('user_id', allUserIds);
       if (subError) {
-        console.error('Erro ao buscar inscrições push:', subError);
-      // Não lança erro, apenas loga. A notificação principal no DB já foi salva.
+        console.error('Error fetching push subscriptions:', subError);
       } else if (subscriptions && subscriptions.length > 0) {
         const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
         const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
         if (!vapidPublicKey || !vapidPrivateKey) {
-          console.error("As chaves VAPID não estão configuradas. Pulando notificações push.");
+          console.error("VAPID keys are not set. Skipping push notifications.");
         } else {
-          const options = {
-            vapidDetails: {
-              subject: "mailto:admin@example.com",
-              publicKey: vapidPublicKey,
-              privateKey: vapidPrivateKey
-            }
-          };
-          // 4. Cria um array de promessas para enviar todas as notificações em paralelo.
+          // Set VAPID details for the web-push library
+          webpush.setVapidDetails('mailto:admin@example.com', vapidPublicKey, vapidPrivateKey);
           const pushPromises = subscriptions.map(async (sub)=>{
-            const userNotifications = notificationsByUser.get(sub.user_id);
+            const userNotifications = notificationsByUser.get(sub.user_id) || [];
             const title = 'Nova Notificação do App Voluntários';
-            const body = userNotifications.length > 1 ? `Você tem ${userNotifications.length} novas notificações.` : userNotifications[0].message;
+            const body = userNotifications.length > 1 ? `Você tem ${userNotifications.length} novas notificações.` : userNotifications[0]?.message || 'Você tem uma nova notificação.';
             let targetUrl = '/#/notifications';
             if (userNotifications.length === 1 && userNotifications[0].related_event_id) {
               targetUrl = '/#/events';
@@ -63,26 +64,25 @@ Deno.serve(async (req)=>{
               body,
               url: targetUrl
             });
-            const subscription = sub.subscription_data;
+            const subscriptionObject = sub.subscription_data;
             try {
-              await webpush.sendNotification(subscription, payload, options);
+              await webpush.sendNotification(subscriptionObject, payload);
             } catch (pushError) {
-              console.error(`Falha ao enviar notificação push para ${sub.endpoint}:`, pushError);
+              console.error(`Failed to send push notification to ${sub.endpoint}:`, pushError);
               if (pushError.statusCode === 404 || pushError.statusCode === 410) {
-                console.log('Inscrição expirou. Deletando.');
+                console.log('Subscription expired or invalid. Deleting.');
                 await supabaseAdmin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
               }
             }
           });
-          // 5. Aguarda a conclusão de todos os envios.
           await Promise.all(pushPromises);
         }
       }
     }
-    // ---- FIM: Lógica Otimizada de Notificação Push ----
+    // ---- END: Optimized Push Notification Logic ----
     return new Response(JSON.stringify({
       success: true,
-      message: 'Notificações criadas com sucesso.'
+      message: 'Notifications created successfully.'
     }), {
       headers: {
         ...corsHeaders,
@@ -91,8 +91,8 @@ Deno.serve(async (req)=>{
       status: 200
     });
   } catch (error) {
-    console.error('Erro na função create-notifications:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro inesperado na função.';
+    console.error('Error in create-notifications function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred in the function.';
     return new Response(JSON.stringify({
       error: errorMessage
     }), {
