@@ -1,11 +1,10 @@
-import React from 'react'; 
-import * as _ from 'react/jsx-runtime';
-import App from './App.tsx';
+import React, { StrictMode } from 'react'; // 1. CORREÇÃO: Importa StrictMode
+import ReactDOM from 'react-dom/client'; // 2. CORREÇÃO: Importa ReactDOM
+import App from './App.tsx'; // 3. CORREÇÃO: Caminho do arquivo (se for .tsx)
 
 // Verifica se o Service Worker é suportado
 if ('serviceWorker' in navigator) {
   // O evento 'DOMContentLoaded' é o ponto ideal para iniciar o registro.
-  // Ele dispara assim que o DOM é carregado, o que resolve o erro "invalid state".
   window.addEventListener('DOMContentLoaded', () => {
     const swUrl = new URL('/sw.js', window.location.origin);
     
@@ -19,7 +18,6 @@ if ('serviceWorker' in navigator) {
 }
 
 // INÍCIO DO MONTAGEM DO REACT:
-// Esta parte do código deve ficar fora de qualquer listener de evento.
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
@@ -27,7 +25,7 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <React.StrictMode>
+  <StrictMode> // 4. CORREÇÃO: Usa o nome limpo do componente importado
     <App />
-  </React.StrictMode>
+  </StrictMode>
 );
