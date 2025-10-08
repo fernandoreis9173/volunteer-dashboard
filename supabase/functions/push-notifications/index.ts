@@ -16,12 +16,23 @@ Deno.serve(async (req)=>{
     });
   }
   try {
-    const { subscription, user_id, notifications } = await req.json();
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+
+    // Create a client with the user's auth context to get their ID securely
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    );
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+
+    const { subscription, notifications } = await req.json();
+
     // --- 1. Salvar subscription (se enviada) ---
-    if (subscription?.endpoint && user_id) {
+    // Use the secure user ID from the token, not from the request body.
+    if (subscription?.endpoint && user) {
       const subscriptionData = {
-        user_id,
+        user_id: user.id, // SECURE: ID obtained from the authentication token
         endpoint: subscription.endpoint,
         subscription_data: subscription
       };
@@ -34,10 +45,12 @@ Deno.serve(async (req)=>{
         throw subError;
       }
     }
+    
     // --- 2. Inserir e Enviar notificações (se enviadas) ---
     if (Array.isArray(notifications) && notifications.length > 0) {
       const { error: insertError } = await supabaseAdmin.from('notifications').insert(notifications);
       if (insertError) throw insertError;
+      
       // --- 3. Enviar push notifications ---
       const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
       const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
@@ -64,7 +77,7 @@ Deno.serve(async (req)=>{
                 url
               });
               await webpush.sendNotification(subData, payload);
-            } catch (err) {
+            } catch (err: any) {
               if (err.statusCode === 410 || err.statusCode === 404) {
                 console.log(`Inscrição expirada: ${sub.endpoint}. Removendo...`);
                 await supabaseAdmin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);

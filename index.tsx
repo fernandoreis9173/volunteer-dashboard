@@ -6,8 +6,8 @@ import App from './App';
 // This function handles the service worker registration.
 const registerServiceWorker = () => {
   if ('serviceWorker' in navigator) {
-    // Register the service worker. Using a root-relative path is clean and effective.
-    navigator.serviceWorker.register('/sw.js').then(registration => {
+    // Register the service worker. Using a relative path to avoid origin mismatch errors.
+    navigator.serviceWorker.register('sw.js').then(registration => {
       console.log('Service Worker registered: ', registration);
     }).catch(registrationError => {
       console.log('Service Worker registration failed: ', registrationError);

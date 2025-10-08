@@ -492,10 +492,13 @@ const App: React.FC = () => {
     }
 
     const saveSubscription = async (subscriptionToSave: PushSubscription) => {
+        // CLARIFICATION: We don't need to send the user_id in the body.
+        // The `supabase.functions.invoke` method automatically includes an
+        // 'Authorization' header with the user's JWT. The Edge Function
+        // on the backend is designed to securely get the user ID from this token.
         const { error } = await supabase.functions.invoke('save-push-subscription', {
             body: {
                 subscription: subscriptionToSave,
-                user_id: session.user.id,
             }
         });
 

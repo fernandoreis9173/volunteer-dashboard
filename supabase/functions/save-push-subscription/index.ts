@@ -9,61 +9,70 @@ const corsHeaders = {
 
 declare const Deno: any;
 
+// This function securely saves a push notification subscription.
+// It identifies the user from the JWT passed in the Authorization header,
+// which is automatically sent by the Supabase client.
+// It intentionally does NOT use a user_id from the request body, as that is insecure.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    // 1. Create a Supabase client with the user's auth context from the request headers
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    );
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Supabase URL and Service Role Key are required environment variables.');
+    // 2. Get the authenticated user from the token
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError) throw userError;
+    if (!user) {
+      throw new Error('Usuário não autenticado.');
     }
 
-    // Get subscription and user_id data from the request body
-    const { subscription, user_id } = await req.json();
-
-    if (!user_id) {
-      throw new Error('The user_id is required in the request body.');
+    // 3. Get subscription data from the request body
+    const { subscription } = await req.json();
+    if (!subscription || !subscription.endpoint) {
+      throw new Error('O objeto de inscrição (subscription) é obrigatório.');
     }
 
-    if (!subscription || !subscription.endpoint || !subscription.keys) {
-      throw new Error('The subscription object with endpoint and keys is required in the request body.');
-    }
-
+    // 4. Prepare data for upsert using the secure user ID from the token
     const subscriptionPayload = {
-      user_id: user_id, // Use the user_id from the request body
+      user_id: user.id,
       endpoint: subscription.endpoint,
       subscription_data: subscription
     };
 
-    // Use the admin client to perform the upsert, bypassing any RLS policies
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    // 5. Use the admin client to perform the upsert, bypassing any RLS policies
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('push_subscriptions')
-      .upsert(subscriptionPayload, { onConflict: 'endpoint' })
-      .select();
+      .upsert(subscriptionPayload, { onConflict: 'endpoint' });
 
     if (error) {
-      console.error('Supabase upsert error:', JSON.stringify(error, null, 2));
-      throw error;
-    }
-    
-    if (!data || data.length === 0) {
-      console.warn('Upsert operation succeeded but returned no data. Check RLS policies on `push_subscriptions` table.');
+        console.error('Supabase upsert error:', JSON.stringify(error, null, 2));
+        throw error;
     }
 
-    return new Response(JSON.stringify({ success: true, data }), {
+    return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
 
   } catch (error: any) {
     console.error('Error saving push subscription:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500
