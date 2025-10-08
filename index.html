@@ -38,6 +38,7 @@
     <script type="module">
       // This dynamic import ensures the script is loaded from the correct origin,
       // fixing CORS and pathing issues in sandboxed environments like AI Studio.
+      // We point to '.tsx' for no-build environments that execute TypeScript directly.
       const scriptUrl = new URL('/index.tsx', window.location.origin).href;
       import(scriptUrl).catch(err => {
         console.error("Failed to load main application script:", err);

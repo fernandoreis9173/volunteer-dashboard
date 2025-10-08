@@ -47,6 +47,14 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
     return;
   }
+
+  const requestUrl = new URL(event.request.url);
+
+  // IMPORTANT: Do not intercept and cache cross-origin requests (e.g., CDNs, Google Fonts).
+  // This prevents CORS errors when the Service Worker tries to fetch them.
+  if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
   
   // For navigation requests (like loading the page), always go network-first.
   if (event.request.mode === 'navigate') {
