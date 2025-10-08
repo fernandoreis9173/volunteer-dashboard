@@ -1,12 +1,9 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Event } from '../types';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 import ConfirmationModal from './ConfirmationModal';
 
 interface NewEventFormProps {
-    supabase: SupabaseClient | null;
     initialData?: Event | null;
     onCancel: () => void;
     onSave: (event: any) => void;
@@ -81,7 +78,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
 };
 
 
-const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId }) => {
+const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId }) => {
     const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '' });
     const [selectedVolunteers, setSelectedVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [allVolunteers, setAllVolunteers] = useState<ProcessedVolunteerOption[]>([]);
@@ -97,7 +94,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
 
     useEffect(() => {
         const fetchData = async () => {
-            if (!supabase || !isSchedulingMode || !initialData || !leaderDepartmentId) return;
+            if (!isSchedulingMode || !initialData || !leaderDepartmentId) return;
 
             const { data: leaderDept, error: ldError } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
             if (ldError) {
@@ -128,7 +125,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
             setAllVolunteers(processedVols);
         };
         fetchData();
-    }, [supabase, isSchedulingMode, initialData, leaderDepartmentId]);
+    }, [isSchedulingMode, initialData, leaderDepartmentId]);
 
     useEffect(() => {
         if (initialData) {

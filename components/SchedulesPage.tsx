@@ -3,7 +3,7 @@ import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
 import EventCard from './EventCard';
 import { Event } from '../types';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getErrorMessage } from '../lib/utils';
@@ -24,7 +24,6 @@ function useDebounce(value: string, delay: number) {
 
 
 interface EventsPageProps {
-  supabase: SupabaseClient | null;
   isFormOpen: boolean;
   setIsFormOpen: (isOpen: boolean) => void;
   userRole: string | null;
@@ -32,7 +31,7 @@ interface EventsPageProps {
   onDataChange: () => void;
 }
 
-const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsFormOpen, userRole, leaderDepartmentId, onDataChange }) => {
+const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, userRole, leaderDepartmentId, onDataChange }) => {
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,11 +65,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   }, []);
 
   const fetchEvents = useCallback(async () => {
-    if (!supabase) {
-      setLoading(false);
-      setError("Cliente Supabase não inicializado.");
-      return;
-    }
     setLoading(true);
     setError(null);
 
@@ -123,7 +117,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
     } finally {
       setLoading(false);
     }
-  }, [supabase, debouncedSearchQuery, selectedStatus, dateRange, isLeader, showOnlyMyDepartmentEvents, leaderDepartmentId]);
+  }, [debouncedSearchQuery, selectedStatus, dateRange, isLeader, showOnlyMyDepartmentEvents, leaderDepartmentId]);
   
   useEffect(() => {
     fetchEvents();
@@ -156,7 +150,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   };
 
   const handleConfirmDelete = async () => {
-    if (!eventToDeleteId || !supabase) return;
+    if (!eventToDeleteId) return;
     
     const { error: deleteError } = await supabase.from('events').delete().eq('id', eventToDeleteId);
 
@@ -171,7 +165,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   };
 
   const refetchEvent = async (eventId: number): Promise<Event | null> => {
-      if (!supabase) return null;
       const { data, error } = await supabase.from('events').select(`*, event_departments (department_id, departments (id, name, leader)), event_volunteers (volunteer_id, department_id, volunteers (*))`).eq('id', eventId).single();
       if (error) {
           console.error("Failed to refetch event", getErrorMessage(error));
@@ -181,7 +174,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   };
 
   const handleSaveEvent = async (eventPayload: any) => {
-    if (!supabase) { setSaveError("Conexão não estabelecida."); return; }
     setIsSaving(true);
     setSaveError(null);
 
@@ -392,7 +384,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
   };
   
   const handleAddDepartmentToEvent = async (event: Event) => {
-    if (!supabase || !leaderDepartmentId || !event.id) return;
+    if (!leaderDepartmentId || !event.id) return;
 
     const { error: insertError } = await supabase.from('event_departments').insert({
         event_id: event.id,
@@ -565,7 +557,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ supabase, isFormOpen, setIsForm
       </div>
       
       {isFormOpen ? (
-        <NewEventForm supabase={supabase} initialData={editingEvent} onCancel={hideForm} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} />
+        <NewEventForm initialData={editingEvent} onCancel={hideForm} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} />
       ) : (
         <>
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">

@@ -3,7 +3,9 @@ import DepartmentCard from './DepartmentCard';
 import NewDepartmentForm from './NewDepartmentForm';
 import ConfirmationModal from './ConfirmationModal';
 import { Department } from '../types';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+// FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
+import { type User } from '@supabase/supabase-js';
 import { getErrorMessage } from '../lib/utils';
 
 // Debounce hook
@@ -21,12 +23,11 @@ function useDebounce(value: string, delay: number) {
 }
 
 interface DepartmentsPageProps {
-  supabase: SupabaseClient | null;
   userRole: string | null;
   onDataChange: () => void;
 }
 
-const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, onDataChange }) => {
+const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, onDataChange }) => {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,11 +43,6 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const fetchDepartments = useCallback(async (query: string) => {
-    if (!supabase) {
-      setLoading(false);
-      setError("Supabase client not initialized.");
-      return;
-    }
     setLoading(true);
     setError(null);
     
@@ -70,10 +66,9 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
       setDepartments(data || []);
     }
     setLoading(false);
-  }, [supabase]);
+  }, []);
 
   const fetchLeaders = useCallback(async () => {
-    if (!supabase) return;
     const { data, error: invokeError } = await supabase.functions.invoke('list-users');
     if (invokeError) {
         console.error('Error fetching leaders:', getErrorMessage(invokeError));
@@ -84,7 +79,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
         });
         setLeaders(potentialLeaders);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchDepartments(debouncedSearchQuery);
@@ -119,7 +114,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
   };
 
   const handleConfirmDelete = async () => {
-    if (!departmentToDeleteId || !supabase) return;
+    if (!departmentToDeleteId) return;
 
     const { error: deleteError } = await supabase.from('departments').delete().eq('id', departmentToDeleteId);
 
@@ -133,10 +128,6 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
   };
   
   const handleSaveDepartment = async (departmentData: Omit<Department, 'id' | 'created_at'> & { id?: number }, new_leader_id?: string) => {
-    if (!supabase) {
-      setSaveError("Conexão com o banco de dados não estabelecida.");
-      return;
-    }
     setIsSaving(true);
     setSaveError(null);
 
@@ -243,7 +234,6 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ supabase, userRole, o
 
       {isFormVisible ? (
         <NewDepartmentForm
-          supabase={supabase}
           initialData={editingDepartment}
           onCancel={hideForm}
           onSave={handleSaveDepartment}

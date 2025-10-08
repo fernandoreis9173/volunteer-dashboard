@@ -9,17 +9,18 @@ const corsHeaders = {
 
 declare const Deno: any;
 
-// This function securely saves a push notification subscription.
-// It identifies the user from the JWT passed in the Authorization header,
-// which is automatically sent by the Supabase client.
-// It intentionally does NOT use a user_id from the request body, as that is insecure.
+// This function securely saves a web push notification subscription object.
+// It identifies the user SOLELY from the JWT passed in the Authorization header for enhanced security.
 Deno.serve(async (req) => {
+  console.log('Request received for save-push-subscription function.');
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // 1. Create a Supabase client with the user's auth context from the request headers
+    console.log('Processing request...');
+    // 1. Create a Supabase client with the user's auth context to get the authenticated user
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -37,17 +38,17 @@ Deno.serve(async (req) => {
       throw new Error('Usuário não autenticado.');
     }
 
-    // 3. Get subscription data from the request body
+    // 3. Get ONLY the subscription object from the request body
     const { subscription } = await req.json();
-    if (!subscription || !subscription.endpoint) {
-      throw new Error('O objeto de inscrição (subscription) é obrigatório.');
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      throw new Error('O objeto de inscrição (subscription) é obrigatório e deve ter endpoint e keys.');
     }
-
+    
     // 4. Prepare data for upsert using the secure user ID from the token
     const subscriptionPayload = {
-      user_id: user.id,
+      user_id: user.id, // Use the secure user ID from the auth token
       endpoint: subscription.endpoint,
-      subscription_data: subscription
+      subscription_data: subscription // Store the full subscription object
     };
 
     // 5. Use the admin client to perform the upsert, bypassing any RLS policies
@@ -64,6 +65,8 @@ Deno.serve(async (req) => {
         console.error('Supabase upsert error:', JSON.stringify(error, null, 2));
         throw error;
     }
+    
+    console.log(`Successfully saved subscription for user ${user.id}.`);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

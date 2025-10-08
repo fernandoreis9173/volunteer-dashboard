@@ -3,7 +3,7 @@ import VolunteerCard from './VolunteerCard';
 import NewVolunteerForm from './NewVolunteerForm';
 import ConfirmationModal from './ConfirmationModal';
 import { DetailedVolunteer, Department } from '../types';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 
 // Debounce hook
@@ -21,14 +21,13 @@ function useDebounce(value: string, delay: number) {
 }
 
 interface VolunteersPageProps {
-  supabase: SupabaseClient | null;
   isFormOpen: boolean;
   setIsFormOpen: (isOpen: boolean) => void;
   userRole: string | null;
   onDataChange: () => void;
 }
 
-const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, setIsFormOpen, userRole, onDataChange }) => {
+const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOpen, userRole, onDataChange }) => {
   const [allVolunteers, setAllVolunteers] = useState<DetailedVolunteer[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,12 +42,6 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const fetchVolunteers = useCallback(async (query: string) => {
-      if (!supabase) {
-        setLoading(false);
-        setError("Supabase client not initialized.");
-        return;
-      }
-
       setLoading(true);
       setError(null);
       
@@ -74,10 +67,9 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
       } finally {
         setLoading(false);
       }
-  }, [supabase]);
+  }, []);
   
   const fetchActiveDepartments = useCallback(async () => {
-    if (!supabase) return;
     const { data, error } = await supabase
         .from('departments')
         .select('id, name')
@@ -88,7 +80,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
     } else {
         setDepartments(data as Department[] || []);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     fetchVolunteers(debouncedSearchQuery);
@@ -123,7 +115,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
   };
 
   const handleConfirmDelete = async () => {
-    if (!volunteerToDeleteId || !supabase) {
+    if (!volunteerToDeleteId) {
         alert("Erro ao processar exclusão.");
         handleCancelDelete();
         return;
@@ -142,11 +134,6 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
   };
 
   const handleSaveVolunteer = async (volunteerData: Omit<DetailedVolunteer, 'created_at'> & { id?: number }) => {
-    if (!supabase) {
-      setSaveError("Conexão com o banco de dados não estabelecida.");
-      return;
-    }
-    
     setIsSaving(true);
     setSaveError(null);
     

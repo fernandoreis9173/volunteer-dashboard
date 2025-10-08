@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -7,7 +5,6 @@ import VolunteersPage from './components/VolunteersPage';
 import DepartmentsPage from './components/DepartmentsPage';
 import EventsPage from './components/SchedulesPage';
 import AdminPage from './components/AdminPage';
-import ApiConfigPage from './components/ApiConfigPage';
 import LoginPage from './components/LoginPage';
 import { AcceptInvitationPage } from './components/AcceptInvitationPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
@@ -18,8 +15,9 @@ import NotificationsPage from './components/NotificationsPage';
 import NotificationToast, { Notification as ToastNotification } from './components/NotificationToast';
 import PushNotificationModal from './components/PushNotificationModal';
 import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer, DetailedVolunteer, Stat, EnrichedUser } from './types';
-import { getSupabaseClient } from './lib/supabaseClient';
-import { SupabaseClient, Session } from '@supabase/supabase-js';
+import { supabase } from './lib/supabaseClient';
+// FIX: Use 'type' import for Session to resolve potential module resolution issues with Supabase v2.
+import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
 
 // This state now directly reflects the data we trust from the 'profiles' table.
@@ -74,14 +72,15 @@ const getPageFromHash = (): Page => {
 };
 
 
-// ATENÇÃO: Substitua esta chave pela sua VAPID Public Key gerada.
-// Esta chave é segura para ser exposta no lado do cliente.
+// TODO: Para produção, esta chave deve ser movida para uma variável de ambiente segura.
+// Está fixa no código para conveniência de desenvolvimento neste ambiente.
 const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
 
-function urlBase64ToUint8Array(base64String: string) {
+// Helper function to convert the VAPID public key string to a Uint8Array
+const urlBase64ToUint8Array = (base64String: string) => {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding)
-        .replace(/\-/g, '+')
+        .replace(/-/g, '+')
         .replace(/_/g, '/');
 
     const rawData = window.atob(base64);
@@ -91,10 +90,9 @@ function urlBase64ToUint8Array(base64String: string) {
         outputArray[i] = rawData.charCodeAt(i);
     }
     return outputArray;
-}
+};
 
 const App: React.FC = () => {
-  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const sessionUserId = useRef<string | null>(null);
   const [activePage, setActivePage] = useState<Page>(getPageFromHash());
@@ -114,7 +112,7 @@ const App: React.FC = () => {
   const prevSessionRef = useRef<Session | null>(null);
 
   const fetchApplicationData = useCallback(async () => {
-    if (session && supabase) {
+    if (session) {
         const userStatus = session.user.user_metadata?.status;
         if (userStatus === 'Inativo') {
             setIsUserDisabled(true);
@@ -269,25 +267,17 @@ const App: React.FC = () => {
         setDashboardData(null);
         setIsUserDisabled(false);
     }
-  }, [session, supabase]);
+  }, [session]);
 
   // Effect for initial session check and subscription
   useEffect(() => {
-    const client = getSupabaseClient();
-    setSupabase(client);
-    if (!client) {
-        setIsInitializing(false);
-        setInitialAuthCheckCompleted(true);
-        return;
-    }
-    
-    client.auth.getSession().then(({ data: { session: initialSession } }) => {
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
         setSession(initialSession);
         sessionUserId.current = initialSession?.user?.id ?? null;
         setInitialAuthCheckCompleted(true);
     });
 
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
         const newUserId = newSession?.user?.id ?? null;
         if (newUserId !== sessionUserId.current) {
             setIsInitializing(true); // Re-initialize on user change
@@ -395,7 +385,7 @@ const App: React.FC = () => {
 
     // Effect for real-time notifications
   useEffect(() => {
-    if (!supabase || !session || !userProfile) {
+    if (!session || !userProfile) {
         return;
     }
 
@@ -461,9 +451,9 @@ const App: React.FC = () => {
         supabase.removeChannel(channel);
     };
 
-  }, [supabase, session, userProfile, dashboardData, fetchApplicationData]);
+  }, [session, userProfile, dashboardData, fetchApplicationData]);
   
-  // --- Push Notification Logic ---
+  // --- Push Notification & Service Worker Logic ---
 
   useEffect(() => {
     if (typeof Notification !== 'undefined') {
@@ -484,55 +474,65 @@ const App: React.FC = () => {
     }
     prevSessionRef.current = session;
   }, [session, pushPermissionStatus]);
+  
 
   const subscribeUserToPush = useCallback(async () => {
-    if (!supabase || !session || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (!VAPID_PUBLIC_KEY) {
+        console.error("VAPID_PUBLIC_KEY is not set.");
+        alert("A chave de notificação (VAPID) não está configurada. Contate o administrador.");
+        return;
+    }
+    if (!session || !('serviceWorker' in navigator) || !('PushManager' in window)) {
         console.log("Push messaging is not supported or user is not logged in");
         return;
     }
 
-    const saveSubscription = async (subscriptionToSave: PushSubscription) => {
-        // CLARIFICATION: We don't need to send the user_id in the body.
-        // The `supabase.functions.invoke` method automatically includes an
-        // 'Authorization' header with the user's JWT. The Edge Function
-        // on the backend is designed to securely get the user ID from this token.
-        const { error } = await supabase.functions.invoke('save-push-subscription', {
-            body: {
-                subscription: subscriptionToSave,
-            }
-        });
-
-        if (error) {
-            throw error;
-        }
-    };
-
     try {
-        // FIX: Corrected a typo from `navigator.service.ready` to `navigator.serviceWorker.ready` to correctly access the service worker registration.
         const swRegistration = await navigator.serviceWorker.ready;
-        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        console.log('Service Worker is ready:', swRegistration);
+
+        const subscription = await swRegistration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
         
-        let existingSubscription = await swRegistration.pushManager.getSubscription();
-        if (existingSubscription) {
-            console.log('User is already subscribed. Syncing with backend.');
-            await saveSubscription(existingSubscription);
+        console.log('Successfully obtained push subscription object:', subscription);
+
+        if (!subscription) {
+            console.error("Failed to get subscription object from pushManager.");
+            alert("Não foi possível obter a inscrição para notificações do seu navegador.");
             return;
         }
 
-        const newSubscription = await swRegistration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey
+        const subscriptionJSON = subscription.toJSON();
+        
+        const payload = { 
+            subscription: subscriptionJSON,
+        };
+        console.log('Payload being sent to Edge Function:', payload);
+
+        const { error } = await supabase.functions.invoke('save-push-subscription', {
+            body: payload
         });
 
-        await saveSubscription(newSubscription);
-        
-        console.log('User is subscribed.');
+        if (error) {
+            console.error('Supabase invoke error object:', error);
+            throw error;
+        }
+
+        console.log('Push Subscription saved successfully.');
 
     } catch (err) {
-        console.error('Failed to subscribe the user: ', err);
-        alert(`Não foi possível salvar a sua inscrição para notificações. Por favor, tente novamente. Detalhes: ${getErrorMessage(err)}`);
+        console.error('Failed to subscribe the user for Push notifications: ', err);
+        
+        if (err instanceof DOMException && err.name === 'NotAllowedError') {
+             console.log('User denied notification permission.');
+        } else {
+             const errorMessage = getErrorMessage(err);
+             alert(`Não foi possível salvar a sua inscrição para notificações. Causa do erro: ${errorMessage}`);
+        }
     }
-  }, [supabase, session]);
+  }, [session]);
 
 
   useEffect(() => {
@@ -591,17 +591,18 @@ const App: React.FC = () => {
 
     switch (activePage) {
       case 'volunteers':
-        return <VolunteersPage supabase={supabase} isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} onDataChange={fetchApplicationData} />;
+        return <VolunteersPage isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} onDataChange={fetchApplicationData} />;
       case 'departments':
-        return <DepartmentsPage supabase={supabase} userRole={userRole} onDataChange={fetchApplicationData} />;
+        return <DepartmentsPage userRole={userRole} onDataChange={fetchApplicationData} />;
       case 'events':
-        return <EventsPage supabase={supabase} isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userRole} leaderDepartmentId={userProfile?.department_id ?? null} onDataChange={fetchApplicationData} />;
+        return <EventsPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userRole} leaderDepartmentId={userProfile?.department_id ?? null} onDataChange={fetchApplicationData} />;
       case 'admin':
-        return <AdminPage supabase={supabase} onDataChange={fetchApplicationData} />;
+        return <AdminPage onDataChange={fetchApplicationData} />;
        case 'my-profile':
+        // FIX: Pass the `supabase` client prop to VolunteerProfile to resolve the missing property error.
         return <VolunteerProfile supabase={supabase} volunteerData={dashboardData?.volunteerProfile} onUpdate={fetchApplicationData} />;
       case 'notifications':
-        return <NotificationsPage supabase={supabase} session={session} onDataChange={fetchApplicationData} onNavigate={handleNavigate} />;
+        return <NotificationsPage session={session} onDataChange={fetchApplicationData} onNavigate={handleNavigate} />;
       case 'dashboard':
       default:
         if (userRole === 'volunteer') {
@@ -646,23 +647,19 @@ const App: React.FC = () => {
     }
   }
   
-  if (!supabase) {
-    return <ApiConfigPage />;
-  }
-  
   if (authView === 'reset-password') {
-      return <ResetPasswordPage supabase={supabase} setAuthView={setAuthView} />;
+      return <ResetPasswordPage setAuthView={setAuthView} />;
   }
   if (authView === 'accept-invite') {
-      return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
+      return <AcceptInvitationPage setAuthView={setAuthView} />;
   }
 
   if (!session) {
-      return <LoginPage supabase={supabase} setAuthView={setAuthView} />;
+      return <LoginPage setAuthView={setAuthView} />;
   }
 
   if (isUserDisabled) {
-    return <DisabledUserPage supabase={supabase} userRole={userProfile?.role} />;
+    return <DisabledUserPage userRole={userProfile?.role} />;
   }
   
   if (!userProfile) {
@@ -688,7 +685,6 @@ const App: React.FC = () => {
         onNavigate={handleNavigate} 
         onNewVolunteer={handleNewVolunteer}
         onNewEvent={handleNewEvent}
-        supabase={supabase}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
         userRole={userProfile?.role}

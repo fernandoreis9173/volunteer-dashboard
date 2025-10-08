@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 import { AuthView, Department } from '../types';
 import SmartSearch, { SearchItem } from './SmartSearch';
 import { getErrorMessage } from '../lib/utils';
@@ -173,11 +173,10 @@ const TagInputField: React.FC<{
 
 // FIX: Define the props interface for the component to resolve the "Cannot find name" error.
 interface AcceptInvitationPageProps {
-    supabase: SupabaseClient;
     setAuthView: (view: AuthView) => void;
 }
 
-export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, setAuthView }) => {
+export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setAuthView }) => {
     const [isValidating, setIsValidating] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -238,7 +237,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
         const timer = setTimeout(validateTokenAndFetchData, 250);
         return () => clearTimeout(timer);
     
-      }, [supabase]);
+      }, []);
     
     const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setPhone(formatPhoneNumber(e.target.value));

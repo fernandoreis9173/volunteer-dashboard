@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 import { AuthView } from '../types';
 import { getErrorMessage } from '../lib/utils';
 
 interface ResetPasswordPageProps {
-    supabase: SupabaseClient;
     setAuthView: (view: AuthView) => void;
 }
 
-const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ supabase, setAuthView }) => {
+const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ setAuthView }) => {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);

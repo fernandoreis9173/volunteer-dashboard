@@ -1,6 +1,8 @@
 
 
-import { User } from '@supabase/supabase-js';
+
+// FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
+import type { User } from '@supabase/supabase-js';
 
 export interface Volunteer {
   name: string;

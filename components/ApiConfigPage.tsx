@@ -15,13 +15,14 @@ const ApiConfigPage: React.FC = () => {
                 </div>
                 <h1 className="text-3xl font-bold text-slate-800">Configuração Incompleta</h1>
                 <p className="text-slate-600">
-                    As credenciais do Supabase não foram encontradas.
+                    As credenciais do Supabase ou de Notificação não foram encontradas.
                 </p>
                 <div className="mt-2 text-slate-500 bg-slate-100 p-4 rounded-lg text-left text-sm">
                     <p>Para que o aplicativo funcione, você precisa configurar as seguintes variáveis de ambiente no seu projeto:</p>
                     <div className="mt-4 space-y-2">
                         <code className="font-mono bg-slate-200 p-1 rounded block w-full">SUPABASE_URL="sua-url-do-supabase"</code>
-                        <code className="font-mono bg-slate-200 p-1 rounded block w-full">SUPABASE_KEY="sua-chave-anon"</code>
+                        <code className="font-mono bg-slate-200 p-1 rounded block w-full">SUPABASE_ANON_KEY="sua-chave-anon"</code>
+                        <code className="font-mono bg-slate-200 p-1 rounded block w-full">VAPID_PUBLIC_KEY="sua-chave-publica-vapid"</code>
                     </div>
                     <p className="mt-4">Após configurar as variáveis, por favor, reinicie o seu servidor de desenvolvimento.</p>
                 </div>

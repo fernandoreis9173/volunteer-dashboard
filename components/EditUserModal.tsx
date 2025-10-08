@@ -1,6 +1,8 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { User } from '@supabase/supabase-js';
+// FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
+import type { User } from '@supabase/supabase-js';
 import { Page } from '../types';
 
 interface EditUserModalProps {

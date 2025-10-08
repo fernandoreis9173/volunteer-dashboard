@@ -1,6 +1,8 @@
 import React from 'react';
 import { Page } from '../types';
-import { SupabaseClient, Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+// FIX: Use 'type' import for Session to resolve potential module resolution issues with Supabase v2.
+import { type Session } from '@supabase/supabase-js';
 
 interface NavItemProps {
   icon: React.ReactElement<any>;
@@ -38,7 +40,6 @@ interface SidebarProps {
   onNavigate: (page: Page) => void;
   onNewVolunteer: () => void;
   onNewEvent: () => void;
-  supabase: SupabaseClient | null;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   userRole: string | null;
@@ -65,13 +66,11 @@ const allNavItems: NavItemData[] = [
     { page: 'admin', label: 'Admin', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>, roles: ['admin'] },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewEvent, supabase, isOpen, setIsOpen, userRole, session, unreadCount, pushPermissionStatus, onRequestPushPermission }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewEvent, isOpen, setIsOpen, userRole, session, unreadCount, pushPermissionStatus, onRequestPushPermission }) => {
     const handleLogout = async () => {
-        if (supabase) {
-            const { error } = await supabase.auth.signOut();
-            if (error) {
-                console.error('Error during sign out:', error);
-            }
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Error during sign out:', error);
         }
     };
 

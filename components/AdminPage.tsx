@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
-import { User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+// FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
+import type { User } from '@supabase/supabase-js';
 import EditUserModal from './EditUserModal';
 import ConfirmationModal from './ConfirmationModal';
 import { EnrichedUser } from '../types';
 import { getErrorMessage } from '../lib/utils';
 
 interface AdminPageProps {
-  supabase: SupabaseClient | null;
   onDataChange: () => void;
 }
 
-const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
+const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [role, setRole] = useState('leader');
@@ -32,7 +32,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
     const [actionType, setActionType] = useState<'disable' | 'enable' | null>(null);
 
     const fetchInvitedUsers = async () => {
-        if (!supabase) return;
         setListLoading(true);
         setListError(null);
         
@@ -54,17 +53,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
 
     useEffect(() => {
         fetchInvitedUsers();
-    }, [supabase]);
+    }, []);
 
 
     const handleInviteSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!email || !name) {
             setError('Por favor, insira um nome e um endereço de e-mail válido.');
-            return;
-        }
-        if (!supabase) {
-            setError('Cliente Supabase não inicializado.');
             return;
         }
 
@@ -98,8 +93,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
     };
     
     const handleUpdateUser = async (userId: string, newRole: string, newPermissions: string[]) => {
-        if (!supabase) return;
-        
         const { data, error } = await supabase.functions.invoke('update-permissions', {
             body: { userId, role: newRole, permissions: newPermissions }
         });
@@ -121,7 +114,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ supabase, onDataChange }) => {
     };
 
     const handleConfirmAction = async () => {
-        if (!userToAction || !actionType || !supabase) return;
+        if (!userToAction || !actionType) return;
 
         const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
         

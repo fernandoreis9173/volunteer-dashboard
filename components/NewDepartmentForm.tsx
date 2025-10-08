@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Department } from '../types';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+// FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
+import { type User } from '@supabase/supabase-js';
 import { getErrorMessage } from '../lib/utils';
 
 interface InputFieldProps {
@@ -158,7 +160,6 @@ const TagInputField: React.FC<{
 
 
 interface NewDepartmentFormProps {
-    supabase: SupabaseClient | null;
     initialData?: Department | null;
     onCancel: () => void;
     onSave: (department: Omit<Department, 'created_at'>, new_leader_id?: string) => void;
@@ -174,7 +175,7 @@ const getInitials = (name?: string): string => {
     return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
 };
 
-const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
+const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
     const [formData, setFormData] = useState({ 
         name: '', 
         description: '', 
@@ -196,7 +197,6 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initial
 
     useEffect(() => {
         const fetchAllDepartments = async () => {
-            if (!supabase) return;
             const { data: departmentsData, error: departmentsError } = await supabase.from('departments').select('*');
             if (departmentsError) {
                 console.error('Error fetching departments for conflict check:', getErrorMessage(departmentsError));
@@ -205,7 +205,7 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initial
             }
         };
         fetchAllDepartments();
-    }, [supabase]);
+    }, []);
 
     useEffect(() => {
         const meetingDayKeys = {
