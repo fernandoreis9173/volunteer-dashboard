@@ -2,7 +2,7 @@
 
 // --- Configuration ---
 // Incrementing the cache name invalidates previous caches.
-const CACHE_NAME = 'volunteer-dashboard-v3'; 
+const CACHE_NAME = 'volunteer-dashboard-v5'; 
 const urlsToCache = [
   '/',
   '/index.html',
