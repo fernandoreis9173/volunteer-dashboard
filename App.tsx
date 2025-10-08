@@ -475,79 +475,79 @@ const App: React.FC = () => {
     prevSessionRef.current = session;
   }, [session, pushPermissionStatus]);
   
+  /**
+   * This is the single, consolidated function for handling the entire push subscription flow.
+   * It's triggered directly by a user clicking a button, making the process explicit and easy to debug.
+   */
+  const handleSubscribeToPush = async () => {
+    // Close the prompt modal if it's open.
+    setIsPushPromptOpen(false);
 
-  const subscribeUserToPush = useCallback(async () => {
-    if (!VAPID_PUBLIC_KEY) {
-        console.error("VAPID_PUBLIC_KEY is not set.");
-        alert("A chave de notificação (VAPID) não está configurada. Contate o administrador.");
+    // 0. Check for browser support and VAPID key.
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        alert('As notificações Push não são suportadas por este navegador.');
         return;
     }
-    if (!session || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.log("Push messaging is not supported or user is not logged in");
+    if (!VAPID_PUBLIC_KEY) {
+        alert('A chave de notificação (VAPID) não está configurada. Contate o administrador.');
         return;
     }
 
     try {
-        const swRegistration = await navigator.serviceWorker.ready;
-        console.log('Service Worker is ready:', swRegistration);
+        // 1. Request permission from the user.
+        const permissionResult = await Notification.requestPermission();
+        setPushPermissionStatus(permissionResult); // Update UI state regardless of the result.
 
-        const subscription = await swRegistration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-        });
-        
-        console.log('Successfully obtained push subscription object:', subscription);
-
-        if (!subscription) {
-            console.error("Failed to get subscription object from pushManager.");
-            alert("Não foi possível obter a inscrição para notificações do seu navegador.");
+        // 2. If permission is not granted, stop the process.
+        if (permissionResult !== 'granted') {
+            console.error('Usuário não concedeu permissão para notificações. Não é possível prosseguir.');
+            if (permissionResult === 'denied') {
+                alert('Você bloqueou as notificações. Para ativá-las, você precisará alterar as permissões nas configurações do seu navegador.');
+            }
             return;
         }
 
-        const subscriptionJSON = subscription.toJSON();
-        
-        const payload = { 
-            subscription: subscriptionJSON,
-        };
-        console.log('Payload being sent to Edge Function:', payload);
+        console.log('Permissão concedida. Obtendo Service Worker e inscrição...');
 
+        // 3. Get the service worker registration and then the push subscription.
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+
+        if (!subscription) {
+            throw new Error("Falha ao obter o objeto de inscrição do navegador.");
+        }
+
+        // 4. Check for an active Supabase session to get the JWT.
+        if (!session) {
+            console.error('Usuário não autenticado no Supabase. Não é possível salvar.');
+            alert('Você precisa estar logado para ativar as notificações.');
+            return;
+        }
+        
+        // This is the crucial log to confirm the code path is being executed.
+        console.log("SUCESSO: Tentando enviar POST para a Edge Function...");
+
+        // 5. Send the subscription object to the 'save-push-subscription' Edge Function.
         const { error } = await supabase.functions.invoke('save-push-subscription', {
-            body: payload
+            body: { subscription: subscription.toJSON() }
         });
 
         if (error) {
-            console.error('Supabase invoke error object:', error);
             throw error;
         }
 
-        console.log('Push Subscription saved successfully.');
+        console.log('Inscrição para notificações salva com sucesso!');
+        alert('Notificações ativadas com sucesso!');
 
     } catch (err) {
-        console.error('Failed to subscribe the user for Push notifications: ', err);
-        
-        if (err instanceof DOMException && err.name === 'NotAllowedError') {
-             console.log('User denied notification permission.');
-        } else {
-             const errorMessage = getErrorMessage(err);
-             alert(`Não foi possível salvar a sua inscrição para notificações. Causa do erro: ${errorMessage}`);
-        }
+        const errorMessage = getErrorMessage(err);
+        console.error('Falha no processo de inscrição para notificações:', err);
+        alert(`Ocorreu um erro ao ativar as notificações: ${errorMessage}`);
     }
-  }, [session]);
-
-
-  useEffect(() => {
-    if (pushPermissionStatus === 'granted' && session) {
-        subscribeUserToPush();
-    }
-  }, [pushPermissionStatus, session, subscribeUserToPush]);
-
-  const handleRequestPushPermission = async () => {
-    setIsPushPromptOpen(false);
-    if (pushPermissionStatus !== 'default') return;
-    const permission = await Notification.requestPermission();
-    setPushPermissionStatus(permission);
   };
-
 
   const removeNotification = (id: number) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -691,7 +691,7 @@ const App: React.FC = () => {
         session={session}
         unreadCount={unreadCount}
         pushPermissionStatus={pushPermissionStatus}
-        onRequestPushPermission={handleRequestPushPermission}
+        onSubscribeToPush={handleSubscribeToPush}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="p-4 md:p-8">
@@ -717,7 +717,7 @@ const App: React.FC = () => {
       </div>
       <PushNotificationModal
         isOpen={isPushPromptOpen}
-        onConfirm={handleRequestPushPermission}
+        onConfirm={handleSubscribeToPush}
         onClose={() => setIsPushPromptOpen(false)}
       />
     </div>

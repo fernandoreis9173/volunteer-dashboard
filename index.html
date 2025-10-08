@@ -35,6 +35,19 @@
 </head>
   <body class="bg-slate-50">
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+    <script type="module">
+      // This dynamic import ensures the script is loaded from the correct origin,
+      // fixing CORS and pathing issues in sandboxed environments like AI Studio.
+      const scriptUrl = new URL('/index.tsx', window.location.origin).href;
+      import(scriptUrl).catch(err => {
+        console.error("Failed to load main application script:", err);
+        // Optionally, display an error message to the user in the UI.
+        const rootDiv = document.getElementById('root');
+        if (rootDiv) {
+            rootDiv.innerHTML = '<div style="padding: 2rem; text-align: center; font-family: sans-serif; color: #dc2626;"><h1>Erro Crítico</h1><p>Não foi possível carregar o script principal da aplicação.</p></div>';
+        }
+      });
+    </script>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>

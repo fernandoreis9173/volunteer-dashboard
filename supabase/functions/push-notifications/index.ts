@@ -16,7 +16,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
-// FIX: Removed redundant 'Deno' declaration to fix redeclaration error.
+// FIX: Declare Deno to resolve TypeScript errors for Deno-specific APIs like Deno.serve.
+declare const Deno: any;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
