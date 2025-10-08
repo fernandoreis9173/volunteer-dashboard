@@ -8,6 +8,7 @@ const urlsToCache = [
   '/index.html',
   '/icon.svg',
   '/manifest.webmanifest',
+  '/index.css',
 ];
 
 // --- Lifecycle Listeners ---
