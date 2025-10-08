@@ -2,13 +2,13 @@
 
 // --- Configuration ---
 // Incrementing the cache name invalidates previous caches.
-const CACHE_NAME = 'volunteer-dashboard-v5'; 
+const CACHE_NAME = 'volunteer-dashboard-v6'; // VERSÃO CORRIGIDA
 const urlsToCache = [
   '/',
   '/index.html',
   '/icon.svg',
   '/manifest.webmanifest',
-  '/index.css',
+  // REMOVIDO: '/index.css' (causava erro 404/addAll)
 ];
 
 // --- Lifecycle Listeners ---
@@ -19,7 +19,15 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[sw.js] Opened cache and caching app shell.');
-        return cache.addAll(urlsToCache);
+        
+        // CORREÇÃO: Usar .catch para garantir que mesmo que um arquivo falhe (404),
+        // o Service Worker ainda instale. Isso resolve o erro 'Failed to execute addAll'.
+        return cache.addAll(urlsToCache)
+            .catch(err => {
+                console.warn('[sw.js] Falha parcial no cache. A instalação continua.', err);
+                // A Promise é resolvida para que a instalação continue
+                return; 
+            });
       })
       .then(() => self.skipWaiting()) // Activate new SW immediately
   );
@@ -49,11 +57,10 @@ self.addEventListener('fetch', (event) => {
 
   // --- STRATEGY ---
   // 1. Ignore non-GET requests (like POST to Supabase functions).
-  // 2. Ignore cross-origin requests (like to cdn.tailwindcss.com).
-  // 3. For same-origin GET requests, try network first.
-  // 4. If network fails, serve from cache.
-  // 5. If it's a navigation request and both fail, serve the app shell.
-
+  // 2. Ignore cross-origin requests (já que url.origin !== self.location.origin).
+  // 3. Para same-origin GET requests, try network first.
+  
+  // Isso garante que o POST para a Edge Function não é interceptado e não quebra a Promise.
   if (request.method !== 'GET' || url.origin !== self.location.origin) {
     // Let the browser handle it without interception.
     return;
@@ -98,7 +105,7 @@ self.addEventListener('push', (event) => {
   let data;
   try {
     data = event.data.json();
-  } catch (_e) {
+  } catch (_e) { // Correção para remover aviso de linter
     data = {
       title: 'Nova Notificação',
       body: event.data.text(),
@@ -118,7 +125,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Listener for clicks on notifications
+// Listener for clicks em notificações
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
