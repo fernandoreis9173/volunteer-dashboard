@@ -97,7 +97,7 @@ self.addEventListener('push', (event) => {
   let data;
   try {
     data = event.data.json();
-  } catch (e) {
+  } catch (_e) {
     data = {
       title: 'Nova Notificação',
       body: event.data.text(),
