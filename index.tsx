@@ -20,15 +20,13 @@ const performServiceWorkerRegistration = () => {
   }
 };
 
-// This is the definitive, most robust pattern for Service Worker registration.
-// It addresses the race condition where the 'load' event might fire *before*
-// this script gets to run, which is a common cause for the "invalid state" error.
-if (document.readyState === 'complete') {
-  // If the page is already fully loaded, we can register the service worker immediately.
-  performServiceWorkerRegistration();
-} else {
-  // Otherwise, we wait for the 'load' event to fire.
+// This alternative registration pattern aims to avoid race conditions with the 'load' event.
+// If the document is still loading, we wait for the 'load' event.
+// If it's already 'interactive' or 'complete', we register immediately.
+if (document.readyState === 'loading') {
   window.addEventListener('load', performServiceWorkerRegistration);
+} else {
+  performServiceWorkerRegistration();
 }
 
 
