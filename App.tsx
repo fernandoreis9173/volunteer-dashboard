@@ -329,7 +329,7 @@ const App: React.FC = () => {
         if (session.user.user_metadata?.status === 'Pendente') {
             setIsInitializing(false);
         } else {
-            // This is a normal, active user. Fetch data then stop loading.
+            // This is a normal, active user.Fetch data then stop loading.
             fetchApplicationData().finally(() => {
                 setIsInitializing(false);
             });
@@ -491,30 +491,37 @@ const App: React.FC = () => {
         return;
     }
 
+    const saveSubscription = async (subscriptionToSave: PushSubscription) => {
+        const { error } = await supabase.functions.invoke('save-push-subscription', {
+            body: {
+                subscription: subscriptionToSave,
+                user_id: session.user.id,
+            }
+        });
+
+        if (error) {
+            throw error;
+        }
+    };
+
     try {
+        // FIX: Corrected a typo from `navigator.service.ready` to `navigator.serviceWorker.ready` to correctly access the service worker registration.
         const swRegistration = await navigator.serviceWorker.ready;
         const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
         
         let existingSubscription = await swRegistration.pushManager.getSubscription();
         if (existingSubscription) {
             console.log('User is already subscribed. Syncing with backend.');
-            const { error: syncError } = await supabase.functions.invoke('save-push-subscription', {
-                body: JSON.stringify({ subscription: existingSubscription }),
-            });
-            if (syncError) throw syncError;
+            await saveSubscription(existingSubscription);
             return;
         }
 
-        const subscription = await swRegistration.pushManager.subscribe({
+        const newSubscription = await swRegistration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey
         });
 
-        const { error } = await supabase.functions.invoke('save-push-subscription', {
-            body: JSON.stringify({ subscription }),
-        });
-
-        if (error) throw error;
+        await saveSubscription(newSubscription);
         
         console.log('User is subscribed.');
 

@@ -16,39 +16,25 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    // The anon key is needed to create a client that can validate the user's JWT
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!supabaseUrl || !serviceRoleKey || !supabaseAnonKey) {
-      throw new Error('Supabase URL, Service Role Key, and Anon Key are required environment variables.');
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Supabase URL and Service Role Key are required environment variables.');
     }
 
-    // Create a client with the user's auth token to securely get their identity
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-        throw new Error('Missing Authorization header.');
+    // Get subscription and user_id data from the request body
+    const { subscription, user_id } = await req.json();
+
+    if (!user_id) {
+      throw new Error('The user_id is required in the request body.');
     }
-    
-    const supabaseClient = createClient(
-      supabaseUrl,
-      supabaseAnonKey,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError) throw userError;
-    if (!user) throw new Error('Authentication failed. User not found.');
-
-    // Get subscription data from the request body
-    const { subscription } = await req.json();
 
     if (!subscription || !subscription.endpoint || !subscription.keys) {
       throw new Error('The subscription object with endpoint and keys is required in the request body.');
     }
 
     const subscriptionPayload = {
-      user_id: user.id, // Use the authenticated user's ID
+      user_id: user_id, // Use the user_id from the request body
       endpoint: subscription.endpoint,
       subscription_data: subscription
     };
