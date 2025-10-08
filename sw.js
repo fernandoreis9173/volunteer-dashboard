@@ -41,48 +41,48 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: Implements the "Network First, falling back to Cache" strategy.
+// Fetch: Implements a robust Network First, falling back to Cache strategy.
 self.addEventListener('fetch', (event) => {
-  // We only want to cache GET requests.
-  if (event.request.method !== 'GET') {
-    return;
-  }
+  const { request } = event;
+  const url = new URL(request.url);
 
-  const requestUrl = new URL(event.request.url);
+  // --- STRATEGY ---
+  // 1. Ignore non-GET requests (like POST to Supabase functions).
+  // 2. Ignore cross-origin requests (like to cdn.tailwindcss.com).
+  // 3. For same-origin GET requests, try network first.
+  // 4. If network fails, serve from cache.
+  // 5. If it's a navigation request and both fail, serve the app shell.
 
-  // IMPORTANT: Do not intercept and cache cross-origin requests (e.g., CDNs, Google Fonts).
-  // This prevents CORS errors when the Service Worker tries to fetch them.
-  if (requestUrl.origin !== self.location.origin) {
+  if (request.method !== 'GET' || url.origin !== self.location.origin) {
+    // Let the browser handle it without interception.
     return;
   }
   
-  // For navigation requests (like loading the page), always go network-first.
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .catch(() => caches.match('/index.html')) // Fallback to the main page if offline
-    );
-    return;
-  }
-
-  // For all other assets, use the network-first strategy.
   event.respondWith(
-    fetch(event.request)
+    fetch(request)
       .then((networkResponse) => {
-        // If the fetch is successful, clone it, cache it, and return it.
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME)
-          .then((cache) => {
-            cache.put(event.request, responseToCache);
+        // If we get a valid response, update the cache and return it.
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
           });
+        }
         return networkResponse;
       })
       .catch(() => {
-        // If the network fails, try to serve the response from the cache.
-        return caches.match(event.request)
-          .then((cachedResponse) => {
-            return cachedResponse || new Response(null, { status: 404, statusText: 'Not Found' });
-          });
+        // If the network fails, try to find the request in the cache.
+        return caches.match(request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // Special fallback for navigation requests to the main app page.
+          if (request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+          // For other failed assets, there's no specific fallback.
+          return new Response(null, { status: 404, statusText: 'Not Found' });
+        });
       })
   );
 });

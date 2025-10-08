@@ -16,7 +16,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
-// FIX: The explicit declaration of 'Deno' is removed to prevent a "Cannot redeclare block-scoped variable" error, as it's already provided by the Deno runtime's global scope.
+// FIX: Declare Deno to resolve TypeScript errors for Deno-specific APIs.
+declare const Deno: any;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
