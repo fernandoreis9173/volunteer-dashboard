@@ -18,15 +18,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Supabase URL e Service Role Key são obrigatórios.');
+    }
+
     const { email, role, name } = await req.json();
     if (!email || !role || !name) {
       throw new Error("Email, nome e função são obrigatórios no corpo da requisição.");
     }
     
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '', 
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
     
     // Define metadata, including page permissions based on role, BEFORE inviting.
     let page_permissions: string[];

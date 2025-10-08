@@ -15,47 +15,69 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { subscription, user_id } = await req.json();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    // The anon key is needed to create a client that can validate the user's JWT
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!subscription || !subscription.endpoint || !subscription.keys) {
-      throw new Error('O objeto de inscrição (subscription) com endpoint e keys é obrigatório.');
+    if (!supabaseUrl || !serviceRoleKey || !supabaseAnonKey) {
+      throw new Error('Supabase URL, Service Role Key, and Anon Key are required environment variables.');
     }
 
-    if (!user_id) {
-      throw new Error('O user_id é obrigatório para salvar a subscription.');
+    // Create a client with the user's auth token to securely get their identity
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+        throw new Error('Missing Authorization header.');
     }
-
-    // Prepara dados para upsert, salvando apenas as partes essenciais no JSONB.
-    const subscriptionPayload = {
-      user_id,
-      endpoint: subscription.endpoint,
-      subscription_data: {
-        keys: subscription.keys,
-        expirationTime: subscription.expirationTime || null,
-      }
-    };
-
-    // Cliente admin para contornar RLS
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    
+    const supabaseClient = createClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Upsert na tabela usando endpoint como conflito
-    const { error } = await supabaseAdmin
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError) throw userError;
+    if (!user) throw new Error('Authentication failed. User not found.');
+
+    // Get subscription data from the request body
+    const { subscription } = await req.json();
+
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      throw new Error('The subscription object with endpoint and keys is required in the request body.');
+    }
+
+    const subscriptionPayload = {
+      user_id: user.id, // Use the authenticated user's ID
+      endpoint: subscription.endpoint,
+      subscription_data: subscription
+    };
+
+    // Use the admin client to perform the upsert, bypassing any RLS policies
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data, error } = await supabaseAdmin
       .from('push_subscriptions')
-      .upsert(subscriptionPayload, { onConflict: 'endpoint' });
+      .upsert(subscriptionPayload, { onConflict: 'endpoint' })
+      .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase upsert error:', JSON.stringify(error, null, 2));
+      throw error;
+    }
+    
+    if (!data || data.length === 0) {
+      console.warn('Upsert operation succeeded but returned no data. Check RLS policies on `push_subscriptions` table.');
+    }
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
 
   } catch (error: any) {
-    console.error('Erro ao salvar inscrição push:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
+    console.error('Error saving push subscription:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500

@@ -17,15 +17,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Supabase URL e Service Role Key são obrigatórios.');
+    }
+
     const { userId } = await req.json()
     if (!userId) {
       throw new Error('User ID é obrigatório.')
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
     
     // 1. Fetch the user to get existing metadata
     const { data: { user }, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId)

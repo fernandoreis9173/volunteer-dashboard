@@ -494,14 +494,14 @@ const App: React.FC = () => {
     try {
         const swRegistration = await navigator.serviceWorker.ready;
         const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-        const user_id = session.user.id;
         
         let existingSubscription = await swRegistration.pushManager.getSubscription();
         if (existingSubscription) {
             console.log('User is already subscribed. Syncing with backend.');
-            await supabase.functions.invoke('save-push-subscription', {
-                body: { subscription: existingSubscription, user_id },
+            const { error: syncError } = await supabase.functions.invoke('save-push-subscription', {
+                body: JSON.stringify({ subscription: existingSubscription }),
             });
+            if (syncError) throw syncError;
             return;
         }
 
@@ -511,7 +511,7 @@ const App: React.FC = () => {
         });
 
         const { error } = await supabase.functions.invoke('save-push-subscription', {
-            body: { subscription, user_id },
+            body: JSON.stringify({ subscription }),
         });
 
         if (error) throw error;
@@ -520,6 +520,7 @@ const App: React.FC = () => {
 
     } catch (err) {
         console.error('Failed to subscribe the user: ', err);
+        alert(`Não foi possível salvar a sua inscrição para notificações. Por favor, tente novamente. Detalhes: ${getErrorMessage(err)}`);
     }
   }, [supabase, session]);
 

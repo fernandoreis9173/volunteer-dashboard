@@ -18,6 +18,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error('Supabase URL e Service Role Key são obrigatórios.');
+    }
+
     // Correctly destructure all expected properties from the request body.
     const { userId, role, permissions } = await req.json()
 
@@ -27,10 +33,7 @@ Deno.serve(async (req) => {
     }
 
     // Create a Supabase admin client using environment variables.
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
     
     // 1. Fetch user to get existing metadata
     const { data: { user: existingUser }, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
