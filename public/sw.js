@@ -1,66 +1,30 @@
+// sw.js
 
-const CACHE_NAME = 'volunteer-dashboard-v1';
+// --- Configuration ---
+// Incrementing the cache name invalidates previous caches.
+const CACHE_NAME = 'volunteer-dashboard-v3'; 
 const urlsToCache = [
   '/',
   '/index.html',
-  // '/index.tsx', // This is a source file, not a browser-ready asset. It will be cached by the fetch handler.
   '/icon.svg',
   '/manifest.webmanifest',
-  'https://cdn.tailwindcss.com',
-  'https://esm.sh/react@18.2.0',
-  'https://esm.sh/react-dom@18.2.0',
-  'https://esm.sh/@supabase/supabase-js@2.44.4',
-  'https://esm.sh/jspdf@2.5.1',
-  'https://esm.sh/jspdf-autotable@3.8.2',
-  'https://esm.sh/recharts@2.12.7?external=react,react-dom',
-  'https://esm.sh/react@18.2.0/jsx-runtime',
 ];
 
+// --- Lifecycle Listeners ---
+
+// Install: Caches the core application shell.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Opened cache');
+        console.log('[sw.js] Opened cache and caching app shell.');
         return cache.addAll(urlsToCache);
       })
+      .then(() => self.skipWaiting()) // Activate new SW immediately
   );
 });
 
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        if (response) {
-          return response; // Retorna do cache
-        }
-
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest).then(
-          (response) => {
-            if (!response || response.status !== 200) {
-              return response;
-            }
-            
-            // Apenas requisições GET são armazenadas em cache.
-            if(event.request.method !== 'GET') {
-                return response;
-            }
-
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-
-            return response;
-          }
-        );
-      })
-  );
-});
-
+// Activate: Cleans up old, unused caches.
 self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -68,46 +32,92 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
+            console.log(`[sw.js] Deleting old cache: ${cacheName}`);
             return caches.delete(cacheName);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim()) // Take control of all open clients
   );
 });
 
-// Listener para notificações push
-self.addEventListener('push', (event) => {
-  try {
-    const data = event.data.json();
-    const options = {
-      body: data.body,
-      icon: '/icon.svg',
-      badge: '/icon.svg',
-      data: {
-        url: data.url || '/'
-      }
-    };
-    event.waitUntil(
-      self.registration.showNotification(data.title, options)
-    );
-  } catch (e) {
-    console.error('Push event error:', e);
-    const options = {
-      body: event.data.text(),
-      icon: '/icon.svg',
-      badge: '/icon.svg',
-      data: {
-          url: '/'
-      }
-    };
-    event.waitUntil(
-      self.registration.showNotification("Nova Notificação", options)
-    );
+// Fetch: Implements a robust Network First, falling back to Cache strategy.
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // --- STRATEGY ---
+  // 1. Ignore non-GET requests (like POST to Supabase functions).
+  // 2. Ignore cross-origin requests (like to cdn.tailwindcss.com).
+  // 3. For same-origin GET requests, try network first.
+  // 4. If network fails, serve from cache.
+  // 5. If it's a navigation request and both fail, serve the app shell.
+
+  if (request.method !== 'GET' || url.origin !== self.location.origin) {
+    // Let the browser handle it without interception.
+    return;
   }
+  
+  event.respondWith(
+    fetch(request)
+      .then((networkResponse) => {
+        // If we get a valid response, update the cache and return it.
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        // If the network fails, try to find the request in the cache.
+        return caches.match(request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // Special fallback for navigation requests to the main app page.
+          if (request.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+          // For other failed assets, there's no specific fallback.
+          return new Response(null, { status: 404, statusText: 'Not Found' });
+        });
+      })
+  );
 });
 
-// Listener para cliques em notificações
+
+// --- Push Notification Listeners ---
+
+// Listener for incoming push notifications
+self.addEventListener('push', (event) => {
+  console.log('[sw.js] Push Received.');
+
+  let data;
+  try {
+    data = event.data.json();
+  } catch (_e) {
+    data = {
+      title: 'Nova Notificação',
+      body: event.data.text(),
+    };
+  }
+  
+  const title = data.title || 'Nova Notificação';
+  const options = {
+    body: data.body || 'Você recebeu uma nova notificação.',
+    icon: '/icon.svg',
+    badge: '/icon.svg',
+    data: {
+        url: data.url || '/'
+    }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Listener for clicks on notifications
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
@@ -119,10 +129,8 @@ self.addEventListener('notificationclick', (event) => {
       type: 'window',
       includeUncontrolled: true,
     }).then((clientList) => {
-      // Se um cliente (aba) já estiver aberto, foque nele e navegue.
       if (clientList.length > 0) {
         let client = clientList[0];
-        // Tenta encontrar um cliente que já esteja focado.
         for (let i = 0; i < clientList.length; i++) {
           if (clientList[i].focused) {
             client = clientList[i];
@@ -130,7 +138,6 @@ self.addEventListener('notificationclick', (event) => {
         }
         return client.focus().then(c => c.navigate(urlToOpen));
       }
-      // Se nenhum cliente estiver aberto, abra uma nova janela.
       return clients.openWindow(urlToOpen);
     })
   );

@@ -520,14 +520,18 @@ const App: React.FC = () => {
             throw new Error("Falha ao obter o objeto de inscrição do navegador.");
         }
 
-        // 4. Check for an active Supabase session to get the JWT.
-        if (!session) {
+        // 4. Get the current session and JWT right before invoking the function to ensure it's fresh.
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+            throw new Error(`Falha ao obter a sessão do usuário: ${sessionError.message}`);
+        }
+        if (!currentSession) {
             console.error('Usuário não autenticado no Supabase. Não é possível salvar.');
             alert('Você precisa estar logado para ativar as notificações.');
             return;
         }
         
-        // This is the crucial log to confirm the code path is being executed.
         console.log("SUCESSO: Tentando enviar POST para a Edge Function...");
 
         // 5. Send the subscription object to the 'save-push-subscription' Edge Function.
