@@ -16,11 +16,14 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
     
     const isLeader = userRole === 'leader' || userRole === 'lider';
     const isAdmin = userRole === 'admin';
-    const isDepartmentInvolved = !!leaderDepartmentId && event.event_departments.some(ed => ed.department_id === leaderDepartmentId);
+    const isDepartmentInvolved = !!leaderDepartmentId && event.event_departments.some(ed => Number(ed.department_id) === Number(leaderDepartmentId));
     const canLeaderSchedule = isLeader && event.status === 'Confirmado';
 
     return (
-        <div className={`bg-white p-5 rounded-xl shadow-sm border border-slate-200 transition-all duration-300 ${isHighlighted ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}>
+        <div 
+            className={`bg-white p-5 rounded-xl shadow-sm border border-slate-200 transition-all duration-300 border-l-4 ${isHighlighted ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+            style={{ borderLeftColor: event.color || '#e2e8f0' }}
+        >
             <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
                 <div>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full capitalize mb-2 inline-block ${event.status === 'Confirmado' ? 'bg-green-100 text-green-800' : event.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{event.status}</span>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
+import Header from '../components/Header';
 import Dashboard from '../components/Dashboard';
 import VolunteersPage from '../components/VolunteersPage';
 import DepartmentsPage from '../components/DepartmentsPage';
 import EventsPage from '../components/SchedulesPage';
+import CalendarPage from '../components/CalendarPage';
 import AdminPage from '../components/AdminPage';
-import ApiConfigPage from '../components/ApiConfigPage';
 import LoginPage from '../components/LoginPage';
 import { AcceptInvitationPage } from '../components/AcceptInvitationPage';
 import ResetPasswordPage from '../components/ResetPasswordPage';
@@ -16,11 +17,10 @@ import NotificationsPage from '../components/NotificationsPage';
 import NotificationToast, { Notification as ToastNotification } from '../components/NotificationToast';
 import PushNotificationModal from '../components/PushNotificationModal';
 import { Page, AuthView, Event as VolunteerEvent, DashboardEvent, DashboardVolunteer, DetailedVolunteer, Stat, EnrichedUser } from './types';
-import { getSupabaseClient } from '../lib/supabaseClient';
-import { SupabaseClient, Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from '../lib/utils';
 
-// This state now directly reflects the data we trust from the 'profiles' table.
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -46,53 +46,50 @@ interface DashboardData {
     activeVolunteers?: DashboardVolunteer[];
     chartData?: ChartDataPoint[];
     activeLeaders?: EnrichedUser[];
-    // For Volunteer view
     schedules?: VolunteerEvent[];
     volunteerProfile?: DetailedVolunteer;
 }
 
 const getInitialAuthView = (): AuthView => {
     const hash = window.location.hash;
-    if (hash.includes('type=recovery')) {
-        return 'reset-password';
-    }
-    if (hash.includes('type=invite')) {
-        return 'accept-invite';
-    }
+    if (hash.includes('type=recovery')) return 'reset-password';
+    if (hash.includes('type=invite')) return 'accept-invite';
     return 'login';
 };
 
 const getPageFromHash = (): Page => {
-    const hash = window.location.hash.slice(2); // Remove #/
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'admin', 'my-profile', 'notifications'];
-    if (validPages.includes(hash as Page)) {
-        return hash as Page;
-    }
-    return 'dashboard'; // Default page
+    const hash = window.location.hash.slice(2); 
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'admin', 'my-profile', 'notifications'];
+    if (validPages.includes(hash as Page)) return hash as Page;
+    return 'dashboard';
 };
 
-
-// ATENÇÃO: Substitua esta chave pela sua VAPID Public Key gerada.
-// Esta chave é segura para ser exposta no lado do cliente.
 const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
 
-function urlBase64ToUint8Array(base64String: string) {
+const urlBase64ToUint8Array = (base64String: string) => {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-        .replace(/\-/g, '+')
-        .replace(/_/g, '/');
-
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
-
     for (let i = 0; i < rawData.length; ++i) {
         outputArray[i] = rawData.charCodeAt(i);
     }
     return outputArray;
-}
+};
+
+const pageTitles: Record<Page, string> = {
+  dashboard: 'Dashboard',
+  volunteers: 'Volunteers',
+  departments: 'Departamentos',
+  events: 'Eventos',
+  calendar: 'Calendário',
+  admin: 'Admin',
+  'my-profile': 'Meu Perfil',
+  notifications: 'Notificações'
+};
+
 
 const App: React.FC = () => {
-  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const sessionUserId = useRef<string | null>(null);
   const [activePage, setActivePage] = useState<Page>(getPageFromHash());
@@ -112,7 +109,7 @@ const App: React.FC = () => {
   const prevSessionRef = useRef<Session | null>(null);
 
   const fetchApplicationData = useCallback(async () => {
-    if (session && supabase) {
+    if (session) {
         const userStatus = session.user.user_metadata?.status;
         if (userStatus === 'Inativo') {
             setIsUserDisabled(true);
@@ -130,7 +127,6 @@ const App: React.FC = () => {
             return;
         }
         
-        // Fetch unread notifications count for all logged-in users
         const { count: unreadNotificationsCount } = await supabase
             .from('notifications')
             .select('*', { count: 'exact', head: true })
@@ -166,553 +162,301 @@ const App: React.FC = () => {
                   .order('date', { referencedTable: 'events', ascending: true });
 
                 const schedules = (scheduleQueryData || []).flatMap(item => item.events || []).filter((event): event is VolunteerEvent => event !== null);
-                setDashboardData({ schedules, volunteerProfile: volunteerData as DetailedVolunteer });
+                setDashboardData({
+                    schedules,
+                    volunteerProfile: volunteerData as DetailedVolunteer
+                });
             }
-        } else { // Admin or Leader
+        } else { // Admin/Leader data fetching
             const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
-                .select('role, department_id')
+                .select('department_id')
                 .eq('id', session.user.id)
                 .single();
-
-            if (profileError || !profileData) {
-                console.error("Error fetching admin/leader profile:", getErrorMessage(profileError));
-                setUserProfile(null);
-                setDashboardData(null);
-                return;
+            
+            if (profileError) {
+                console.error("Error fetching leader/admin profile:", getErrorMessage(profileError));
             }
 
             const profile: UserProfileState = {
-                role: profileData.role,
-                department_id: profileData.department_id,
+                role: userRole,
+                department_id: profileData?.department_id ?? session.user.user_metadata?.department_id ?? null,
                 volunteer_id: null,
             };
             setUserProfile(profile);
 
-            const getLocalYYYYMMDD = (d: Date) => new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-            const todayDate = new Date();
-            const today = getLocalYYYYMMDD(todayDate);
-            const tomorrowDate = new Date();
-            tomorrowDate.setDate(todayDate.getDate() + 1);
-            const tomorrow = getLocalYYYYMMDD(tomorrowDate);
-            const sevenDaysFromNow = new Date();
-            sevenDaysFromNow.setDate(todayDate.getDate() + 7);
-            const nextSevenDays = getLocalYYYYMMDD(sevenDaysFromNow);
+            try {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const tomorrow = new Date(today);
+                tomorrow.setDate(today.getDate() + 1);
+                const next7Days = new Date(today);
+                next7Days.setDate(today.getDate() + 7);
+                const last30Days = new Date(today);
+                last30Days.setDate(today.getDate() - 29);
 
-            const oneYearAgo = new Date();
-            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-            const oneYearAgoISO = oneYearAgo.toISOString();
+                const todayStr = today.toISOString().split('T')[0];
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+                const next7DaysStr = next7Days.toISOString().split('T')[0];
+                const last30DaysStr = last30Days.toISOString().split('T')[0];
 
-            const [statsRes, todaySchedulesRes, upcomingSchedulesRes, activeVolunteersRes, chartEventsRes, usersRes] = await Promise.all([
-                Promise.all([
-                    supabase.from('volunteers').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                    supabase.from('departments').select('id', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                    supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', today).eq('status', 'Confirmado'),
-                    supabase.from('events').select('id', { count: 'exact', head: true }).eq('date', tomorrow).eq('status', 'Confirmado'),
-                ]),
-                supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').eq('date', today).eq('status', 'Confirmado').order('start_time').limit(10),
-                supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').gte('date', tomorrow).lte('date', nextSevenDays).eq('status', 'Confirmado').order('date').limit(10),
-                supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').order('created_at', { ascending: false }).limit(5),
-                supabase.from('events').select('date, name, event_volunteers(volunteer_id), event_departments(department_id)').gte('date', oneYearAgoISO.slice(0, 10)).limit(10000),
-                supabase.functions.invoke('list-users'),
-            ]);
-            
-            // Process chart data
-            const dailyCounts: { [key: string]: { scheduledVolunteers: number; involvedDepartments: number, eventNames: string[] } } = {};
-            
-            (chartEventsRes.data || []).forEach(event => {
-                const date = event.date;
-                if (date) {
-                    if (!dailyCounts[date]) {
-                        dailyCounts[date] = { scheduledVolunteers: 0, involvedDepartments: 0, eventNames: [] };
-                    }
-                    // The nested select returns an array of objects, so .length is the count.
-                    dailyCounts[date].scheduledVolunteers += (event.event_volunteers || []).length;
-                    dailyCounts[date].involvedDepartments += (event.event_departments || []).length;
-                    if(event.name) {
-                        dailyCounts[date].eventNames.push(event.name);
+                const [
+                    activeVolunteersCountRes,
+                    departmentsCountRes,
+                    schedulesTodayCountRes,
+                    schedulesTomorrowCountRes,
+                    todaySchedulesRes,
+                    upcomingSchedulesRes,
+                    activeVolunteersRes,
+                    activeLeadersRes,
+                    chartEventsRes
+                ] = await Promise.all([
+                    supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
+                    supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
+                    supabase.from('events').select('*', { count: 'exact', head: true }).eq('date', todayStr),
+                    supabase.from('events').select('*', { count: 'exact', head: true }).eq('date', tomorrowStr),
+                    supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').eq('date', todayStr).order('start_time'),
+                    supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').gte('date', tomorrowStr).lte('date', next7DaysStr).limit(10).order('date').order('start_time'),
+                    supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').limit(5).order('created_at', { ascending: false }),
+                    supabase.functions.invoke('list-users'),
+                    supabase.from('events').select('date, name, event_volunteers(count), event_departments(department_id)').gte('date', last30DaysStr).lte('date', todayStr)
+                ]);
+
+                // Process Stats
+                const stats = {
+                    activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
+                    departments: { value: String(departmentsCountRes.count ?? 0), change: 0 },
+                    schedulesToday: { value: String(schedulesTodayCountRes.count ?? 0), change: 0 },
+                    schedulesTomorrow: { value: String(schedulesTomorrowCountRes.count ?? 0), change: 0 },
+                };
+
+                // Process Leaders
+                const activeLeaders = (activeLeadersRes.data?.users || [])
+                    .filter((u: EnrichedUser) => u.app_status === 'Ativo')
+                    .sort((a: EnrichedUser, b: EnrichedUser) => new Date(b.last_sign_in_at || 0).getTime() - new Date(a.last_sign_in_at || 0).getTime())
+                    .slice(0, 5);
+                
+                // Process Chart Data
+                const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
+                if (chartEventsRes.data) {
+                    for (const event of chartEventsRes.data) {
+                        const date = event.date;
+                        if (!chartDataMap.has(date)) {
+                            chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
+                        }
+                        const entry = chartDataMap.get(date)!;
+                        entry.scheduledVolunteers += (event.event_volunteers[0] as any)?.count ?? 0;
+                        (event.event_departments as any[]).forEach((ed: any) => entry.involvedDepartments.add(ed.department_id));
+                        entry.eventNames.push(event.name);
                     }
                 }
-            });
         
-            const chartData: ChartDataPoint[] = Object.entries(dailyCounts).map(([date, counts]) => ({
-                date,
-                ...counts,
-            })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                const chartData: ChartDataPoint[] = [];
+                for (let i = 0; i < 30; i++) {
+                    const day = new Date(last30Days);
+                    day.setDate(last30Days.getDate() + i);
+                    const dateStr = day.toISOString().split('T')[0];
+                    const dataForDay = chartDataMap.get(dateStr);
+                    chartData.push({
+                        date: dateStr,
+                        scheduledVolunteers: dataForDay?.scheduledVolunteers || 0,
+                        involvedDepartments: dataForDay?.involvedDepartments.size || 0,
+                        eventNames: dataForDay?.eventNames || [],
+                    });
+                }
+                
+                setDashboardData({
+                    stats,
+                    todaySchedules: (todaySchedulesRes.data as DashboardEvent[]) || [],
+                    upcomingSchedules: (upcomingSchedulesRes.data as DashboardEvent[]) || [],
+                    activeVolunteers: (activeVolunteersRes.data as DashboardVolunteer[]) || [],
+                    chartData,
+                    activeLeaders,
+                });
 
-            // FIX: Cast the user object to EnrichedUser to inform TypeScript of its shape, resolving the property access error.
-            const activeLeaders = (usersRes.data?.users || []).filter((user: any) => {
-                const enrichedUser = user as EnrichedUser;
-                const role = enrichedUser.user_metadata?.role;
-                return (role === 'leader' || role === 'lider') && enrichedUser.app_status === 'Ativo';
-            });
-
-
-            setDashboardData({
-                stats: {
-                    activeVolunteers: { value: String(statsRes[0].count ?? 0), change: 9.5 },
-                    departments: { value: String(statsRes[1].count ?? 0), change: 3.5 },
-                    schedulesToday: { value: String(statsRes[2].count ?? 0), change: -1.6 },
-                    schedulesTomorrow: { value: String(statsRes[3].count ?? 0), change: 2.5 },
-                },
-                todaySchedules: (todaySchedulesRes.data as unknown as DashboardEvent[]) || [],
-                upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
-                activeVolunteers: (activeVolunteersRes.data as DashboardVolunteer[]) || [],
-                chartData,
-                activeLeaders,
-            });
+            } catch (error) {
+                console.error("Failed to fetch dashboard data:", getErrorMessage(error));
+                setDashboardData(null);
+            }
         }
-    } else {
-        setUserProfile(null);
-        setDashboardData(null);
-        setIsUserDisabled(false);
     }
-  }, [session, supabase]);
+  }, [session]);
 
-  // Effect for initial session check and subscription
-  useEffect(() => {
-    const client = getSupabaseClient();
-    setSupabase(client);
-    if (!client) {
-        setIsInitializing(false);
-        setInitialAuthCheckCompleted(true);
-        return;
-    }
+    useEffect(() => {
+        if (session && !isInitializing) {
+            fetchApplicationData();
+        }
+    }, [session, isInitializing, fetchApplicationData]);
     
-    client.auth.getSession().then(({ data: { session: initialSession } }) => {
-        setSession(initialSession);
-        sessionUserId.current = initialSession?.user?.id ?? null;
-        setInitialAuthCheckCompleted(true);
-    });
+    useEffect(() => {
+        if (!initialAuthCheckCompleted) return;
 
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, newSession) => {
-        const newUserId = newSession?.user?.id ?? null;
-        if (newUserId !== sessionUserId.current) {
-            setIsInitializing(true); // Re-initialize on user change
-            setSession(newSession);
-            sessionUserId.current = newUserId;
-        } else if (!session && newSession) { // Handle the invite link case where user id is the same but session appears
-            setSession(newSession);
-        }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-  
-  // Effect for fetching ALL application data when session changes, and controlling the initialization state.
-  useEffect(() => {
-    // Block 1: Wait for initial Supabase client check.
-    if (!initialAuthCheckCompleted) {
-        return; 
-    }
-
-    const isAcceptFlow = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
-
-    // Block 2: Handle the invitation flow specifically.
-    // The key is to keep showing the loading screen (`isInitializing`=true) until the session
-    // is established by Supabase after processing the URL hash.
-    if (isAcceptFlow) {
-        if (session) {
-            // Session is ready, we can stop loading and render the AcceptInvitationPage.
-            setIsInitializing(false);
-        }
-        // If session is NOT ready, we do nothing and return. `isInitializing` remains true.
-        return;
-    }
-
-    // Block 3: Handle logged-in users who are NOT in the invite flow.
-    if (session) {
-        // If their profile is still pending, they shouldn't be here.
-        // Stop loading and let the render logic show the "Conta Pendente" page.
-        if (session.user.user_metadata?.status === 'Pendente') {
-            setIsInitializing(false);
-        } else {
-            // This is a normal, active user. Fetch data then stop loading.
-            fetchApplicationData().finally(() => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+            if (_event === 'SIGNED_IN' && session?.user.id !== sessionUserId.current) {
+                sessionUserId.current = session.user.id;
                 setIsInitializing(false);
-            });
-        }
-        return;
-    }
-    
-    // Block 4: Handle logged-out users.
-    // If we reach here, there's no session and it's not an invite flow.
-    setUserProfile(null);
-    setDashboardData(null);
-    setIsUserDisabled(false);
-    setIsInitializing(false);
+            } else if (_event === 'SIGNED_OUT') {
+                setSession(null);
+                setUserProfile(null);
+                setDashboardData(null);
+                setAuthView('login');
+                window.location.hash = '';
+            }
+        });
+        
+        return () => subscription.unsubscribe();
+    }, [initialAuthCheckCompleted]);
 
-  }, [session, fetchApplicationData, initialAuthCheckCompleted]);
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            sessionUserId.current = session?.user.id ?? null;
+            setIsInitializing(false);
+            setInitialAuthCheckCompleted(true);
+        });
 
-
-  // Effect for hash-based routing (navigation)
-  useEffect(() => {
-    const handleHashChange = () => {
-        setActivePage(getPageFromHash());
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => {
-        window.removeEventListener('hashchange', handleHashChange);
-    };
-  }, []);
-
-  // Effect for handling redirects based on auth state and current page
-  useEffect(() => {
-    if (isInitializing || !session) {
-        // Don't perform redirects until everything is loaded and user is logged in
-        return;
-    }
-
-    const currentHash = window.location.hash;
-    if (!currentHash || !currentHash.startsWith('#/')) {
-        window.location.hash = '#/dashboard';
-        return;
-    }
-
-    if (userProfile) {
-        const userRole = userProfile.role;
-        const normalizedRole = userRole === 'lider' ? 'leader' : userRole;
-        if (normalizedRole === 'volunteer' && activePage !== 'dashboard' && activePage !== 'my-profile' && activePage !== 'notifications') {
-            window.location.hash = '#/dashboard';
-            return;
-        }
-        if (normalizedRole === 'leader' && activePage === 'admin') {
-            window.location.hash = '#/dashboard';
-            return;
-        }
-        if (normalizedRole === 'admin' && activePage === 'notifications') {
-            window.location.hash = '#/dashboard';
-            return;
-        }
-        if (normalizedRole !== 'volunteer' && activePage === 'my-profile') {
-             window.location.hash = '#/dashboard';
-             return;
-        }
-    }
-  }, [isInitializing, session, userProfile, activePage]);
-
-    // Effect for real-time notifications
-  useEffect(() => {
-    if (!supabase || !session || !userProfile) {
-        return;
-    }
-
-    const handleNewNotification = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
-        const newNotification: ToastNotification = {
-            id: Date.now(),
-            message,
-            type,
+        const handleHashChange = () => {
+            setActivePage(getPageFromHash());
+            setAuthView(getInitialAuthView());
         };
-        setNotifications(prev => [...prev, newNotification]);
+
+        window.addEventListener('hashchange', handleHashChange, false);
+        return () => {
+            window.removeEventListener('hashchange', handleHashChange, false);
+        };
+    }, []);
+
+    useEffect(() => {
+        // Automatically hide the sidebar when navigating to the calendar page
+        if (activePage === 'calendar') {
+            setIsSidebarOpen(false);
+        }
+    }, [activePage]);
+
+    const subscribeToPushNotifications = async () => {
+        if ('serviceWorker' in navigator && 'PushManager' in window && session) {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+                });
+
+                const { error } = await supabase.functions.invoke('save-push-subscription', {
+                    body: { subscription },
+                });
+
+                if (error) throw error;
+
+                setPushPermissionStatus('granted');
+                setNotifications(prev => [...prev, { id: Date.now(), message: 'Notificações ativadas!', type: 'success' }]);
+
+            } catch (err) {
+                console.error('Failed to subscribe to push notifications:', getErrorMessage(err));
+                setPushPermissionStatus('denied');
+                setNotifications(prev => [...prev, { id: Date.now(), message: 'Falha ao ativar notificações.', type: 'warning' }]);
+            }
+        }
+        setIsPushPromptOpen(false);
     };
 
-    const channel = supabase.channel('global-notifications');
-    
-    channel.on('broadcast', { event: 'new_schedule' }, ({ payload }) => {
-        if (userProfile.volunteer_id && payload.volunteerIds?.includes(userProfile.volunteer_id)) {
-            handleNewNotification(`Você foi escalado para o evento "${payload.eventName}" no departamento de ${payload.departmentName}.`, 'success');
-            fetchApplicationData();
-        }
-    });
-
-    channel.on('broadcast', { event: 'event_update' }, ({ payload }) => {
-        let shouldNotify = false;
-
-        // For Volunteers: check if they are scheduled
-        const isScheduledVolunteer = userProfile.volunteer_id && dashboardData?.schedules?.some(s => s.id === payload.eventId);
-        if (isScheduledVolunteer) {
-            shouldNotify = true;
-        }
-
-        // For Leaders: check if their department is involved
-        const userRole = userProfile?.role;
-        const isAffectedLeader = (userRole === 'leader' || userRole === 'lider') && 
-                                 userProfile.department_id && 
-                                 payload.departmentIds?.includes(userProfile.department_id);
-        if (isAffectedLeader) {
-            shouldNotify = true;
-        }
-
-        if (shouldNotify) {
-            handleNewNotification(`Atualização no evento "${payload.eventName}": ${payload.updateMessage}`, 'info');
-            fetchApplicationData();
-        }
-    });
-
-    channel.on('broadcast', { event: 'new_event_for_department' }, ({ payload }) => {
-        const volunteerDepts = dashboardData?.volunteerProfile?.departments as string[] | undefined;
-        if (volunteerDepts && volunteerDepts.includes(payload.departmentName)) {
-            handleNewNotification(`Novo evento para o seu departamento (${payload.departmentName}): "${payload.eventName}"!`, 'info');
-        }
-    });
-
-    channel.on('broadcast', { event: 'new_event_for_leader' }, ({ payload }) => {
-        const userRole = userProfile?.role;
-        if (userRole === 'leader' || userRole === 'lider') {
-            handleNewNotification(`Novo evento criado: "${payload.eventName}". Verifique se é necessário escalar seu departamento.`, 'info');
-        }
-    });
-
-    channel.subscribe();
-
-    return () => {
-        supabase.removeChannel(channel);
+    const handleNavigate = (page: Page) => {
+        setActivePage(page);
+        window.location.hash = `#/${page}`;
+        setIsSidebarOpen(false);
     };
 
-  }, [supabase, session, userProfile, dashboardData, fetchApplicationData]);
-  
-  // --- Push Notification Logic ---
+    const removeNotification = (id: number) => {
+        setNotifications(notifications => notifications.filter(n => n.id !== id));
+    };
 
-  useEffect(() => {
-    if (typeof Notification !== 'undefined') {
-        setPushPermissionStatus(Notification.permission);
-    } else {
-        setPushPermissionStatus('unsupported');
-    }
-  }, []);
-  
-  // Effect to trigger the push notification prompt after a user logs in.
-  useEffect(() => {
-    // Check for a login event (transition from null to a session).
-    if (!prevSessionRef.current && session && pushPermissionStatus === 'default') {
-      // Use a timeout to ensure the UI has settled before showing the modal.
-      setTimeout(() => {
-        setIsPushPromptOpen(true);
-      }, 1500);
-    }
-    prevSessionRef.current = session;
-  }, [session, pushPermissionStatus]);
-
-  const subscribeUserToPush = useCallback(async () => {
-    if (!supabase || !session || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.log("Push messaging is not supported or user is not logged in");
-        return;
-    }
-
-    try {
-        const swRegistration = await navigator.serviceWorker.ready;
-        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-        const user_id = session.user.id;
-        
-        let existingSubscription = await swRegistration.pushManager.getSubscription();
-        if (existingSubscription) {
-            console.log('User is already subscribed. Syncing with backend.');
-            await supabase.functions.invoke('push-notifications', {
-                body: { subscription: existingSubscription, user_id },
-            });
-            return;
+    const renderPage = () => {
+        if (userProfile?.role === 'volunteer') {
+             switch (activePage) {
+                case 'my-profile':
+                    return <VolunteerProfile supabase={supabase} volunteerData={dashboardData?.volunteerProfile} onUpdate={fetchApplicationData} />;
+                case 'notifications':
+                    return <NotificationsPage session={session} onDataChange={fetchApplicationData} onNavigate={handleNavigate} />;
+                case 'dashboard':
+                default:
+                    return <VolunteerDashboard initialData={dashboardData} />;
+            }
         }
 
-        const subscription = await swRegistration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey
-        });
-
-        const { error } = await supabase.functions.invoke('push-notifications', {
-            body: { subscription, user_id },
-        });
-
-        if (error) throw error;
-        
-        console.log('User is subscribed.');
-
-    } catch (err) {
-        console.error('Failed to subscribe the user: ', err);
-    }
-  }, [supabase, session]);
-
-
-  useEffect(() => {
-    if (pushPermissionStatus === 'granted' && session) {
-        subscribeUserToPush();
-    }
-  }, [pushPermissionStatus, session, subscribeUserToPush]);
-
-  const handleRequestPushPermission = async () => {
-    setIsPushPromptOpen(false);
-    if (pushPermissionStatus !== 'default') return;
-    const permission = await Notification.requestPermission();
-    setPushPermissionStatus(permission);
-  };
-
-
-  const removeNotification = (id: number) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-  
-  const handleNavigate = (page: Page) => {
-    if (`#/${page}` !== window.location.hash) {
-      window.location.hash = `#/${page}`;
-    }
-    setIsVolunteerFormOpen(false);
-    setIsEventFormOpen(false);
-    setIsSidebarOpen(false);
-  };
-
-  const handleNewVolunteer = () => {
-    window.location.hash = '#/volunteers';
-    setIsEventFormOpen(false);
-    setIsVolunteerFormOpen(true);
-    setIsSidebarOpen(false);
-  };
-
-  const handleNewEvent = () => {
-    window.location.hash = '#/events';
-    setIsVolunteerFormOpen(false);
-    setIsEventFormOpen(true);
-    setIsSidebarOpen(false);
-  };
-
-  const renderPage = () => {
-    if (!userProfile) {
-        return null; // Don't render pages until profile is loaded
-    }
+        // Admin and Leader pages
+        switch (activePage) {
+            case 'volunteers':
+                return <VolunteersPage isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile?.role ?? null} onDataChange={fetchApplicationData} />;
+            case 'departments':
+                return <DepartmentsPage userRole={userProfile?.role ?? null} onDataChange={fetchApplicationData} />;
+            case 'events':
+                 return <EventsPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile?.role ?? null} leaderDepartmentId={userProfile?.department_id ?? null} onDataChange={fetchApplicationData} />;
+            case 'calendar':
+                return <CalendarPage userRole={userProfile?.role ?? null} leaderDepartmentId={userProfile?.department_id ?? null} onDataChange={fetchApplicationData} setIsSidebarOpen={setIsSidebarOpen} />;
+            case 'admin':
+                return userProfile?.role === 'admin' ? <AdminPage onDataChange={fetchApplicationData} /> : <Dashboard initialData={dashboardData} />;
+            case 'notifications':
+                return <NotificationsPage session={session} onDataChange={fetchApplicationData} onNavigate={handleNavigate} />;
+            case 'dashboard':
+            default:
+                return <Dashboard initialData={dashboardData} />;
+        }
+    };
     
-    // Authorization checks to prevent rendering a page while a redirect is pending
-    const userRole = userProfile.role;
-    const normalizedRole = userRole === 'lider' ? 'leader' : userRole;
-    if (normalizedRole === 'volunteer' && activePage !== 'dashboard' && activePage !== 'my-profile' && activePage !== 'notifications') return null;
-    if (normalizedRole === 'leader' && activePage === 'admin') return null;
-    if (normalizedRole === 'admin' && activePage === 'notifications') return null;
-    if (normalizedRole !== 'volunteer' && activePage === 'my-profile') return null;
-
-    switch (activePage) {
-      case 'volunteers':
-        return <VolunteersPage supabase={supabase} isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} onDataChange={fetchApplicationData} />;
-      case 'departments':
-        return <DepartmentsPage supabase={supabase} userRole={userRole} onDataChange={fetchApplicationData} />;
-      case 'events':
-        return <EventsPage supabase={supabase} isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userRole} leaderDepartmentId={userProfile?.department_id ?? null} onDataChange={fetchApplicationData} />;
-      case 'admin':
-        return <AdminPage supabase={supabase} onDataChange={fetchApplicationData} />;
-       case 'my-profile':
-        return <VolunteerProfile supabase={supabase} volunteerData={dashboardData?.volunteerProfile} onUpdate={fetchApplicationData} />;
-      case 'notifications':
-        return <NotificationsPage supabase={supabase} session={session} onDataChange={fetchApplicationData} onNavigate={handleNavigate} />;
-      case 'dashboard':
-      default:
-        if (userRole === 'volunteer') {
-            return <VolunteerDashboard initialData={dashboardData} />;
-        }
-        return <Dashboard initialData={dashboardData} />;
+    if (isInitializing) {
+        return <div className="flex items-center justify-center h-screen bg-slate-50"><p>Carregando...</p></div>;
     }
-  };
 
-  if (isInitializing) {
+    if (!session) {
+        switch (authView) {
+            case 'accept-invite':
+                return <AcceptInvitationPage setAuthView={setAuthView} />;
+            case 'reset-password':
+                return <ResetPasswordPage setAuthView={setAuthView} />;
+            case 'login':
+            default:
+                return <LoginPage setAuthView={setAuthView} />;
+        }
+    }
+
+    if (isUserDisabled) {
+        return <DisabledUserPage userRole={userProfile?.role ?? null} />;
+    }
+
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-100">
-        <p className="text-lg text-slate-500">Carregando...</p>
-      </div>
-    );
-  }
-
-  // Handle users who are logged in but haven't completed the invitation flow.
-  if (session && session.user.user_metadata?.status === 'Pendente') {
-    const isAcceptFlow = window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
-    if (!isAcceptFlow) {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 text-center p-4">
-          <div className="w-full max-w-lg p-8 space-y-6 bg-white rounded-2xl shadow-lg">
-             <div className="flex justify-center mb-4">
-                  <div className="p-3 bg-amber-500 text-white rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-              </div>
-            <h1 className="text-3xl font-bold text-slate-800">Conta Pendente</h1>
-            <p className="text-slate-600">Sua conta ainda não foi ativada. Por favor, use o link de convite enviado para o seu e-mail para completar o cadastro.</p>
-            <div className="pt-4">
-              <button onClick={() => supabase?.auth.signOut()} className="w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-slate-600 text-base font-semibold text-white shadow-sm hover:bg-slate-700">
-                  Sair
-              </button>
+        <div className="flex h-screen bg-slate-50">
+            <Sidebar
+                activePage={activePage}
+                onNavigate={handleNavigate}
+                onNewVolunteer={() => setIsVolunteerFormOpen(true)}
+                onNewEvent={() => setIsEventFormOpen(true)}
+                isOpen={isSidebarOpen}
+                setIsOpen={setIsSidebarOpen}
+                userRole={userProfile?.role ?? null}
+                session={session}
+                unreadCount={unreadCount}
+                pushPermissionStatus={pushPermissionStatus}
+                onSubscribeToPush={() => setIsPushPromptOpen(true)}
+            />
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {activePage !== 'calendar' && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
+                <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 ${activePage === 'calendar' ? '' : 'p-6'}`}>
+                    {renderPage()}
+                </main>
             </div>
-          </div>
+            <div className="fixed top-4 right-4 z-50 space-y-2">
+                {notifications.map(n => (
+                    <NotificationToast key={n.id} notification={n} onClose={removeNotification} />
+                ))}
+            </div>
+            <PushNotificationModal
+                isOpen={isPushPromptOpen}
+                onClose={() => setIsPushPromptOpen(false)}
+                onConfirm={subscribeToPushNotifications}
+            />
         </div>
-      );
-    }
-  }
-  
-  if (!supabase) {
-    return <ApiConfigPage />;
-  }
-  
-  if (authView === 'reset-password') {
-      return <ResetPasswordPage supabase={supabase} setAuthView={setAuthView} />;
-  }
-  if (authView === 'accept-invite') {
-      return <AcceptInvitationPage supabase={supabase} setAuthView={setAuthView} />;
-  }
-
-  if (!session) {
-      return <LoginPage supabase={supabase} setAuthView={setAuthView} />;
-  }
-
-  if (isUserDisabled) {
-    return <DisabledUserPage supabase={supabase} userRole={userProfile?.role} />;
-  }
-  
-  if (!userProfile) {
-    // This case handles a logged-in user whose profile failed to load.
-    // It prevents rendering a broken UI and avoids getting stuck on the loading screen.
-    return (
-       <div className="flex items-center justify-center min-h-screen bg-slate-100 text-center p-4">
-        <div>
-            <p className="text-lg text-red-600 font-semibold">Erro Crítico</p>
-            <p className="text-slate-500 mt-2">Não foi possível carregar os dados do seu perfil. Por favor, tente novamente.</p>
-            <button onClick={() => supabase?.auth.signOut()} className="mt-4 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg">
-                Sair
-            </button>
-        </div>
-      </div>
     );
-  }
-
-  return (
-    <div className="flex h-screen bg-slate-100 font-sans overflow-hidden">
-      <Sidebar 
-        activePage={activePage} 
-        onNavigate={handleNavigate} 
-        onNewVolunteer={handleNewVolunteer}
-        onNewEvent={handleNewEvent}
-        supabase={supabase}
-        isOpen={isSidebarOpen}
-        setIsOpen={setIsSidebarOpen}
-        userRole={userProfile?.role}
-        session={session}
-        unreadCount={unreadCount}
-        pushPermissionStatus={pushPermissionStatus}
-        onRequestPushPermission={handleRequestPushPermission}
-      />
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-4 md:p-8">
-            <button 
-              onClick={() => setIsSidebarOpen(true)} 
-              className="lg:hidden mb-4 p-2 rounded-md bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 shadow-sm flex items-center space-x-2"
-              aria-label="Abrir menu"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                </svg>
-                <span>Menu</span>
-            </button>
-            {renderPage()}
-        </div>
-      </main>
-      <div aria-live="assertive" className="fixed inset-0 flex items-end px-4 py-6 pointer-events-none sm:p-6 sm:items-start z-50">
-        <div className="w-full flex flex-col items-center space-y-4 sm:items-end">
-          {notifications.map((notification) => (
-            <NotificationToast key={notification.id} notification={notification} onClose={removeNotification} />
-          ))}
-        </div>
-      </div>
-      <PushNotificationModal
-        isOpen={isPushPromptOpen}
-        onConfirm={handleRequestPushPermission}
-        onClose={() => setIsPushPromptOpen(false)}
-      />
-    </div>
-  );
 };
 
 export default App;

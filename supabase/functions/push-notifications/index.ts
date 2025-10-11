@@ -18,7 +18,6 @@ const corsHeaders = {
 
 // FIX: Declare Deno to resolve TypeScript errors for Deno-specific APIs.
 declare const Deno: any;
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });

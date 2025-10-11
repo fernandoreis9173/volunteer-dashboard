@@ -22,6 +22,13 @@ interface VolunteerItemProps {
     actionType: 'add' | 'remove';
 }
 
+const colorOptions = [
+    { name: 'Azul', value: '#3b82f6', bg: 'bg-blue-500' },
+    { name: 'Verde', value: '#22c55e', bg: 'bg-green-500' },
+    { name: 'Amarelo', value: '#f59e0b', bg: 'bg-amber-500' },
+    { name: 'Vermelho', value: '#ef4444', bg: 'bg-red-500' },
+];
+
 const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, actionType }) => {
     if (actionType === 'remove') {
         return (
@@ -79,7 +86,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
 
 
 const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId }) => {
-    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '' });
+    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
     const [selectedVolunteers, setSelectedVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [allVolunteers, setAllVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [volunteerSearch, setVolunteerSearch] = useState('');
@@ -129,7 +136,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
     useEffect(() => {
         if (initialData) {
-            setFormData({ name: initialData.name, date: initialData.date, start_time: initialData.start_time, end_time: initialData.end_time, local: initialData.local || '', status: initialData.status, observations: initialData.observations || '' });
+            setFormData({ name: initialData.name, date: initialData.date, start_time: initialData.start_time, end_time: initialData.end_time, local: initialData.local || '', status: initialData.status, observations: initialData.observations || '', color: initialData.color || '' });
             if (initialData.event_volunteers && isSchedulingMode) {
                 const scheduledElsewhereIds = new Set(
                     initialData.event_volunteers
@@ -150,7 +157,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 setSelectedVolunteers([]);
             }
         } else {
-            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '' });
+            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
             setSelectedVolunteers([]);
         }
     }, [initialData, isSchedulingMode, leaderDepartmentId]);
@@ -163,6 +170,10 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
         } else {
             setFormData(prev => ({ ...prev, [e.target.name]: value }));
         }
+    };
+
+    const handleColorChange = (colorValue: string) => {
+        setFormData(prev => ({ ...prev, color: prev.color === colorValue ? '' : colorValue }));
     };
     
     const handleConfirmStatusChange = () => {
@@ -244,6 +255,24 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 <div><label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label><input type="time" name="end_time" value={formData.end_time} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
             </div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
+            {isAdminMode && (
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Cor do Evento</label>
+                    <div className="flex items-center space-x-3">
+                        {colorOptions.map(option => (
+                        <button
+                            type="button"
+                            key={option.value}
+                            onClick={() => handleColorChange(option.value)}
+                            className={`w-8 h-8 rounded-full ${option.bg} transition-transform duration-150 transform hover:scale-110 focus:outline-none ${formData.color === option.value ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+                            aria-label={option.name}
+                        >
+                           {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </button>
+                        ))}
+                    </div>
+                </div>
+            )}
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed"></textarea></div>
 
             {isSchedulingMode && !isSchedulingAllowed && (

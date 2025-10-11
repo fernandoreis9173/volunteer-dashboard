@@ -1,6 +1,3 @@
-
-
-
 // FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
 import type { User } from '@supabase/supabase-js';
 
@@ -35,6 +32,7 @@ export interface Event {
   event_volunteers: EventVolunteer[];
   local?: string;
   observations?: string;
+  color?: string;
 }
 
 // Added for Dashboard performance and type safety
@@ -49,7 +47,7 @@ export interface DashboardEvent {
   event_volunteers: { volunteers: { name: string } }[] | null; // Can be null from DB join
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'admin' | 'my-profile' | 'notifications';
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'admin' | 'my-profile' | 'notifications';
 
 export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 

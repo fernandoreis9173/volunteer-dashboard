@@ -72,7 +72,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
       let queryBuilder = supabase
         .from('events')
         .select(`
-          id, name, date, start_time, end_time, status, local, observations, created_at,
+          id, name, date, start_time, end_time, status, local, observations, color, created_at,
           event_departments (
             department_id,
             departments ( id, name, leader )
