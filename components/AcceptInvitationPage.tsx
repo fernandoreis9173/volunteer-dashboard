@@ -351,11 +351,16 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 }
             }
             
-            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para o painel...');
+            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login para você acessar sua conta.');
+            
+            // Sign out the current temporary session to force a manual login
+            await supabase.auth.signOut();
             
             setTimeout(() => {
-                onRegistrationComplete();
-            }, 2000);
+                setAuthView('login');
+                // Clear the invite hash from the URL so it doesn't trigger the invite view again on reload
+                window.location.hash = ''; 
+            }, 3000);
 
         } catch (error: any) {
             const errorMessage = getErrorMessage(error);
