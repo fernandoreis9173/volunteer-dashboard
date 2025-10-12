@@ -1,39 +1,24 @@
-# Estágio 1: Build - Prepara o aplicativo para produção
-# Usa uma versão mais moderna do Node.js, recomendada pelo seu projeto
+# Estágio 1: Build - Constrói a aplicação
+# Esta parte continua a mesma, pois já está funcionando perfeitamente.
 FROM node:20-alpine AS build
 
 WORKDIR /app
-
-# Copia os arquivos de dependência primeiro para aproveitar o cache do Docker
 COPY package*.json ./
-
-# Instala TODAS as dependências necessárias para o build
 RUN npm install
-
-# Copia o restante do código-fonte do seu projeto
 COPY . .
-
-# Executa o build, criando a pasta 'dist'
 RUN npm run build
 
 
-# Estágio 2: Produção - Roda o aplicativo final
-# Usa a mesma base para consistência
-FROM node:20-alpine
+# Estágio 2: Produção - Serve os arquivos finais com um servidor Nginx
+# Usamos uma imagem oficial do Nginx, que é extremamente pequena e otimizada.
+FROM nginx:alpine
 
-WORKDIR /app
+# Copia os arquivos construídos no Estágio 1 (a pasta 'dist') 
+# para a pasta padrão que o Nginx usa para servir sites.
+COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copia apenas os arquivos necessários do estágio de build
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/package.json ./package.json
+# Expõe a porta 80, que é a porta padrão para tráfego web.
+EXPOSE 80
 
-# Instala APENAS as dependências de produção (geralmente nenhuma para um app Vite puro)
-# Esta etapa é leve e rápida
-RUN npm install --omit=dev
-
-# Expõe a porta que o servidor de produção irá usar
-EXPOSE 3000
-
-# O COMANDO CORRETO PARA INICIAR O SERVIDOR DE PRODUÇÃO
-# Este comando substitui a necessidade do entrypoint.sh
-CMD ["npm", "start"]
+# O Nginx inicia automaticamente quando o container é executado.
+# Não precisamos de um comando CMD.
