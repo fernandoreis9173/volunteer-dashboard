@@ -6,26 +6,25 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "start": "vite preview --host"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "@supabase/supabase-js": "2.44.4",
-    "jspdf": "2.5.1",
-    "jspdf-autotable": "3.8.2",
-    "recharts": "2.12.7",
-    "@fullcalendar/react": "6.1.14",
     "@fullcalendar/core": "6.1.14",
     "@fullcalendar/daygrid": "6.1.14",
-    "@fullcalendar/timegrid": "6.1.14",
     "@fullcalendar/interaction": "6.1.14",
-    "vite": "^6.2.0"
+    "@fullcalendar/react": "6.1.14",
+    "@fullcalendar/timegrid": "6.1.14",
+    "@supabase/supabase-js": "^2.75.0",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "recharts": "2.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
   }
 }

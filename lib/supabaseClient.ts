@@ -1,16 +1,14 @@
-// ARQUIVO: supabaseClient.ts - VERSÃO CORRIGIDA PARA VITE ✅
-
 import { createClient } from '@supabase/supabase-js';
 
-// Use a sintaxe do Vite (import.meta.env) para acessar as variáveis de ambiente.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+// 1. Acessa as variáveis de ambiente usando o método do Vite
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// A lógica de verificação agora usa a sintaxe correta.
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-    // Este aviso continua útil para os desenvolvedores no console.
-    console.warn("URL do Supabase ou Chave Anon estão ausentes nas variáveis de ambiente. A página de configuração será exibida.");
+// 2. Uma verificação mais robusta: se as chaves não existirem, lança um erro.
+// Isso impede que o app tente funcionar com credenciais inválidas.
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("As variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY não foram encontradas. Verifique seu arquivo .env");
 }
 
-// Inicializa o cliente do Supabase.
+// 3. Inicializa o cliente Supabase com as variáveis corretas.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

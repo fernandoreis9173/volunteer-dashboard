@@ -1,10 +1,10 @@
-// COPIE TUDO A PARTIR DAQUI
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
 import DepartmentsPage from './components/DepartmentsPage';
+// FIX: Corrected import name from SchedulesPage to EventsPage to match the component.
 import EventsPage from './components/SchedulesPage';
 import CalendarPage from './components/CalendarPage';
 import AdminPage from './components/AdminPage';
@@ -19,17 +19,17 @@ import NotificationsPage from './components/NotificationsPage';
 import NotificationToast, { Notification as ToastNotification } from './components/NotificationToast';
 import PushNotificationModal from './components/PushNotificationModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
-import ApiConfigPage from './components/ApiConfigPage';
+import ApiConfigPage from './components/ApiConfigPage'; // Import the config page
 import { Page, AuthView } from './types';
 import { supabase } from './lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
 
-// CORREÇÃO APLICADA AQUI: Usa import.meta.env com o prefixo VITE_ para Vite.
+// Check for required environment variables for the frontend
 const areApiKeysConfigured = 
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    import.meta.env.VITE_SUPABASE_URL &&
+    import.meta.env.VITE_SUPABASE_ANON_KEY &&
+    import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 interface UserProfileState {
   role: string | null;
@@ -90,8 +90,8 @@ const App: React.FC = () => {
   const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
   const lastUserId = useRef<string | null>(null);
   
-  // CORREÇÃO APLICADA AQUI: Usa import.meta.env com o prefixo VITE_ para a chave VAPID.
-  const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY!;
+  // VAPID key is now from environment variables
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY!;
 
   const hasPermission = useMemo(() => {
     if (!userProfile?.role) {
@@ -110,7 +110,7 @@ const App: React.FC = () => {
         if (userStatus === 'Inativo') {
             setIsUserDisabled(true);
             setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
-            setIsLoading(false);
+            setIsLoading(false); // Stop loading, render disabled page.
             return;
         }
         setIsUserDisabled(false);
@@ -121,6 +121,8 @@ const App: React.FC = () => {
             return;
         }
         
+        // If the user status is pending, we don't need to fetch detailed profiles yet.
+        // The registration page will handle the profile creation.
         if (userStatus === 'Pendente') {
              setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null });
              return;
@@ -143,7 +145,7 @@ const App: React.FC = () => {
                 status: userStatus,
             };
 
-        } else {
+        } else { // Admin/Leader
             const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
                 .select('department_id')
@@ -161,6 +163,7 @@ const App: React.FC = () => {
         }
         setUserProfile(profile);
 
+        // Fetch global data (like unread notifications count) for active users
         const { count } = await supabase
             .from('notifications')
             .select('*', { count: 'exact', head: true })
@@ -169,9 +172,9 @@ const App: React.FC = () => {
         setUnreadCount(count ?? 0);
     } catch (err) {
         console.error("Error fetching core user data:", getErrorMessage(err));
-        setUserProfile(null);
+        setUserProfile(null); // Clear profile on error
     } finally {
-        setIsLoading(false);
+        setIsLoading(false); // Signal that all initial data loading is complete.
     }
   }, []);
 
@@ -183,6 +186,7 @@ const App: React.FC = () => {
   }, [session, fetchCoreData]);
   
   const handleRegistrationComplete = useCallback(() => {
+    // After registration, user status is 'Ativo'. We just need to refetch the profile data.
     refetchUserData();
     window.location.hash = '#/dashboard';
   }, [refetchUserData]);
@@ -199,20 +203,24 @@ const App: React.FC = () => {
   }, [session]);
 
     useEffect(() => {
+        // Initialize push notification permission status
         if ('Notification' in window && 'PushManager' in window) {
             setPushPermissionStatus(Notification.permission);
         }
     }, []);
 
     useEffect(() => {
+        // This is the primary listener for auth changes (login, logout, token refresh).
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
             setSession(newSession);
+             // If session becomes null (logout), we're not loading anymore.
             if (!newSession) {
                 setIsLoading(false);
                 setUserProfile(null);
             }
         });
 
+        // This handles navigation via URL hash changes.
         const handleHashChange = () => {
             setActivePage(getPageFromHash());
             setAuthView(getInitialAuthView());
@@ -227,6 +235,9 @@ const App: React.FC = () => {
     }, []);
     
     useEffect(() => {
+        // This effect runs whenever the session changes to fetch the user profile.
+        // We only refetch all data if the user ID has changed, to avoid reloading
+        // on token refreshes (e.g., when refocusing the tab).
         if (session) {
             if (session.user.id !== lastUserId.current) {
                 lastUserId.current = session.user.id;
@@ -234,14 +245,17 @@ const App: React.FC = () => {
                 fetchCoreData(session);
             }
         } else {
+            // User has logged out
             lastUserId.current = null;
         }
     }, [session, fetchCoreData]);
 
     useEffect(() => {
+        // Prompt for push notifications after login if permission is 'default'
         if (!isLoading && userProfile) {
             const isTargetRole = userProfile.role === 'leader' || userProfile.role === 'lider' || userProfile.role === 'volunteer';
             if (isTargetRole && pushPermissionStatus === 'default' && !sessionStorage.getItem('pushPromptedThisSession')) {
+                // Delay slightly to ensure UI is stable before showing modal
                 setTimeout(() => {
                     setIsPushPromptOpen(true);
                     sessionStorage.setItem('pushPromptedThisSession', 'true');
@@ -312,6 +326,7 @@ const App: React.FC = () => {
             }
         }
 
+        // Admin and Leader pages
         switch (activePage) {
             case 'volunteers':
                 return <VolunteersPage isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} />;
@@ -333,6 +348,7 @@ const App: React.FC = () => {
         }
     };
 
+    // If API keys are not configured, show the configuration page.
     if (!areApiKeysConfigured) {
         return <ApiConfigPage />;
     }
@@ -353,6 +369,7 @@ const App: React.FC = () => {
         }
     }
 
+    // If there's a session but the user's status is 'Pendente', force them to the registration page.
     if (userProfile?.status === 'Pendente') {
         return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
     }
@@ -361,6 +378,7 @@ const App: React.FC = () => {
         return <DisabledUserPage userRole={userProfile?.role ?? null} />;
     }
 
+    // Full-screen permission check, runs after all data is loaded and user status is confirmed as not 'Pendente'.
     if (!hasPermission) {
         return <PermissionDeniedPage onNavigate={handleNavigate} />;
     }
