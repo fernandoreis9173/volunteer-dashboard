@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
-// FIX: Changed EventResizeDoneArg to EventResizeArg to match the current FullCalendar API.
-import { EventInput, EventClickArg, EventDropArg, DayHeaderContentArg, EventContentArg, DatesSetArg, EventResizeArg } from '@fullcalendar/core';
+// FIX: Corrected import for EventResizeDoneArg to be from '@fullcalendar/interaction'.
+import interactionPlugin, { type EventResizeDoneArg } from '@fullcalendar/interaction';
+import { EventInput, EventClickArg, DayHeaderContentArg, EventContentArg, DatesSetArg, type EventDropArg } from '@fullcalendar/core';
 import ptBrBaseLocale from '@fullcalendar/core/locales/pt-br';
 
 import NewEventForm from './NewScheduleForm';
@@ -478,6 +478,28 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         }
     };
 
+    const notifyLeadersAndAdmins = async (message: string, related_event_id: number) => {
+        const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select('id')
+            .or('role.eq.leader,role.eq.lider,role.eq.admin');
+
+        if (profileError) {
+            console.error("Could not fetch leaders/admins for notification:", profileError);
+            return;
+        }
+
+        if (profiles) {
+            const notifications = profiles.map(p => ({
+                user_id: p.id,
+                message: message,
+                type: 'event_update' as const,
+                related_event_id: related_event_id,
+            }));
+            await createAndSendNotifications(notifications);
+        }
+    };
+
     const handleStatusFilterChange = (status: string) => {
         setStatusFilters(prev =>
             prev.includes(status)
@@ -681,7 +703,9 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             
             await fetchAllEvents(false); 
             onDataChange();
-            await notifyScheduledVolunteers(eventId, `O evento "${event.title}" foi reagendado para um novo dia/horário.`);
+            const message = `O evento "${event.title}" foi reagendado para um novo dia/horário.`;
+            await notifyScheduledVolunteers(eventId, message);
+            await notifyLeadersAndAdmins(message, eventId);
 
         } catch (err) {
             alert('Erro ao mover evento: ' + getErrorMessage(err));
@@ -689,8 +713,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         }
     };
     
-    // FIX: Changed EventResizeDoneArg to EventResizeArg to match the current FullCalendar API.
-    const handleEventResize = async (info: EventResizeArg) => {
+    const handleEventResize = async (info: EventResizeDoneArg) => {
         if (!isAdmin) { info.revert(); return; }
         const { event } = info;
         if (!event.start || !event.end) { info.revert(); return; }
@@ -709,7 +732,9 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             if (updateError) throw updateError;
             await fetchAllEvents(false);
             onDataChange();
-            await notifyScheduledVolunteers(eventId, `O horário do evento "${event.title}" foi alterado.`);
+            const message = `O horário do evento "${event.title}" foi alterado.`;
+            await notifyScheduledVolunteers(eventId, message);
+            await notifyLeadersAndAdmins(message, eventId);
         } catch (err) {
             alert('Erro ao redimensionar evento: ' + getErrorMessage(err));
             info.revert();
@@ -720,55 +745,95 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setIsSaving(true);
         setSaveError(null);
         try {
-            const { volunteer_ids, ...upsertData } = eventPayload;
-            
-            let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', upsertData.date).lt('start_time', upsertData.end_time).gt('end_time', upsertData.start_time);
-            if (upsertData.id) {
-                conflictQuery = conflictQuery.neq('id', upsertData.id);
-            }
-            const { data: conflicts, error: conflictError } = await conflictQuery;
-            if (conflictError) throw conflictError;
-            if (conflicts && conflicts.length > 0) {
-                const c = conflicts[0];
-                throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
-            }
-
-            let savedEvent;
-            const isCreating = !upsertData.id;
-
-            if (isCreating) {
-                const { id, ...insertPayload } = upsertData;
-                const { data: newEvent, error } = await supabase.from('events').insert(insertPayload).select().single();
-                if (error) throw error;
-                savedEvent = newEvent;
-
-                const { data: profiles, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .or('role.eq.leader,role.eq.lider,role.eq.admin');
-
-                if (profileError) {
-                    console.error("Could not fetch leaders/admins for notification:", profileError);
-                } else if (profiles) {
-                    const notifications = profiles.map(p => ({
-                        user_id: p.id,
-                        message: `Novo evento criado: "${savedEvent.name}".`,
-                        type: 'new_event_for_leader' as const,
-                        related_event_id: savedEvent.id,
-                    }));
-                    await createAndSendNotifications(notifications);
-                }
-
-            } else { // Updating
-                const eventId = upsertData.id;
-                const { id, ...updatePayload } = upsertData;
-                const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
-                if (error) throw error;
-                savedEvent = updatedEvent;
+            const isLeader = userRole === 'leader' || userRole === 'lider';
+            const isSchedulingMode = isLeader && eventPayload.id && leaderDepartmentId;
+    
+            if (isSchedulingMode) {
+                const eventId = eventPayload.id;
+                const eventName = eventPayload.name;
+                const newVolunteerIds = new Set(eventPayload.volunteer_ids || []);
+    
+                const { data: currentVolunteersData, error: currentVolError } = await supabase
+                    .from('event_volunteers')
+                    .select('volunteer_id, volunteers(user_id, name)')
+                    .eq('event_id', eventId)
+                    .eq('department_id', leaderDepartmentId);
+    
+                if (currentVolError) throw currentVolError;
                 
-                await notifyScheduledVolunteers(savedEvent.id, `O evento "${savedEvent.name}" foi atualizado. Confira os detalhes.`);
+                const currentVolunteers = currentVolunteersData || [];
+                const currentVolunteerIds = new Set(currentVolunteers.map(v => v.volunteer_id));
+    
+                const addedVolunteerIds = [...newVolunteerIds].filter(id => !currentVolunteerIds.has(id));
+                const removedVolunteers = currentVolunteers.filter(v => !newVolunteerIds.has(v.volunteer_id));
+    
+                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', leaderDepartmentId);
+                if (deleteError) throw deleteError;
+                
+                if (eventPayload.volunteer_ids && eventPayload.volunteer_ids.length > 0) {
+                    const volunteersToInsert = eventPayload.volunteer_ids.map((vol_id: number) => ({
+                        event_id: eventId, volunteer_id: vol_id, department_id: leaderDepartmentId,
+                    }));
+                    const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
+                    if (insertError) throw insertError;
+                }
+    
+                const notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[] = [];
+    
+                if (addedVolunteerIds.length > 0) {
+                    const { data: addedUsers, error: usersError } = await supabase.from('volunteers').select('user_id').in('id', addedVolunteerIds);
+                    if (usersError) console.error("Error fetching added volunteers for notification", usersError);
+                    else if (addedUsers) {
+                        addedUsers.forEach(u => {
+                            if (u.user_id) notifications.push({ user_id: u.user_id, message: `Você foi escalado(a) para o evento "${eventName}".`, type: 'new_schedule', related_event_id: eventId });
+                        });
+                    }
+                }
+    
+                removedVolunteers.forEach(v => {
+                    const volunteer = Array.isArray(v.volunteers) ? v.volunteers[0] : v.volunteers;
+                    if (volunteer?.user_id) {
+                        notifications.push({ user_id: volunteer.user_id, message: `Você foi removido(a) da escala do evento "${eventName}".`, type: 'event_update', related_event_id: eventId });
+                    }
+                });
+                
+                if (notifications.length > 0) await createAndSendNotifications(notifications);
+            
+            } else if (isAdmin) {
+                const { volunteer_ids, ...upsertData } = eventPayload;
+                
+                let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', upsertData.date).lt('start_time', upsertData.end_time).gt('end_time', upsertData.start_time);
+                if (upsertData.id) conflictQuery = conflictQuery.neq('id', upsertData.id);
+                const { data: conflicts, error: conflictError } = await conflictQuery;
+                if (conflictError) throw conflictError;
+                if (conflicts && conflicts.length > 0) {
+                    const c = conflicts[0];
+                    throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
+                }
+    
+                let savedEvent;
+                const isCreating = !upsertData.id;
+    
+                if (isCreating) {
+                    const { id, ...insertPayload } = upsertData;
+                    const { data: newEvent, error } = await supabase.from('events').insert(insertPayload).select().single();
+                    if (error) throw error;
+                    if (!newEvent) throw new Error("Falha ao criar o evento.");
+                    savedEvent = newEvent;
+                    await notifyLeadersAndAdmins(`Novo evento criado: "${savedEvent.name}".`, savedEvent.id);
+                } else {
+                    const eventId = upsertData.id;
+                    const { id, ...updatePayload } = upsertData;
+                    const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
+                    if (error) throw error;
+                    if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
+                    savedEvent = updatedEvent;
+                    const message = `O evento "${savedEvent.name}" foi atualizado. Confira os detalhes.`;
+                    await notifyScheduledVolunteers(savedEvent.id, message);
+                    await notifyLeadersAndAdmins(message, savedEvent.id);
+                }
             }
-
+    
             handleCloseForm();
             onDataChange();
             await fetchAllEvents(false);
@@ -778,6 +843,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             setIsSaving(false);
         }
     };
+    
 
     const handleAddNewEvent = () => {
         const date = selectedDate.toISOString().split('T')[0];
@@ -827,7 +893,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         .mobile-calendar-view.month-view .fc-day-today:not(.fc-day-selected) .fc-daygrid-day-number { color: #2563eb; font-weight: 700; } .mobile-calendar-view.month-view .fc-day.fc-day-selected .fc-daygrid-day-number { background-color: #2563eb; color: white; }
         .mobile-calendar-view.month-view .fc-daygrid-day-events { display: flex; justify-content: center; gap: 3px; margin-top: 4px; height: auto; flex-direction: row; flex-wrap: wrap; padding: 0 2px; }
         .mobile-calendar-view.month-view .fc-daygrid-day-dot { width: 5px; height: 5px; border-radius: 50%; } .mobile-calendar-view.month-view .fc-day-other .fc-daygrid-day-top { opacity: 0.4; }
-        .mobile-calendar-view.month-view .fc-col-header-cell-cushion { font-size: 1rem; color: #334155; font-weight: 700; text-transform: uppercase; padding: 0.5rem 0; }
+        .mobile-calendar-view.month-view .fc-col-header-cell-cushion { font-size: 0.75rem; color: #334155; font-weight: 700; text-transform: uppercase; padding: 0.5rem 0; }
         .mobile-calendar-view.month-view .fc-theme-standard .fc-scrollgrid { border-left: none; border-right: none; } .mobile-calendar-view.month-view .fc-daygrid-day, .mobile-calendar-view.month-view .fc-col-header-cell { border-color: #f8fafc; }
         .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-col-header-cell:first-child, .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-daygrid-day:first-child { border-left-width: 0; }
         .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-col-header-cell:last-child, .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-daygrid-day:last-child { border-right-width: 0; }
@@ -868,7 +934,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                                 datesSet={handleDatesSet}
                                 height="auto"
                                 dayHeaderContent={(arg) => {
-                                    // FIX: Cast dayHeaderFormat to Intl.DateTimeFormatOptions to resolve type mismatch.
                                     const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat as Intl.DateTimeFormatOptions).format(arg.date) : arg.text;
                                     return headerText.replace('.', '');
                                 }}
@@ -950,7 +1015,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                         if (arg.view.type === 'timeGridWeek' || arg.view.type === 'timeGridDay') {
                             return renderDayHeaderContent(arg);
                         }
-                        // FIX: Cast dayHeaderFormat to Intl.DateTimeFormatOptions to resolve type mismatch.
                         const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat as Intl.DateTimeFormatOptions).format(arg.date) : arg.text;
                         return headerText.replace('.', '');
                     }}

@@ -56,7 +56,7 @@ const NotificationToast: React.FC<NotificationToastProps> = ({ notification, onC
                     </div>
                     <div className="ml-3 w-0 flex-1 pt-0.5">
                         <p className="text-sm font-medium text-slate-800">Nova Notificação</p>
-                        <p className="mt-1 text-sm text-slate-600">{notification.message}</p>
+                        <p className="mt-1 text-sm text-slate-600 break-words">{notification.message}</p>
                     </div>
                     <div className="ml-4 flex-shrink-0 flex">
                         <button onClick={handleClose} className="bg-white rounded-md inline-flex text-slate-400 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">

@@ -45,7 +45,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
     try {
       const { data, error: fetchError } = await supabase
         .from('events')
-        .select('*, event_departments(department_id, departments(id, name, leader)), event_volunteers(volunteer_id, department_id, volunteers(id, name, email, initials, departments:departaments))')
+        .select('*, event_departments(department_id, departments(id, name, leader)), event_volunteers(volunteer_id, department_id, volunteers(id, user_id, name, email, initials, departments:departaments))')
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -392,35 +392,73 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         try {
             const isSchedulingMode = isLeader && eventData.id;
             if (isSchedulingMode) {
-                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventData.id).eq('department_id', leaderDepartmentId);
+                const eventId = eventData.id;
+                const eventName = eventData.name;
+                const newVolunteerIds = new Set(eventData.volunteer_ids || []);
+
+                const { data: currentVolunteersData, error: currentVolError } = await supabase
+                    .from('event_volunteers')
+                    .select('volunteer_id, volunteers(user_id, name)')
+                    .eq('event_id', eventId)
+                    .eq('department_id', leaderDepartmentId);
+
+                if (currentVolError) throw currentVolError;
+                
+                const currentVolunteers = currentVolunteersData || [];
+                const currentVolunteerIds = new Set(currentVolunteers.map(v => v.volunteer_id));
+
+                const addedVolunteerIds = [...newVolunteerIds].filter(id => !currentVolunteerIds.has(id));
+                const removedVolunteers = currentVolunteers.filter(v => !newVolunteerIds.has(v.volunteer_id));
+
+                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', leaderDepartmentId);
                 if (deleteError) throw deleteError;
 
                 if (eventData.volunteer_ids && eventData.volunteer_ids.length > 0) {
                     const volunteersToInsert = eventData.volunteer_ids.map((vol_id: number) => ({
-                        event_id: eventData.id, volunteer_id: vol_id, department_id: leaderDepartmentId,
+                        event_id: eventId, volunteer_id: vol_id, department_id: leaderDepartmentId,
                     }));
                     const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
                     if (insertError) throw insertError;
                 }
 
-                if (eventData.volunteer_ids && eventData.volunteer_ids.length > 0) {
-                    const { data: volunteers, error: volError } = await supabase
+                const notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[] = [];
+
+                if (addedVolunteerIds.length > 0) {
+                    const { data: addedUsers, error: usersError } = await supabase
                         .from('volunteers')
                         .select('user_id')
-                        .in('id', eventData.volunteer_ids);
+                        .in('id', addedVolunteerIds);
                     
-                    if (volError) {
-                        console.error("Não foi possível buscar voluntários para notificação:", volError);
-                    } else if (volunteers) {
-                        const notifications = volunteers.map(v => ({
-                            user_id: v.user_id,
-                            message: `Você foi escalado(a) para o evento "${eventData.name}".`,
-                            type: 'new_schedule' as const,
-                            related_event_id: eventData.id,
-                        }));
-                        await createAndSendNotifications(notifications);
+                    if (usersError) {
+                        console.error("Could not fetch added volunteers for notification:", usersError);
+                    } else if (addedUsers) {
+                        addedUsers.filter(u => u.user_id).forEach(u => {
+                            notifications.push({
+                                user_id: u.user_id!,
+                                message: `Você foi escalado(a) para o evento "${eventName}".`,
+                                type: 'new_schedule' as const,
+                                related_event_id: eventId,
+                            });
+                        });
                     }
                 }
+
+                removedVolunteers.forEach(v => {
+                    const volunteer = Array.isArray(v.volunteers) ? v.volunteers[0] : v.volunteers;
+                    if (volunteer?.user_id) {
+                        notifications.push({
+                            user_id: volunteer.user_id,
+                            message: `Você foi removido(a) da escala do evento "${eventName}".`,
+                            type: 'event_update' as const,
+                            related_event_id: eventId,
+                        });
+                    }
+                });
+                
+                if (notifications.length > 0) {
+                    await createAndSendNotifications(notifications);
+                }
+
             } else {
                 const { volunteer_ids, ...eventPayload } = eventData;
 
@@ -507,13 +545,27 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                     } else if (eventVolunteers) {
                         const userIdsToNotify = new Set<string>();
                         eventVolunteers.forEach(ev => {
-                            // FIX: Supabase client can infer a one-to-one join as an array.
-                            // Safely access the first element if it's an array.
                             const volunteer = Array.isArray(ev.volunteers) ? ev.volunteers[0] : ev.volunteers;
                             if (volunteer?.user_id) {
                                 userIdsToNotify.add(volunteer.user_id);
                             }
                         });
+
+                        // Also fetch leaders and admins to notify them of the update
+                        const { data: profiles, error: profileError } = await supabase
+                            .from('profiles')
+                            .select('id')
+                            .or('role.eq.leader,role.eq.lider,role.eq.admin');
+
+                        if (profileError) {
+                            console.error("Could not fetch leaders/admins for update notification:", profileError);
+                        } else if (profiles) {
+                            profiles.forEach(p => {
+                                if (p.id) {
+                                    userIdsToNotify.add(p.id);
+                                }
+                            });
+                        }
                         
                         const notifications = Array.from(userIdsToNotify).map(userId => ({
                             user_id: userId,
@@ -561,12 +613,14 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
             if (volError) {
                 console.error("Não foi possível buscar voluntários para notificação do departamento:", volError);
             } else if (volunteers) {
-                const notifications = volunteers.map(v => ({
-                    user_id: v.user_id,
-                    message: `Um novo evento, "${event.name}", foi adicionado para o seu departamento.`,
-                    type: 'new_event_for_department' as const,
-                    related_event_id: event.id,
-                }));
+                const notifications = volunteers
+                    .filter(v => v.user_id)
+                    .map(v => ({
+                        user_id: v.user_id!,
+                        message: `Um novo evento, "${event.name}", foi adicionado para o seu departamento.`,
+                        type: 'new_event_for_department' as const,
+                        related_event_id: event.id,
+                    }));
                 await createAndSendNotifications(notifications);
             }
         }
