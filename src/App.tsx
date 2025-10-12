@@ -403,4 +403,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-// COLE ATÉ AQUI
