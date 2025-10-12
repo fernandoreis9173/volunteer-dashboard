@@ -202,11 +202,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
           setIsValidating(true);
           setError(null);
     
-          // Supabase client automatically handles the token from the URL.
-          // We wait for the session to be established.
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-          // The user must be in an authenticated state from the invite link.
           if (sessionError || !session || session.user.aud !== 'authenticated') {
             setError("Token de convite inválido ou ausente. Por favor, use o link do seu e-mail.");
             setIsValidating(false);
@@ -233,7 +230,6 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
           setIsValidating(false);
         };
     
-        // A short delay gives the Supabase client time to process the hash.
         const timer = setTimeout(validateTokenAndFetchData, 250);
         return () => clearTimeout(timer);
     
@@ -265,7 +261,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             setError("Por favor, insira seu nome completo.");
             return;
         }
-        if (!phone.replace(/[^\d]/g, '')) {
+        if (isVolunteer && !phone.replace(/[^\d]/g, '')) {
             setError("Por favor, insira seu número de telefone.");
             return;
         }
@@ -342,17 +338,16 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 if (profileError) {
                     throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil. Por favor, contate um administrador.");
                 }
-
-                // Cleanup: Delete the record from the 'volunteers' table if it exists.
-                // This handles cases where a trigger might have incorrectly created a volunteer record.
+                
+                // Cleanup step: If a volunteer record was somehow created (e.g., by a trigger), delete it.
                 const { error: deleteError } = await supabase
                     .from('volunteers')
                     .delete()
                     .eq('user_id', user.id);
 
                 if (deleteError) {
-                    // Log the error but don't block the user, as this is a cleanup operation.
-                    console.error("Cleanup error: Failed to delete potential volunteer record for admin/leader:", deleteError);
+                    // Log the error but don't block the user, as the main process was successful.
+                    console.warn('Could not clean up stray volunteer record during admin/leader registration:', deleteError);
                 }
             }
             
@@ -426,14 +421,14 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                             onChange={() => {}}
                             readOnly
                         />
-                        <InputField 
+                         <InputField 
                             label="Telefone" 
                             type="tel" 
                             name="phone" 
                             value={phone} 
                             onChange={handlePhoneChange} 
                             placeholder="(11) 99876-5432"
-                            required
+                            required={isVolunteer}
                         />
 
                         {isVolunteer && (

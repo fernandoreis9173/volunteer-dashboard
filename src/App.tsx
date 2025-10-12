@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
 import DepartmentsPage from './components/DepartmentsPage';
-// FIX: Corrected import name from SchedulesPage to EventsPage to match the component.
 import EventsPage from './components/SchedulesPage';
 import CalendarPage from './components/CalendarPage';
 import AdminPage from './components/AdminPage';
@@ -28,7 +27,6 @@ interface UserProfileState {
   role: string | null;
   department_id: number | null;
   volunteer_id: number | null;
-  status: string | null;
 }
 
 const pagePermissions: Record<Page, string[]> = {
@@ -77,16 +75,17 @@ const App: React.FC = () => {
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
+  const [isRegistering, setIsRegistering] = useState(getInitialAuthView() === 'accept-invite');
   const [isUserDisabled, setIsUserDisabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
   const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
-  const lastUserId = useRef<string | null>(null);
 
   const hasPermission = useMemo(() => {
     if (!userProfile?.role) {
+        // If there's no profile/role, permission cannot be granted.
         return false;
     }
     const normalizedRole = userProfile.role === 'lider' ? 'leader' : userProfile.role;
@@ -96,28 +95,21 @@ const App: React.FC = () => {
 
   const fetchCoreData = useCallback(async (currentSession: Session) => {
     try {
+        // 1. Check for disabled status
         const userStatus = currentSession.user.user_metadata?.status;
-        const userRole = currentSession.user.user_metadata?.role;
-
         if (userStatus === 'Inativo') {
             setIsUserDisabled(true);
-            setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
-            setIsLoading(false); // Stop loading, render disabled page.
+            setUserProfile(null);
             return;
         }
         setIsUserDisabled(false);
 
+        // 2. Fetch user profile (role, department_id, etc.)
+        const userRole = currentSession.user.user_metadata?.role;
         if (!userRole) {
             console.error("User role not found in metadata.");
             setUserProfile(null);
             return;
-        }
-        
-        // If the user status is pending, we don't need to fetch detailed profiles yet.
-        // The registration page will handle the profile creation.
-        if (userStatus === 'Pendente') {
-             setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null });
-             return;
         }
 
         let profile: UserProfileState | null = null;
@@ -134,7 +126,6 @@ const App: React.FC = () => {
                 role: userRole,
                 department_id: null,
                 volunteer_id: volunteerData?.id ?? null,
-                status: userStatus,
             };
 
         } else { // Admin/Leader
@@ -150,12 +141,11 @@ const App: React.FC = () => {
                 role: userRole,
                 department_id: profileData?.department_id ?? null,
                 volunteer_id: null,
-                status: userStatus,
             };
         }
         setUserProfile(profile);
 
-        // Fetch global data (like unread notifications count) for active users
+        // 3. Fetch global data (like unread notifications count)
         const { count } = await supabase
             .from('notifications')
             .select('*', { count: 'exact', head: true })
@@ -169,19 +159,16 @@ const App: React.FC = () => {
         setIsLoading(false); // Signal that all initial data loading is complete.
     }
   }, []);
-
-  const refetchUserData = useCallback(() => {
-    if (session) {
-        setIsLoading(true);
-        fetchCoreData(session);
-    }
-  }, [session, fetchCoreData]);
   
   const handleRegistrationComplete = useCallback(() => {
-    // After registration, user status is 'Ativo'. We just need to refetch the profile data.
-    refetchUserData();
+    setIsRegistering(false);
+    // After registration is complete, we can allow session updates and fetch the new session.
+    supabase.auth.getSession().then(({ data }) => {
+        setSession(data.session);
+    });
+    // Navigate to the dashboard. App.tsx will see the new session and render the dashboard.
     window.location.hash = '#/dashboard';
-  }, [refetchUserData]);
+  }, []);
 
   const refetchNotificationCount = useCallback(async () => {
     if (session) {
@@ -193,68 +180,56 @@ const App: React.FC = () => {
       setUnreadCount(count ?? 0);
     }
   }, [session]);
+  
+  const refetchUserData = useCallback(() => {
+    if (session) {
+        setIsLoading(true);
+        fetchCoreData(session);
+    }
+  }, [session, fetchCoreData]);
 
     useEffect(() => {
-        // Initialize push notification permission status
-        if ('Notification' in window && 'PushManager' in window) {
-            setPushPermissionStatus(Notification.permission);
-        }
-    }, []);
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (isRegistering) {
+                // During registration, temporarily ignore session changes to prevent the
+                // form from unmounting before it can show the success message.
+                // The `onRegistrationComplete` callback will handle the final state update.
+                return;
+            }
 
-    useEffect(() => {
-        // This is the primary listener for auth changes (login, logout, token refresh).
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-            setSession(newSession);
-             // If session becomes null (logout), we're not loading anymore.
-            if (!newSession) {
+            setSession(session);
+            if (!session) {
                 setIsLoading(false);
-                setUserProfile(null);
             }
         });
 
-        // This handles navigation via URL hash changes.
         const handleHashChange = () => {
+            const newAuthView = getInitialAuthView();
+            if (newAuthView === 'accept-invite') {
+                setIsRegistering(true);
+            }
             setActivePage(getPageFromHash());
-            setAuthView(getInitialAuthView());
+            setAuthView(newAuthView);
         };
 
         window.addEventListener('hashchange', handleHashChange, false);
-        
         return () => {
             subscription.unsubscribe();
             window.removeEventListener('hashchange', handleHashChange, false);
         };
-    }, []);
+    }, [isRegistering]); // Re-subscribe if isRegistering changes
     
     useEffect(() => {
         // This effect runs whenever the session changes to fetch the user profile.
-        // We only refetch all data if the user ID has changed, to avoid reloading
-        // on token refreshes (e.g., when refocusing the tab).
         if (session) {
-            if (session.user.id !== lastUserId.current) {
-                lastUserId.current = session.user.id;
-                setIsLoading(true);
-                fetchCoreData(session);
-            }
+            setIsLoading(true); // Re-enter loading state to fetch profile for new session
+            fetchCoreData(session);
         } else {
-            // User has logged out
-            lastUserId.current = null;
+            // Clear user-specific data on logout
+            setUserProfile(null);
+            setIsUserDisabled(false);
         }
     }, [session, fetchCoreData]);
-
-    useEffect(() => {
-        // Prompt for push notifications after login if permission is 'default'
-        if (!isLoading && userProfile) {
-            const isTargetRole = userProfile.role === 'leader' || userProfile.role === 'lider' || userProfile.role === 'volunteer';
-            if (isTargetRole && pushPermissionStatus === 'default' && !sessionStorage.getItem('pushPromptedThisSession')) {
-                // Delay slightly to ensure UI is stable before showing modal
-                setTimeout(() => {
-                    setIsPushPromptOpen(true);
-                    sessionStorage.setItem('pushPromptedThisSession', 'true');
-                }, 1000);
-            }
-        }
-    }, [isLoading, userProfile, pushPermissionStatus]);
 
     const subscribeToPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {
@@ -356,16 +331,11 @@ const App: React.FC = () => {
         }
     }
 
-    // If there's a session but the user's status is 'Pendente', force them to the registration page.
-    if (userProfile?.status === 'Pendente') {
-        return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
-    }
-
     if (isUserDisabled) {
         return <DisabledUserPage userRole={userProfile?.role ?? null} />;
     }
 
-    // Full-screen permission check, runs after all data is loaded and user status is confirmed as not 'Pendente'.
+    // Full-screen permission check, runs after all data is loaded.
     if (!hasPermission) {
         return <PermissionDeniedPage onNavigate={handleNavigate} />;
     }

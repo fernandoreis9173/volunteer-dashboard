@@ -55,7 +55,8 @@ const Dashboard: React.FC = () => {
             supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(name)), event_volunteers(volunteers(name))').eq('date', todayStr).order('start_time')
         ]);
 
-        const todaySchedules = (todaySchedulesRes.data as DashboardEvent[]) || [];
+        // FIX: Cast to unknown first to resolve type mismatch from Supabase client's inference.
+        const todaySchedules = (todaySchedulesRes.data as unknown as DashboardEvent[]) || [];
 
         const initialStats = {
             activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
@@ -131,7 +132,8 @@ const Dashboard: React.FC = () => {
         // Update state with the rest of the data
         setDashboardData(prev => ({
             ...prev,
-            upcomingSchedules: (upcomingSchedulesRes.data as DashboardEvent[]) || [],
+            // FIX: Cast to unknown first to resolve type mismatch from Supabase client's inference.
+            upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
             activeLeaders: activeLeadersRes.data?.users || [],
             chartData: chartData,
         }));

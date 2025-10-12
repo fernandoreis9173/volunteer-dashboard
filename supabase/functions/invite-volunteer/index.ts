@@ -29,23 +29,16 @@ Deno.serve(async (req)=>{
     }
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // 1. Proactively check if a volunteer with this email already exists in the public table.
-    const { data: existingVolunteer, error: volunteerCheckError } = await supabaseAdmin
+    const { data: existingVolunteer } = await supabaseAdmin
         .from('volunteers')
         .select('id')
         .eq('email', email)
         .maybeSingle();
 
-    if (volunteerCheckError) {
-      console.error("Error checking for existing volunteer:", volunteerCheckError);
-      // Do not block the request, let the auth invitation handle the primary validation.
-    }
-
     if (existingVolunteer) {
       throw new Error(`Um voluntário com o email ${email} já está cadastrado.`);
     }
 
-    // 2. Attempt to invite the user via Supabase Auth.
     const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: {
         name: name,
@@ -56,10 +49,35 @@ Deno.serve(async (req)=>{
 
     if (error) {
       if (error.message.includes('User already registered')) {
-        // If the volunteer check passed, this error means the email belongs to a non-volunteer user (admin/leader).
         throw new Error(`Este e-mail já está em uso por um administrador ou líder. Não é possível cadastrá-lo como voluntário.`);
       }
       throw error;
+    }
+    
+    if (!data.user) throw new Error("A falha no convite não retornou um objeto de usuário.");
+
+    const nameParts = name.trim().split(' ').filter((p: string) => p.length > 0);
+    const calculatedInitials = (
+        (nameParts[0]?.[0] || '') + 
+        (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
+    ).toUpperCase();
+
+    const volunteerPayload = {
+        user_id: data.user.id,
+        email: data.user.email,
+        name: name,
+        initials: calculatedInitials,
+        status: 'Pendente' as const,
+    };
+
+    const { error: volunteerUpsertError } = await supabaseAdmin
+      .from('volunteers')
+      .upsert(volunteerPayload, { onConflict: 'user_id' });
+
+    if (volunteerUpsertError) {
+      console.error("Failed to create/update volunteer profile. Rolling back user invitation.", volunteerUpsertError);
+      await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+      throw new Error(`Falha ao criar o perfil do voluntário. O convite foi cancelado. Erro do banco: ${volunteerUpsertError.message}`);
     }
 
     return new Response(JSON.stringify({

@@ -10,6 +10,9 @@
 // Manter esta função vazia evita bugs e confusão na arquitetura.
 // ===================================================================================
 
+// FIX: Convert this file to a module to scope the 'declare' statement and avoid a global redeclaration error.
+export {};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',

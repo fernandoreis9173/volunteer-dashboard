@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import EventCard from './EventCard';
 import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
-import { Event } from '../types';
+import { Event, NotificationRecord } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import Pagination from './Pagination';
@@ -143,7 +143,8 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
     let lastHeaderPage = 0;
 
     const pageHeader = (docInstance: jsPDF) => {
-        const currentPage = docInstance.internal.getNumberOfPages();
+        // FIX: Cast `docInstance.internal` to `any` to access `getNumberOfPages` which may not be in the type definition.
+        const currentPage = (docInstance.internal as any).getNumberOfPages();
         if (currentPage === lastHeaderPage) {
             return; // Prevent duplicate headers on the same page
         }
@@ -373,139 +374,316 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
     setEventToDeleteId(null);
   };
 
-  const handleSaveEvent = async (eventData: any) => {
-    setIsSaving(true);
-    setSaveError(null);
-    try {
-        const isSchedulingMode = isLeader && eventData.id;
-        if (isSchedulingMode) {
-            const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventData.id).eq('department_id', leaderDepartmentId);
-            if (deleteError) throw deleteError;
-
-            if (eventData.volunteer_ids && eventData.volunteer_ids.length > 0) {
-                const volunteersToInsert = eventData.volunteer_ids.map((vol_id: number) => ({
-                    event_id: eventData.id, volunteer_id: vol_id, department_id: leaderDepartmentId,
-                }));
-                const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
-                if (insertError) throw insertError;
-            }
-        } else {
-            const { id, ...upsertData } = eventData;
-            const { error } = await supabase.from('events').upsert(upsertData).select().single();
-            if (error) throw error;
+    const createAndSendNotifications = async (notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[]) => {
+        if (notifications.length === 0) return;
+        try {
+            const { error: invokeError } = await supabase.functions.invoke('create-notifications', {
+                body: { notifications },
+            });
+            if (invokeError) throw invokeError;
+        } catch (err) {
+            console.error("Falha ao enviar notificações:", getErrorMessage(err));
         }
-        await fetchEvents();
-        hideForm();
-    } catch (err) {
-        setSaveError(getErrorMessage(err));
-    } finally {
-        setIsSaving(false);
-    }
-  };
+    };
+
+    const handleSaveEvent = async (eventData: any) => {
+        setIsSaving(true);
+        setSaveError(null);
+        try {
+            const isSchedulingMode = isLeader && eventData.id;
+            if (isSchedulingMode) {
+                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventData.id).eq('department_id', leaderDepartmentId);
+                if (deleteError) throw deleteError;
+
+                if (eventData.volunteer_ids && eventData.volunteer_ids.length > 0) {
+                    const volunteersToInsert = eventData.volunteer_ids.map((vol_id: number) => ({
+                        event_id: eventData.id, volunteer_id: vol_id, department_id: leaderDepartmentId,
+                    }));
+                    const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
+                    if (insertError) throw insertError;
+                }
+
+                if (eventData.volunteer_ids && eventData.volunteer_ids.length > 0) {
+                    const { data: volunteers, error: volError } = await supabase
+                        .from('volunteers')
+                        .select('user_id')
+                        .in('id', eventData.volunteer_ids);
+                    
+                    if (volError) {
+                        console.error("Não foi possível buscar voluntários para notificação:", volError);
+                    } else if (volunteers) {
+                        const notifications = volunteers.map(v => ({
+                            user_id: v.user_id,
+                            message: `Você foi escalado(a) para o evento "${eventData.name}".`,
+                            type: 'new_schedule' as const,
+                            related_event_id: eventData.id,
+                        }));
+                        await createAndSendNotifications(notifications);
+                    }
+                }
+            } else {
+                const { volunteer_ids, ...eventPayload } = eventData;
+
+                // --- CONFLICT CHECK ---
+                let conflictQuery = supabase
+                    .from('events')
+                    .select('id, name, start_time, end_time')
+                    .eq('date', eventPayload.date)
+                    .lt('start_time', eventPayload.end_time) // Other event starts before this one ends
+                    .gt('end_time', eventPayload.start_time); // Other event ends after this one starts
+                
+                if (eventPayload.id) {
+                    // If editing, exclude the current event from the check
+                    conflictQuery = conflictQuery.neq('id', eventPayload.id);
+                }
+
+                const { data: conflictingEvents, error: conflictError } = await conflictQuery;
+
+                if (conflictError) {
+                    throw new Error(`Erro ao verificar conflitos: ${getErrorMessage(conflictError)}`);
+                }
+
+                if (conflictingEvents && conflictingEvents.length > 0) {
+                    const conflict = conflictingEvents[0];
+                    const conflictMessage = `Conflito de horário com o evento "${conflict.name}" (${conflict.start_time.substring(0,5)} - ${conflict.end_time.substring(0,5)}).`;
+                    throw new Error(conflictMessage);
+                }
+                // --- END CONFLICT CHECK ---
+                
+                let savedEvent;
+                const isCreating = !eventPayload.id;
+
+                if (isCreating) {
+                    // Logic for creating a new event
+                    const { id, ...insertPayload } = eventPayload;
+                    const { data: newEvent, error } = await supabase
+                        .from('events')
+                        .insert(insertPayload)
+                        .select()
+                        .single();
+                    if (error) throw error;
+                    if (!newEvent) throw new Error("Falha ao criar o evento.");
+                    savedEvent = newEvent;
+                } else {
+                    // Logic for updating an existing event
+                    const eventId = eventPayload.id;
+                    const { id, ...updatePayload } = eventPayload;
+                    const { data: updatedEvent, error } = await supabase
+                        .from('events')
+                        .update(updatePayload)
+                        .eq('id', eventId)
+                        .select()
+                        .single();
+                    if (error) throw error;
+                    if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
+                    savedEvent = updatedEvent;
+                }
+
+                if (isCreating) {
+                    const { data: profiles, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('id')
+                        .or('role.eq.leader,role.eq.lider');
+
+                    if (profileError) {
+                        console.error("Não foi possível buscar líderes para notificação:", profileError);
+                    } else if (profiles) {
+                        const notifications = profiles.map(p => ({
+                            user_id: p.id,
+                            message: `Novo evento criado: "${savedEvent.name}". Verifique se é relevante para seu departamento.`,
+                            type: 'new_event_for_leader' as const,
+                            related_event_id: savedEvent.id,
+                        }));
+                        await createAndSendNotifications(notifications);
+                    }
+                } else {
+                    const { data: eventVolunteers, error: evError } = await supabase
+                        .from('event_volunteers')
+                        .select('volunteers(user_id)')
+                        .eq('event_id', savedEvent.id);
+
+                    if (evError) {
+                        console.error("Erro ao buscar usuários para notificação de atualização:", evError);
+                    } else if (eventVolunteers) {
+                        const userIdsToNotify = new Set<string>();
+                        eventVolunteers.forEach(ev => {
+                            // FIX: Supabase client can infer a one-to-one join as an array.
+                            // Safely access the first element if it's an array.
+                            const volunteer = Array.isArray(ev.volunteers) ? ev.volunteers[0] : ev.volunteers;
+                            if (volunteer?.user_id) {
+                                userIdsToNotify.add(volunteer.user_id);
+                            }
+                        });
+                        
+                        const notifications = Array.from(userIdsToNotify).map(userId => ({
+                            user_id: userId,
+                            message: `O evento "${savedEvent.name}" foi atualizado. Confira os detalhes.`,
+                            type: 'event_update' as const,
+                            related_event_id: savedEvent.id,
+                        }));
+                        await createAndSendNotifications(notifications);
+                    }
+                }
+            }
+            await fetchEvents();
+            hideForm();
+        } catch (err) {
+            setSaveError(getErrorMessage(err));
+        } finally {
+            setIsSaving(false);
+        }
+    };
   
-  const handleAddDepartment = async (event: Event) => {
-    if (!leaderDepartmentId || !event.id) return;
-    if (event.event_departments.some(ed => ed.department_id === leaderDepartmentId)) return;
-    const { error } = await supabase.from('event_departments').insert({ event_id: event.id, department_id: leaderDepartmentId });
-    if (error) {
-      alert(`Falha ao adicionar departamento: ${getErrorMessage(error)}`);
-    } else {
-      await fetchEvents();
-    }
-  };
+    const handleAddDepartment = async (event: Event) => {
+        if (!leaderDepartmentId || !event.id) return;
+        if (event.event_departments.some(ed => ed.department_id === leaderDepartmentId)) return;
+        const { error } = await supabase.from('event_departments').insert({ event_id: event.id, department_id: leaderDepartmentId });
+        if (error) {
+            alert(`Falha ao adicionar departamento: ${getErrorMessage(error)}`);
+        } else {
+            await fetchEvents();
+            const { data: dept, error: deptError } = await supabase
+                .from('departments')
+                .select('name')
+                .eq('id', leaderDepartmentId)
+                .single();
 
-  const renderContent = () => {
-    if (loading) return <p className="text-center text-slate-500 mt-10">Carregando eventos...</p>;
-    if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
-    return (
-      <div className="space-y-6">
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                <div className="relative lg:col-span-2">
-                    <label htmlFor="search" className="sr-only">Buscar</label>
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg></div>
-                    <input type="text" id="search" placeholder="Buscar por nome..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-blue-500 text-slate-900 bg-white" />
-                </div>
-                <div className="relative">
-                    <label htmlFor="start" className="block text-sm font-medium text-slate-700 mb-1">Data Início</label>
-                    <input type="date" name="start" id="start" value={dateFilters.start} onChange={handleDateFilterChange} className="w-full pl-3 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-blue-500 text-slate-900 bg-white" />
-                    {dateFilters.start && <button onClick={() => setDateFilters(p => ({...p, start: ''}))} className="absolute right-2 top-8 p-1 text-slate-400 hover:text-slate-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>}
-                </div>
-                <div className="relative">
-                    <label htmlFor="end" className="block text-sm font-medium text-slate-700 mb-1">Data Fim</label>
-                    <input type="date" name="end" id="end" value={dateFilters.end} onChange={handleDateFilterChange} min={dateFilters.start} className="w-full pl-3 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-blue-500 text-slate-900 bg-white" />
-                    {dateFilters.end && <button onClick={() => setDateFilters(p => ({...p, end: ''}))} className="absolute right-2 top-8 p-1 text-slate-400 hover:text-slate-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>}
-                </div>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-4">
-                <div className="relative">
-                    <label htmlFor="status" className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                    <select id="status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="appearance-none w-full md:w-auto pl-3 pr-8 py-2 border border-slate-300 rounded-lg focus:ring-blue-500 text-slate-900 bg-white">
-                        <option value="all">Todos</option><option value="Confirmado">Confirmado</option><option value="Pendente">Pendente</option><option value="Cancelado">Cancelado</option>
-                    </select>
-                    <div className="absolute inset-y-0 right-0 top-6 flex items-center px-2 pointer-events-none"><svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></div>
-                </div>
-                {isLeader && (
-                    <div className="flex items-center pt-6">
-                        <input type="checkbox" id="myDept" checked={showOnlyMyDepartmentEvents} onChange={(e) => setShowOnlyMyDepartmentEvents(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                        <label htmlFor="myDept" className="ml-2 text-sm text-slate-700">Apenas meu departamento</label>
+            if (deptError || !dept) {
+                console.error("Não foi possível encontrar o nome do departamento para notificação", deptError);
+                return;
+            }
+
+            const { data: volunteers, error: volError } = await supabase
+                .from('volunteers')
+                .select('user_id')
+                .contains('departaments', [dept.name]);
+            
+            if (volError) {
+                console.error("Não foi possível buscar voluntários para notificação do departamento:", volError);
+            } else if (volunteers) {
+                const notifications = volunteers.map(v => ({
+                    user_id: v.user_id,
+                    message: `Um novo evento, "${event.name}", foi adicionado para o seu departamento.`,
+                    type: 'new_event_for_department' as const,
+                    related_event_id: event.id,
+                }));
+                await createAndSendNotifications(notifications);
+            }
+        }
+    };
+
+    const renderContent = () => {
+        if (loading) return <p className="text-center text-slate-500 mt-10">Carregando eventos...</p>;
+        if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
+
+        return (
+            <div className="space-y-6">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <input type="text" placeholder="Buscar por nome do evento..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                        <input type="date" name="start" value={dateFilters.start} onChange={handleDateFilterChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                        <input type="date" name="end" value={dateFilters.end} onChange={handleDateFilterChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
+                            <option value="all">Todos os Status</option>
+                            <option value="Confirmado">Confirmado</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Cancelado">Cancelado</option>
+                        </select>
                     </div>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        {isLeader && (
+                        <div className="flex items-center">
+                            <input type="checkbox" id="my-dept-filter" checked={showOnlyMyDepartmentEvents} onChange={(e) => setShowOnlyMyDepartmentEvents(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"/>
+                            <label htmlFor="my-dept-filter" className="ml-2 block text-sm text-slate-900">Mostrar apenas meu departamento</label>
+                        </div>
+                        )}
+                        <button onClick={handleClearFilters} className="text-sm text-blue-600 font-semibold hover:underline">Limpar Filtros</button>
+                    </div>
+                </div>
+
+                {paginatedEvents.length > 0 ? (
+                <>
+                    <div className="space-y-6">
+                        {paginatedEvents.map((event) => (
+                        <EventCard 
+                            key={event.id} 
+                            event={event} 
+                            userRole={userRole}
+                            leaderDepartmentId={leaderDepartmentId}
+                            onEdit={handleEditEvent}
+                            onDelete={handleDeleteRequest}
+                            onAddDepartment={handleAddDepartment}
+                            isHighlighted={event.id === highlightedEventId}
+                            isFilteredByMyDepartment={showOnlyMyDepartmentEvents}
+                        />
+                        ))}
+                    </div>
+                    <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    />
+                </>
+                ) : (
+                <div className="text-center py-12 text-slate-500">
+                    <h3 className="text-lg font-medium text-slate-800">Nenhum evento encontrado</h3>
+                    <p className="mt-1 text-sm">Tente ajustar seus filtros ou adicione um novo evento.</p>
+                </div>
                 )}
-                <button onClick={handleClearFilters} className="mt-6 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg">Limpar Filtros</button>
             </div>
+        );
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                <h1 className="text-3xl font-bold text-slate-800">Eventos (Lista)</h1>
+                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas da igreja</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={handleExportPDF}
+                        className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <span>Exportar PDF</span>
+                    </button>
+                    {isAdmin && (
+                        <button 
+                        onClick={() => { setEditingEvent(null); showForm(); }}
+                        className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            <span>Novo Evento</span>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {isFormOpen ? (
+                <NewEventForm 
+                initialData={editingEvent}
+                onCancel={hideForm}
+                onSave={handleSaveEvent}
+                isSaving={isSaving}
+                saveError={saveError}
+                userRole={userRole}
+                leaderDepartmentId={leaderDepartmentId}
+                />
+            ) : (
+                renderContent()
+            )}
+
+            <ConfirmationModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => {setIsDeleteModalOpen(false); setEventToDeleteId(null);}}
+                onConfirm={handleConfirmDelete}
+                title="Confirmar Exclusão"
+                message="Tem certeza de que deseja excluir este evento? Todos os dados de escala associados serão perdidos."
+            />
         </div>
-        {paginatedEvents.length > 0 ? (
-          <>
-            <div className="space-y-4">
-                {paginatedEvents.map(event => (
-                    <EventCard key={event.id} event={event} userRole={userRole} leaderDepartmentId={leaderDepartmentId} onEdit={handleEditEvent} onDelete={handleDeleteRequest} onAddDepartment={handleAddDepartment} isHighlighted={event.id === highlightedEventId} isFilteredByMyDepartment={showOnlyMyDepartmentEvents} />
-                ))}
-            </div>
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
-          </>
-        ) : (
-            <div className="text-center py-12 text-slate-500"><h3 className="text-lg font-medium text-slate-800">Nenhum evento encontrado</h3><p className="mt-1 text-sm">Tente ajustar seus filtros ou crie um novo evento.</p></div>
-        )}
-      </div>
     );
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Eventos</h1>
-          <p className="text-slate-500 mt-1">Gerencie os eventos e escale os voluntários</p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
-            {(isAdmin || isLeader) && (
-                <button onClick={handleExportPDF} className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm flex items-center justify-center space-x-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                    <span>Visualizar Relatório</span>
-                </button>
-            )}
-            {isAdmin && (
-            <button onClick={() => { setEditingEvent(null); showForm(); }} className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center space-x-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                </svg>
-                <span>Novo Evento</span>
-            </button>
-            )}
-        </div>
-      </div>
-
-      {isFormOpen ? (
-        <NewEventForm initialData={editingEvent} onCancel={hideForm} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} />
-      ) : (
-        renderContent()
-      )}
-
-      <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => {setIsDeleteModalOpen(false); setEventToDeleteId(null);}} onConfirm={handleConfirmDelete} title="Confirmar Exclusão" message="Tem certeza que deseja excluir este evento? Esta ação e todos os dados de escala associados serão perdidos permanentemente." />
-    </div>
-  );
-};
+}
 
 export default EventsPage;
