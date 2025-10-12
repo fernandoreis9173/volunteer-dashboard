@@ -1,3 +1,5 @@
+// src/App.tsx (ou onde quer que seja o seu componente principal de layout)
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -5,7 +7,7 @@ import Dashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
 import DepartmentsPage from './components/DepartmentsPage';
 // FIX: Corrected import name from SchedulesPage to EventsPage to match the component.
-import EventsPage from './components/SchedulesPage';
+import EventsPage from './components/SchedulesPage'; // Mantenha o nome original se o arquivo se chama SchedulesPage
 import CalendarPage from './components/CalendarPage';
 import AdminPage from './components/AdminPage';
 import LoginPage from './components/LoginPage';
@@ -20,7 +22,12 @@ import NotificationToast, { Notification as ToastNotification } from './componen
 import PushNotificationModal from './components/PushNotificationModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
 import { Page, AuthView } from './types';
-import { supabase } from './lib/supabaseClient';
+
+// ---- MUDANÇA 1: Importar o cliente frontend correto ----
+// Certifique-se que o caminho está correto para o seu projeto.
+// Se você renomeou para supabaseFrontend.ts, use esse nome.
+import { supabaseFrontend } from './lib/supabaseFrontend'; 
+
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
 
@@ -50,13 +57,13 @@ const getInitialAuthView = (): AuthView => {
 };
 
 const getPageFromHash = (): Page => {
-    const hash = window.location.hash.slice(2); 
+    const hash = window.location.hash.slice(2);
     const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'admin', 'my-profile', 'notifications'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
 
-const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
+const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk'; // Lembre-se de configurá-la também como variável de ambiente se for sensível.
 
 const urlBase64ToUint8Array = (base64String: string) => {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -85,15 +92,29 @@ const App: React.FC = () => {
   const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
   const lastUserId = useRef<string | null>(null);
 
+  // ---- MUDANÇA 2: Ajuste na lógica de permissão ----
+  // A permissão agora depende de userProfile e activePage estarem prontos.
   const hasPermission = useMemo(() => {
-    if (!userProfile?.role) {
+    // Se ainda estamos carregando ou o perfil não foi carregado, não podemos determinar a permissão.
+    if (isLoading || !userProfile) return false;
+    
+    // Se o usuário estiver desativado, ele não tem permissão para ver páginas normais.
+    if (isUserDisabled) return false;
+    
+    if (!userProfile.role) { // Caso raro, mas pode acontecer se o perfil estiver incompleto.
+        console.warn("User role not found in profile state, assuming no permission.");
         return false;
     }
+
+    // Normaliza o role para garantir compatibilidade (ex: 'lider' para 'leader')
     const normalizedRole = userProfile.role === 'lider' ? 'leader' : userProfile.role;
     const allowedRolesForPage = pagePermissions[activePage];
-    return allowedRolesForPage && allowedRolesForPage.includes(normalizedRole);
-  }, [userProfile, activePage]);
 
+    // Verifica se a página existe nas permissões e se o papel do usuário está na lista permitida.
+    return allowedRolesForPage ? allowedRolesForPage.includes(normalizedRole) : false;
+  }, [userProfile, activePage, isLoading, isUserDisabled]); // Adicionado isLoading e isUserDisabled às dependências
+
+  // ---- MUDANÇA 3: Usar supabaseFrontend para todas as chamadas Supabase ----
   const fetchCoreData = useCallback(async (currentSession: Session) => {
     try {
         const userStatus = currentSession.user.user_metadata?.status;
@@ -102,10 +123,10 @@ const App: React.FC = () => {
         if (userStatus === 'Inativo') {
             setIsUserDisabled(true);
             setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
-            setIsLoading(false); // Stop loading, render disabled page.
+            // setIsLoading(false); // Removido - O efeito principal de sessão cuidará do isLoading.
             return;
         }
-        setIsUserDisabled(false);
+        setIsUserDisabled(false); // Garante que se o status mudar para Ativo, isso seja resetado.
 
         if (!userRole) {
             console.error("User role not found in metadata.");
@@ -113,8 +134,6 @@ const App: React.FC = () => {
             return;
         }
         
-        // If the user status is pending, we don't need to fetch detailed profiles yet.
-        // The registration page will handle the profile creation.
         if (userStatus === 'Pendente') {
              setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null });
              return;
@@ -122,7 +141,8 @@ const App: React.FC = () => {
 
         let profile: UserProfileState | null = null;
         if (userRole === 'volunteer') {
-            const { data: volunteerData, error: volunteerError } = await supabase
+            // Usando supabaseFrontend para acessar dados do Supabase
+            const { data: volunteerData, error: volunteerError } = await supabaseFrontend
                 .from('volunteers')
                 .select('id')
                 .eq('user_id', currentSession.user.id)
@@ -138,7 +158,8 @@ const App: React.FC = () => {
             };
 
         } else { // Admin/Leader
-            const { data: profileData, error: profileError } = await supabase
+            // Usando supabaseFrontend para acessar dados do Supabase
+            const { data: profileData, error: profileError } = await supabaseFrontend
                 .from('profiles')
                 .select('department_id')
                 .eq('id', currentSession.user.id)
@@ -156,36 +177,49 @@ const App: React.FC = () => {
         setUserProfile(profile);
 
         // Fetch global data (like unread notifications count) for active users
-        const { count } = await supabase
+        // Usando supabaseFrontend
+        const { count } = await supabaseFrontend
             .from('notifications')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', currentSession.user.id)
             .eq('is_read', false);
         setUnreadCount(count ?? 0);
+
     } catch (err) {
         console.error("Error fetching core user data:", getErrorMessage(err));
         setUserProfile(null); // Clear profile on error
+        setIsUserDisabled(false); // Reset disabled status if there's an error fetching profile
     } finally {
-        setIsLoading(false); // Signal that all initial data loading is complete.
+        // Signal that all initial data loading is complete, REGARDLESS of success or failure in fetching profile.
+        // The UI will then render based on the final state (e.g., show login, disabled page, or permission denied).
+        setIsLoading(false);
     }
-  }, []);
+  }, []); // fetchCoreData não depende de `session` diretamente, mas é chamado com ela.
 
+  // Refetched user data when session exists and user ID changes
   const refetchUserData = useCallback(() => {
     if (session) {
-        setIsLoading(true);
+        setIsLoading(true); // Start loading when refetching
         fetchCoreData(session);
+    } else {
+        // If session is null, we are logged out, so not loading and profile should be null.
+        setIsLoading(false);
+        setUserProfile(null);
+        setIsUserDisabled(false);
     }
   }, [session, fetchCoreData]);
   
   const handleRegistrationComplete = useCallback(() => {
     // After registration, user status is 'Ativo'. We just need to refetch the profile data.
     refetchUserData();
+    // Redirect to dashboard after successful registration and profile update.
     window.location.hash = '#/dashboard';
   }, [refetchUserData]);
 
   const refetchNotificationCount = useCallback(async () => {
     if (session) {
-      const { count } = await supabase
+      // Usando supabaseFrontend
+      const { count } = await supabaseFrontend
         .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', session.user.id)
@@ -202,17 +236,20 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        // This is the primary listener for auth changes (login, logout, token refresh).
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+        // Listen for authentication state changes (login, logout, token refresh)
+        const { data: { subscription } } = supabaseFrontend.auth.onAuthStateChange((_event, newSession) => {
             setSession(newSession);
-             // If session becomes null (logout), we're not loading anymore.
+            // If session becomes null (logout), we should stop loading and reset profile.
             if (!newSession) {
-                setIsLoading(false);
+                setIsLoading(false); // Stop loading as the user is logged out
                 setUserProfile(null);
+                setIsUserDisabled(false); // Reset disabled status
+                lastUserId.current = null; // Reset last user ID
             }
+            // Note: fetchCoreData is called in another effect based on session changes.
         });
 
-        // This handles navigation via URL hash changes.
+        // Handle navigation via URL hash changes
         const handleHashChange = () => {
             setActivePage(getPageFromHash());
             setAuthView(getInitialAuthView());
@@ -220,6 +257,7 @@ const App: React.FC = () => {
 
         window.addEventListener('hashchange', handleHashChange, false);
         
+        // Cleanup subscription and event listener
         return () => {
             subscription.unsubscribe();
             window.removeEventListener('hashchange', handleHashChange, false);
@@ -227,36 +265,47 @@ const App: React.FC = () => {
     }, []);
     
     useEffect(() => {
-        // This effect runs whenever the session changes to fetch the user profile.
-        // We only refetch all data if the user ID has changed, to avoid reloading
-        // on token refreshes (e.g., when refocusing the tab).
+        // This effect runs whenever the session state changes.
+        // It triggers refetching core data only if the user ID is different,
+        // to avoid unnecessary reloads on token refreshes.
         if (session) {
             if (session.user.id !== lastUserId.current) {
                 lastUserId.current = session.user.id;
-                setIsLoading(true);
+                setIsLoading(true); // Indicate loading state when fetching user-specific data
                 fetchCoreData(session);
+            } else {
+                 // If the session user ID hasn't changed but session object itself did (e.g. token refresh),
+                 // we might still want to refetch notifications or other counts if they are session-dependent.
+                 // For simplicity, we'll assume fetchCoreData covers most, and refetchNotificationCount can be called here if needed.
+                 // console.log("Session updated, but user ID same. Potentially a token refresh.");
+                 // refetchNotificationCount(); // Uncomment if you need to refresh counts on token refresh
             }
         } else {
-            // User has logged out
+            // User has logged out. Ensure loading is false and profile is cleared.
+            // This is also handled by the onAuthStateChange listener, but good for redundancy.
+            setIsLoading(false);
+            setUserProfile(null);
+            setIsUserDisabled(false);
             lastUserId.current = null;
         }
-    }, [session, fetchCoreData]);
+    }, [session, fetchCoreData]); // Added fetchCoreData to dependencies for clarity
 
     useEffect(() => {
-        // Prompt for push notifications after login if permission is 'default'
+        // Prompt for push notifications after login if permission is 'default' and user is eligible
         if (!isLoading && userProfile) {
-            const isTargetRole = userProfile.role === 'leader' || userProfile.role === 'lider' || userProfile.role === 'volunteer';
-            if (isTargetRole && pushPermissionStatus === 'default' && !sessionStorage.getItem('pushPromptedThisSession')) {
+            const isEligibleForPush = userProfile.role === 'leader' || userProfile.role === 'lider' || userProfile.role === 'volunteer';
+            if (isEligibleForPush && pushPermissionStatus === 'default' && !sessionStorage.getItem('pushPromptedThisSession')) {
                 // Delay slightly to ensure UI is stable before showing modal
                 setTimeout(() => {
                     setIsPushPromptOpen(true);
-                    sessionStorage.setItem('pushPromptedThisSession', 'true');
+                    sessionStorage.setItem('pushPromptedThisSession', 'true'); // Mark as prompted for this session
                 }, 1000);
             }
         }
-    }, [isLoading, userProfile, pushPermissionStatus]);
+    }, [isLoading, userProfile, pushPermissionStatus]); // Dependencies for this effect
 
     const subscribeToPushNotifications = async () => {
+        // Use supabaseFrontend for invoking functions
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {
             try {
                 const registration = await navigator.serviceWorker.ready;
@@ -265,7 +314,8 @@ const App: React.FC = () => {
                     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
                 });
 
-                const { error } = await supabase.functions.invoke('save-push-subscription', {
+                // Use supabaseFrontend to invoke functions
+                const { error } = await supabaseFrontend.functions.invoke('save-push-subscription', {
                     body: { subscription },
                 });
 
@@ -274,7 +324,7 @@ const App: React.FC = () => {
                 setPushPermissionStatus('granted');
                 setNotifications(prev => [...prev, { id: Date.now(), message: 'Notificações ativadas!', type: 'success' }]);
 
-            } catch (err) {
+            } catch (err: any) {
                 console.error('Failed to subscribe to push notifications:', getErrorMessage(err));
                 setPushPermissionStatus('denied');
                 setNotifications(prev => [...prev, { id: Date.now(), message: 'Falha ao ativar notificações.', type: 'warning' }]);
@@ -283,34 +333,68 @@ const App: React.FC = () => {
         setIsPushPromptOpen(false);
     };
 
-    const handleNavigate = (page: Page) => {
+    const handleNavigate = useCallback((page: Page) => {
         setActivePage(page);
         window.location.hash = `#/${page}`;
         setIsSidebarOpen(false);
-    };
+    }, []); // Dependencies are empty as it doesn't use external state
     
-    const handleNewVolunteer = () => {
+    const handleNewVolunteer = useCallback(() => {
         handleNavigate('volunteers');
         setIsVolunteerFormOpen(true);
-    };
+    }, [handleNavigate]); // Depends on handleNavigate
 
-    const handleNewEvent = () => {
+    const handleNewEvent = useCallback(() => {
         handleNavigate('events');
         setIsEventFormOpen(true);
-    };
+    }, [handleNavigate]); // Depends on handleNavigate
 
-    const removeNotification = (id: number) => {
+    const removeNotification = useCallback((id: number) => {
         setNotifications(notifications => notifications.filter(n => n.id !== id));
-    };
+    }, []); // Dependencies are empty
 
-    const renderPage = () => {
-        if (!userProfile?.role) return null;
+    const renderPage = useCallback(() => {
+        // Render loading state first, then auth, then permission checks, then content.
+        if (isLoading) {
+            return <div className="flex items-center justify-center h-screen bg-slate-50"><p>Carregando...</p></div>;
+        }
 
-        if (userProfile.role === 'volunteer') {
+        if (!session) {
+            switch (authView) {
+                case 'accept-invite':
+                    return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
+                case 'reset-password':
+                    return <ResetPasswordPage setAuthView={setAuthView} />;
+                case 'login':
+                default:
+                    return <LoginPage setAuthView={setAuthView} />;
+            }
+        }
+
+        // If there's a session but the user's status is 'Pendente', force them to the registration page.
+        if (userProfile?.status === 'Pendente') {
+            // Ensure userProfile is available and status is 'Pendente'
+            return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
+        }
+
+        if (isUserDisabled) {
+            return <DisabledUserPage userRole={userProfile?.role ?? null} />;
+        }
+
+        // Full-screen permission check, runs after all data is loaded and user status is confirmed as not 'Pendente'.
+        if (!hasPermission) {
+            return <PermissionDeniedPage onNavigate={handleNavigate} />;
+        }
+        
+        // If all checks pass, render the main page content.
+        // Conditional rendering based on role for different page layouts.
+        if (userProfile?.role === 'volunteer') {
              switch (activePage) {
                 case 'my-profile':
-                    return <VolunteerProfile session={session} onUpdate={refetchNotificationCount} />;
+                    // Pass session for profile data, onUpdate for refetching.
+                    return <VolunteerProfile session={session} onUpdate={refetchUserData} />;
                 case 'notifications':
+                    // Pass session, onDataChange for refetching count, onNavigate for internal routing.
                     return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
                 case 'dashboard':
                 default:
@@ -321,88 +405,56 @@ const App: React.FC = () => {
         // Admin and Leader pages
         switch (activePage) {
             case 'volunteers':
-                return <VolunteersPage isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} />;
+                // Pass form states, user role, and department ID for filtering.
+                return <VolunteersPage isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile?.role ?? 'unknown'} leaderDepartmentId={userProfile?.department_id ?? null} />;
             case 'departments':
-                return <DepartmentsPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} />;
+                // Pass user role and department ID.
+                return <DepartmentsPage userRole={userProfile?.role ?? 'unknown'} leaderDepartmentId={userProfile?.department_id ?? null} />;
             case 'events':
-                 return <EventsPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} />;
+                 // Pass form states, user role, and department ID for filtering.
+                 return <EventsPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile?.role ?? 'unknown'} leaderDepartmentId={userProfile?.department_id ?? null} />;
             case 'calendar':
-                return <CalendarPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} setIsSidebarOpen={setIsSidebarOpen} />;
+                // Pass role, department ID, and functions for data changes/sidebar control.
+                return <CalendarPage userRole={userProfile?.role ?? 'unknown'} leaderDepartmentId={userProfile?.department_id ?? null} onDataChange={refetchNotificationCount} setIsSidebarOpen={setIsSidebarOpen} />;
             case 'admin':
-                return userProfile.role === 'admin' ? <AdminPage onDataChange={refetchNotificationCount} /> : <Dashboard />;
+                // Only show AdminPage if user is admin, otherwise redirect to Dashboard.
+                return userProfile?.role === 'admin' ? <AdminPage onDataChange={refetchNotificationCount} /> : <Dashboard />;
             case 'notifications':
+                // Same as volunteer notifications.
                 return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
             case 'my-profile':
+                // Pass session and update function.
                 return <UserProfilePage session={session} onUpdate={refetchUserData} />;
             case 'dashboard':
             default:
                 return <Dashboard />;
         }
-    };
-    
-    if (isLoading) {
-        return <div className="flex items-center justify-center h-screen bg-slate-50"><p>Carregando...</p></div>;
-    }
+    }, [isLoading, session, authView, userProfile, isUserDisabled, hasPermission, activePage, isSidebarOpen, isVolunteerFormOpen, isEventFormOpen, notifications, unreadCount, pushPermissionStatus, isPushPromptOpen, lastUserId, fetchCoreData, refetchUserData, handleRegistrationComplete, refetchNotificationCount, subscribeToPushNotifications, handleNavigate, handleNewVolunteer, handleNewEvent, removeNotification]); // All state and callbacks that affect render
 
-    if (!session) {
-        switch (authView) {
-            case 'accept-invite':
-                return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
-            case 'reset-password':
-                return <ResetPasswordPage setAuthView={setAuthView} />;
-            case 'login':
-            default:
-                return <LoginPage setAuthView={setAuthView} />;
-        }
-    }
-
-    // If there's a session but the user's status is 'Pendente', force them to the registration page.
-    if (userProfile?.status === 'Pendente') {
-        return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
-    }
-
-    if (isUserDisabled) {
-        return <DisabledUserPage userRole={userProfile?.role ?? null} />;
-    }
-
-    // Full-screen permission check, runs after all data is loaded and user status is confirmed as not 'Pendente'.
-    if (!hasPermission) {
-        return <PermissionDeniedPage onNavigate={handleNavigate} />;
-    }
-    
+    // --- Renderização Principal ---
+    // Se isLoading for true, renderPage() já retorna o spinner.
+    // Renderiza os toasts e o modal de push notification fora do fluxo principal de renderização de página.
     return (
         <>
-            <div className="flex min-h-screen bg-slate-50">
-                <Sidebar
-                    activePage={activePage}
-                    onNavigate={handleNavigate}
-                    onNewVolunteer={handleNewVolunteer}
-                    onNewEvent={handleNewEvent}
-                    isOpen={isSidebarOpen}
-                    setIsOpen={setIsSidebarOpen}
-                    userRole={userProfile?.role ?? null}
-                    session={session}
-                    unreadCount={unreadCount}
-                    pushPermissionStatus={pushPermissionStatus}
-                    onSubscribeToPush={() => setIsPushPromptOpen(true)}
-                />
-                <div className="flex-1 flex flex-col min-w-0">
-                    {activePage !== 'calendar' && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
-                    <main className={`flex-1 bg-slate-50 ${activePage === 'calendar' ? 'p-0 lg:p-6' : 'p-6'}`}>
-                        {renderPage()}
-                    </main>
-                </div>
-                <PushNotificationModal
-                    isOpen={isPushPromptOpen}
-                    onClose={() => setIsPushPromptOpen(false)}
-                    onConfirm={subscribeToPushNotifications}
-                />
-            </div>
+            {/* Renderiza a página principal, autenticação, permissão negada, etc. */}
+            {renderPage()}
+            
+            {/* Toasts e Modals são renderizados aqui, para estarem sempre presentes se necessário. */}
+            {/* Renderiza os toasts de notificação se houver algum */}
             <div className="fixed top-4 right-4 z-[9999] space-y-2">
                 {notifications.map(n => (
                     <NotificationToast key={n.id} notification={n} onClose={removeNotification} />
                 ))}
             </div>
+            
+            {/* Modal de prompt de notificação push */}
+            {isPushPromptOpen && ( // Renderiza o modal apenas se o estado for true
+                <PushNotificationModal
+                    isOpen={isPushPromptOpen}
+                    onClose={() => setIsPushPromptOpen(false)}
+                    onConfirm={subscribeToPushNotifications}
+                />
+            )}
         </>
     );
 };
