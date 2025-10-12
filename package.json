@@ -1,35 +1,29 @@
 {
-  "name": "volunteer-dashboard",
+  "name": "volunteers",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "start": "serve -s dist -l 3000"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@fullcalendar/core": "^6.1.19",
-    "@fullcalendar/daygrid": "^6.1.19",
-    "@fullcalendar/interaction": "^6.1.19",
-    "@fullcalendar/react": "^6.1.19",
-    "@fullcalendar/timegrid": "^6.1.19",
-    "@supabase/supabase-js": "^2.74.0",
-    "jspdf": "^3.0.3",
-    "jspdf-autotable": "^5.0.2",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "recharts": "^3.2.1",
-    "serve": "^14.2.5",
-    "sirv-cli": "^2.0.2"
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "@supabase/supabase-js": "2.44.4",
+    "jspdf": "2.5.1",
+    "jspdf-autotable": "3.8.2",
+    "recharts": "2.12.7",
+    "@fullcalendar/react": "6.1.14",
+    "@fullcalendar/core": "6.1.14",
+    "@fullcalendar/daygrid": "6.1.14",
+    "@fullcalendar/timegrid": "6.1.14",
+    "@fullcalendar/interaction": "6.1.14"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "autoprefixer": "^10.4.21",
-    "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
