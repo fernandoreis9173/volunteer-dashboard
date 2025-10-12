@@ -3,7 +3,8 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { EventInput, EventClickArg, EventDropArg, DayHeaderContentArg, EventContentArg, DatesSetArg, EventResizeDoneArg } from '@fullcalendar/core';
+// FIX: Changed EventResizeDoneArg to EventResizeArg to match the current FullCalendar API.
+import { EventInput, EventClickArg, EventDropArg, DayHeaderContentArg, EventContentArg, DatesSetArg, EventResizeArg } from '@fullcalendar/core';
 import ptBrBaseLocale from '@fullcalendar/core/locales/pt-br';
 
 import NewEventForm from './NewScheduleForm';
@@ -688,7 +689,8 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         }
     };
     
-    const handleEventResize = async (info: EventResizeDoneArg) => {
+    // FIX: Changed EventResizeDoneArg to EventResizeArg to match the current FullCalendar API.
+    const handleEventResize = async (info: EventResizeArg) => {
         if (!isAdmin) { info.revert(); return; }
         const { event } = info;
         if (!event.start || !event.end) { info.revert(); return; }
@@ -866,7 +868,8 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                                 datesSet={handleDatesSet}
                                 height="auto"
                                 dayHeaderContent={(arg) => {
-                                    const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat).format(arg.date) : arg.text;
+                                    // FIX: Cast dayHeaderFormat to Intl.DateTimeFormatOptions to resolve type mismatch.
+                                    const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat as Intl.DateTimeFormatOptions).format(arg.date) : arg.text;
                                     return headerText.replace('.', '');
                                 }}
                             />
@@ -947,7 +950,8 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                         if (arg.view.type === 'timeGridWeek' || arg.view.type === 'timeGridDay') {
                             return renderDayHeaderContent(arg);
                         }
-                        const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat).format(arg.date) : arg.text;
+                        // FIX: Cast dayHeaderFormat to Intl.DateTimeFormatOptions to resolve type mismatch.
+                        const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat as Intl.DateTimeFormatOptions).format(arg.date) : arg.text;
                         return headerText.replace('.', '');
                     }}
                     eventContent={renderPillEventContent}
