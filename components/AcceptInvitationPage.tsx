@@ -171,12 +171,12 @@ const TagInputField: React.FC<{
 };
 
 
-// FIX: Define the props interface for the component to resolve the "Cannot find name" error.
 interface AcceptInvitationPageProps {
     setAuthView: (view: AuthView) => void;
+    onRegistrationComplete: () => void;
 }
 
-export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setAuthView }) => {
+export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setAuthView, onRegistrationComplete }) => {
     const [isValidating, setIsValidating] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -265,6 +265,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             setError("Por favor, insira seu nome completo.");
             return;
         }
+        if (!phone.replace(/[^\d]/g, '')) {
+            setError("Por favor, insira seu número de telefone.");
+            return;
+        }
         if (password.length < 6) {
             setError("A senha deve ter pelo menos 6 caracteres.");
             return;
@@ -286,7 +290,11 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
 
             const { data: authData, error: updateError } = await supabase.auth.updateUser({
                 password: password,
-                data: { name: fullName, status: 'Ativo' }
+                data: { 
+                    name: fullName, 
+                    status: 'Ativo',
+                    phone: phone.replace(/[^\d]/g, '')
+                }
             });
 
             if (updateError) throw updateError;
@@ -351,11 +359,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para o painel...');
             
             setTimeout(() => {
-                // The user is logged in after setting the password.
-                // We just need to change the hash and let the App component take over.
-                window.location.hash = '#/dashboard';
-                // A full reload ensures the App's state is completely fresh.
-                window.location.reload();
+                onRegistrationComplete();
             }, 2000);
 
         } catch (error: any) {
@@ -392,10 +396,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                       </div>
                     </div>
                     <h1 className="text-3xl font-bold text-slate-800">
-                        Ative Sua Conta
+                        Complete seu Cadastro
                     </h1>
                     <p className="mt-2 text-slate-500">
-                        Você foi convidado para o Sistema de Voluntários. Complete seu perfil e crie uma senha para começar.
+                        Você foi convidado para o Sistema de Voluntários. Preencha seus dados e crie uma senha para começar.
                     </p>
                 </div>
 
@@ -422,18 +426,18 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                             onChange={() => {}}
                             readOnly
                         />
+                        <InputField 
+                            label="Telefone" 
+                            type="tel" 
+                            name="phone" 
+                            value={phone} 
+                            onChange={handlePhoneChange} 
+                            placeholder="(11) 99876-5432"
+                            required
+                        />
 
                         {isVolunteer && (
                             <>
-                                <InputField 
-                                    label="Telefone" 
-                                    type="tel" 
-                                    name="phone" 
-                                    value={phone} 
-                                    onChange={handlePhoneChange} 
-                                    placeholder="(11) 99876-5432"
-                                />
-
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
                                     <SmartSearch

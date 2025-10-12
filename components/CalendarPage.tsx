@@ -3,21 +3,53 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-// FIX: Removed DateClickArg from import as it's not exported from @fullcalendar/core in some configurations. An inline type will be used instead.
-import { EventInput, EventClickArg, EventDropArg, DayHeaderContentArg, EventContentArg, DatesSetArg } from '@fullcalendar/core';
-import ptBrLocale from '@fullcalendar/core/locales/pt-br';
+import { EventInput, EventClickArg, EventDropArg, DayHeaderContentArg, EventContentArg, DatesSetArg, EventResizeDoneArg } from '@fullcalendar/core';
+import ptBrBaseLocale from '@fullcalendar/core/locales/pt-br';
 
 import NewEventForm from './NewScheduleForm';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 
+// --- Status Filter Component & Options ---
+const statusOptions = [
+    { value: 'Confirmado', label: 'Confirmado', color: 'bg-green-500', checkboxClass: 'text-green-600' },
+    { value: 'Pendente', label: 'Pendente', color: 'bg-yellow-500', checkboxClass: 'text-yellow-600' },
+    { value: 'Cancelado', label: 'Cancelado', color: 'bg-red-500', checkboxClass: 'text-red-600' }
+];
+
+interface StatusFilterProps {
+    statusFilters: string[];
+    onStatusFilterChange: (status: string) => void;
+    isMobile?: boolean;
+}
+
+const StatusFilter: React.FC<StatusFilterProps> = ({ statusFilters, onStatusFilterChange, isMobile = false }) => {
+    return (
+        <div className={`flex gap-4 ${isMobile ? 'flex-col items-start' : 'flex-row items-center'}`}>
+            {statusOptions.map(option => (
+                <label key={option.value} htmlFor={`filter-${option.value}-${isMobile}`} className="flex items-center cursor-pointer">
+                    <input
+                        type="checkbox"
+                        id={`filter-${option.value}-${isMobile}`}
+                        checked={statusFilters.includes(option.value)}
+                        onChange={() => onStatusFilterChange(option.value)}
+                        className={`h-4 w-4 rounded border-slate-300 focus:ring-2 focus:ring-offset-1 ${option.checkboxClass} ${option.checkboxClass.replace('text-', 'focus:ring-')}`}
+                    />
+                    <span className={`ml-2 h-2.5 w-2.5 rounded-full ${option.color}`}></span>
+                    <span className="ml-1.5 text-sm font-medium text-slate-700">{option.label}</span>
+                </label>
+            ))}
+        </div>
+    );
+};
+
 // --- Color & Style Logic ---
 
 const PREDEFINED_COLORS: { [key: string]: { bg: string, text: string, border: string } } = {
     '#3b82f6': { bg: '#dbeafe', text: '#1e40af', border: '#93c5fd' }, // Blue
     '#22c55e': { bg: '#dcfce7', text: '#166534', border: '#86efac' }, // Green
-    '#f59e0b': { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' }, // Amber
+    '#f59e0b': { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' }, // Amber (was transparent border)
     '#ef4444': { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5' }, // Red
     'purple': { bg: '#f5f3ff', text: '#5b21b6', border: '#ddd6fe' },
     'orange': { bg: '#fff7ed', text: '#9a3412', border: '#fed7aa' },
@@ -29,13 +61,28 @@ const departmentColorMap = new Map<number, {bg: string, text: string, border: st
 let lastColorIndex = 0;
 
 const getDepartmentColor = (departmentId?: number) => {
-    if (!departmentId) return { bg: '#f1f5f9', text: '#334155', border: '#e2e8f0' };
+    if (!departmentId) return PREDEFINED_COLORS['orange']; // Default to orange
     if (!departmentColorMap.has(departmentId)) {
         departmentColorMap.set(departmentId, PASTEL_COLORS[lastColorIndex % PASTEL_COLORS.length]);
         lastColorIndex++;
     }
     return departmentColorMap.get(departmentId)!;
 };
+
+// --- Custom Header Renderers ---
+const dayNamesShort = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+const renderDayHeaderContent = (arg: DayHeaderContentArg) => {
+    const dayName = dayNamesShort[arg.date.getDay()];
+    const dayNumber = new Intl.DateTimeFormat('pt-BR', { day: 'numeric' }).format(arg.date);
+    return (
+        <div className="day-header-container">
+            <div className="day-name">{dayName}</div>
+            <div className="day-number">{String(dayNumber).padStart(2, '0')}</div>
+        </div>
+    );
+};
+
 
 // --- Mobile-Specific Components & Hooks ---
 const isSameDay = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
@@ -53,23 +100,27 @@ const useIsMobile = (breakpoint = 1024) => { // Using lg breakpoint
 type MobileView = 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth';
 
 const MobileHeader: React.FC<{ 
-    selectedDate: Date; 
+    title: string;
     onMenuClick: () => void; 
     currentView: MobileView;
     onViewChange: (view: MobileView) => void;
-}> = ({ selectedDate, onMenuClick, currentView, onViewChange }) => {
+    onPrev: () => void;
+    onNext: () => void;
+    onToday: () => void;
+    statusFilters: string[];
+    onStatusFilterChange: (status: string) => void;
+}> = ({ title, onMenuClick, currentView, onViewChange, onPrev, onNext, onToday, statusFilters, onStatusFilterChange }) => {
     const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+    const viewDropdownRef = useRef<HTMLDivElement>(null);
+    const filterDropdownRef = useRef<HTMLDivElement>(null);
 
-    const formattedDate = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).format(selectedDate).replace(/\./g, '');
-    const parts = formattedDate.split(' de ');
-    const displayDate = `${parts[0]} De ${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)}`;
-
-    const viewLabels: Record<MobileView, string> = {
-        timeGridDay: 'Dia',
-        timeGridWeek: 'Semana',
-        dayGridMonth: 'Mês'
-    };
+    const viewOptions: {key: MobileView, label: string, shortcut: string}[] = [
+        { key: 'dayGridMonth', label: 'Mês', shortcut: 'M' },
+        { key: 'timeGridWeek', label: 'Semana', shortcut: 'W' },
+        { key: 'timeGridDay', label: 'Dia', shortcut: 'D' }
+    ];
+    const currentViewLabel = viewOptions.find(v => v.key === currentView)?.label || 'Dia';
 
     const handleViewSelect = (view: MobileView) => {
         onViewChange(view);
@@ -78,8 +129,11 @@ const MobileHeader: React.FC<{
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            if (viewDropdownRef.current && !viewDropdownRef.current.contains(event.target as Node)) {
                 setIsViewDropdownOpen(false);
+            }
+            if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+                setIsFilterDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -87,24 +141,49 @@ const MobileHeader: React.FC<{
     }, []);
 
     return (
-        <div className="px-6 py-4 bg-white">
-            <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-2">
-                    {currentView !== 'dayGridMonth' && <h2 className="text-2xl font-bold text-slate-900 capitalize">{displayDate}</h2>}
+        <div className="px-4 py-3 bg-white border-b border-slate-200">
+            {/* Top row for navigation */}
+            <div className="flex justify-between items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Anterior">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <h2 className="text-base font-bold text-slate-800 capitalize text-center truncate">{title}</h2>
+                    <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Próximo">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </button>
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="relative" ref={dropdownRef}>
-                        <button onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-lg text-slate-700 font-semibold text-sm transition-colors hover:bg-slate-200" aria-haspopup="true" aria-expanded={isViewDropdownOpen}>
-                            <span>{viewLabels[currentView]}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${isViewDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                <button onClick={onMenuClick} className="p-2 text-slate-600 hover:text-slate-900 flex-shrink-0" aria-label="Open menu">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                </button>
+            </div>
+            
+            {/* Bottom row for controls and filters */}
+            <div className="mt-4 flex justify-between items-center">
+                <div className="flex items-center gap-1 sm:gap-2">
+                    <button onClick={onToday} className="bg-white border border-slate-300 text-slate-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-slate-50 text-sm">
+                        Hoje
+                    </button>
+                    <div className="relative" ref={viewDropdownRef}>
+                        <button
+                            onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors"
+                            aria-haspopup="true"
+                            aria-expanded={isViewDropdownOpen}
+                        >
+                            <span>{currentViewLabel}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
                         </button>
                         {isViewDropdownOpen && (
-                            <div className="absolute right-0 mt-2 w-32 bg-white rounded-lg shadow-lg border border-slate-200 z-10" role="menu">
+                            <div className="absolute left-0 mt-2 w-36 bg-white rounded-lg shadow-lg border border-slate-200 z-10" role="menu">
                                 <ul className="py-1">
-                                    {Object.keys(viewLabels).map((view) => (
-                                        <li key={view}>
-                                            <button onClick={() => handleViewSelect(view as MobileView)} className={`w-full text-left px-4 py-2 text-sm transition-colors ${currentView === view ? 'font-semibold text-blue-600 bg-blue-50' : 'text-slate-700 hover:bg-slate-100'}`} role="menuitem">
-                                                {viewLabels[view as MobileView]}
+                                    {viewOptions.map((viewOption) => (
+                                        <li key={viewOption.key}>
+                                            <button onClick={() => handleViewSelect(viewOption.key)} className={`w-full text-left px-4 py-2 text-sm flex justify-between items-center transition-colors ${currentView === viewOption.key ? 'font-semibold text-blue-600 bg-blue-50' : 'text-slate-700 hover:bg-slate-100'}`} role="menuitem">
+                                                <span>{viewOption.label}</span>
+                                                <span className="text-xs text-slate-400">{viewOption.shortcut}</span>
                                             </button>
                                         </li>
                                     ))}
@@ -112,9 +191,24 @@ const MobileHeader: React.FC<{
                             </div>
                         )}
                     </div>
-                    <button onClick={onMenuClick} className="p-2 text-slate-600 hover:text-slate-900" aria-label="Open menu">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                </div>
+                
+                <div className="relative" ref={filterDropdownRef}>
+                    <button
+                        onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                        className="p-2 text-slate-600 hover:text-slate-900"
+                        aria-label="Filtrar eventos"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                        </svg>
                     </button>
+                    {isFilterDropdownOpen && (
+                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-10 p-4">
+                            <h4 className="text-sm font-bold text-slate-800 mb-3">Filtrar por Status</h4>
+                            <StatusFilter statusFilters={statusFilters} onStatusFilterChange={onStatusFilterChange} isMobile={true} />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -133,15 +227,16 @@ const DateScroller: React.FC<{ selectedDate: Date; onDateSelect: (date: Date) =>
     }, [selectedDate]);
 
     return (
-        <div className="px-6 py-3 bg-white border-b border-t border-slate-100">
+        <div className="px-4 py-3 bg-white border-b border-t border-slate-100">
             <div className="flex justify-between items-center">
                 {weekDates.map(date => {
                     const isSelected = isSameDay(date, selectedDate);
-                    const dayName = date.toLocaleDateString('pt-BR', { weekday: 'narrow' });
+                    const isToday = isSameDay(date, new Date());
+                    const dayName = date.toLocaleString('pt-BR', { weekday: 'narrow' });
                     return (
                         <button key={date.toISOString()} onClick={() => onDateSelect(date)} className="flex flex-col items-center space-y-2 w-10 focus:outline-none text-center">
                             <span className="text-sm font-medium text-slate-400 uppercase">{dayName}</span>
-                            <span className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-transparent text-slate-800'}`}>
+                            <span className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${isSelected ? 'bg-blue-600 text-white' : isToday ? 'bg-blue-100 text-blue-600' : 'bg-transparent text-slate-800'}`}>
                                 {date.getDate()}
                             </span>
                         </button>
@@ -152,46 +247,15 @@ const DateScroller: React.FC<{ selectedDate: Date; onDateSelect: (date: Date) =>
     );
 };
 
-
-const renderDayHeaderContentDesktop = (arg: DayHeaderContentArg) => {
-    const dayNumber = new Intl.DateTimeFormat('pt-BR', { day: 'numeric' }).format(arg.date);
-    const dayName = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(arg.date).replace('.', '');
-    return <div className="day-header-container"><div className="day-name">{dayName}</div><div className="day-number">{String(dayNumber).padStart(2, '0')}</div></div>;
-};
-
 const renderMobileWeekDayHeader = (arg: DayHeaderContentArg) => {
-    const isToday = arg.isToday;
+    const isToday = isSameDay(arg.date, new Date());
+    const dayName = arg.date.toLocaleDateString('pt-BR', { weekday: 'narrow' });
     return (
-        <div className="flex flex-col items-center py-1">
-            <span className="text-xs uppercase text-slate-500">{arg.text.split(' ')[0]}</span>
-            <span className={`mt-1 text-base font-bold ${isToday ? 'bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center' : 'text-slate-800'}`}>
+        <div className="flex flex-col items-center py-2">
+            <span className="text-sm uppercase font-medium text-slate-500">{dayName}</span>
+            <span className={`mt-1.5 text-base font-bold w-8 h-8 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-slate-800'}`}>
                 {arg.date.getDate()}
             </span>
-        </div>
-    );
-};
-
-const MonthNavigator: React.FC<{ currentDate: Date; onDateChange: (newDate: Date) => void }> = ({ currentDate, onDateChange }) => {
-    const getMonthDate = (offset: number) => {
-        const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1);
-        return newDate;
-    };
-    
-    const prevMonth = getMonthDate(-1);
-    const nextMonth = getMonthDate(1);
-    const formatMonth = (date: Date) => date.toLocaleDateString('pt-BR', { month: 'long' });
-
-    return (
-        <div className="flex justify-between items-center px-6 py-4 bg-white">
-            <button onClick={() => onDateChange(prevMonth)} className="text-lg font-semibold text-slate-400 capitalize hover:text-slate-600 transition-colors">
-                {formatMonth(prevMonth)}
-            </button>
-            <h2 className="text-xl font-bold text-blue-600 capitalize">
-                {formatMonth(currentDate)}
-            </h2>
-            <button onClick={() => onDateChange(nextMonth)} className="text-lg font-semibold text-slate-400 capitalize hover:text-slate-600 transition-colors">
-                {formatMonth(nextMonth)}
-            </button>
         </div>
     );
 };
@@ -224,7 +288,7 @@ const MobileMonthEventList: React.FC<{ events: Event[], selectedDate: Date, onEv
     };
 
     return (
-        <div className="p-6 bg-slate-50 flex-grow">
+        <div className="p-4 bg-slate-50">
             <h3 className="font-bold text-slate-800 mb-4 text-lg capitalize">
                 {selectedDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </h3>
@@ -240,6 +304,102 @@ const MobileMonthEventList: React.FC<{ events: Event[], selectedDate: Date, onEv
         </div>
     );
 };
+
+// --- Desktop Custom Header ---
+
+const CalendarHeader: React.FC<{
+    title: string;
+    currentView: string;
+    onPrev: () => void;
+    onNext: () => void;
+    onToday: () => void;
+    onViewChange: (view: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => void;
+    onNewEvent: () => void;
+    isAdmin: boolean;
+    statusFilters: string[];
+    onStatusFilterChange: (status: string) => void;
+}> = ({ title, currentView, onPrev, onNext, onToday, onViewChange, onNewEvent, isAdmin, statusFilters, onStatusFilterChange }) => {
+    const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const viewOptions = [
+        { key: 'dayGridMonth', label: 'Mês', shortcut: 'M' },
+        { key: 'timeGridWeek', label: 'Semana', shortcut: 'W' },
+        { key: 'timeGridDay', label: 'Dia', shortcut: 'D' }
+    ];
+    const currentViewLabel = viewOptions.find(v => v.key === currentView)?.label || 'View';
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsViewDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+             <div className="flex items-center gap-4">
+                <button onClick={onToday} className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
+                    Hoje
+                </button>
+                <div className="flex items-center">
+                    <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors" aria-label="Anterior">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors" aria-label="Próximo">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                </div>
+                 <h2 className="text-3xl font-bold text-slate-800 capitalize">{title}</h2>
+            </div>
+            <div className="flex items-center flex-wrap justify-center gap-x-6 gap-y-2">
+                 <StatusFilter statusFilters={statusFilters} onStatusFilterChange={onStatusFilterChange} />
+                 <div className="h-6 w-px bg-slate-200 hidden lg:block"></div>
+                 <div className="relative" ref={dropdownRef}>
+                    <button 
+                        onClick={() => setIsViewDropdownOpen(prev => !prev)}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition-colors shadow-sm"
+                        aria-haspopup="true"
+                        aria-expanded={isViewDropdownOpen}
+                    >
+                        <span>{currentViewLabel}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                    {isViewDropdownOpen && (
+                        <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                            <ul className="py-1">
+                                {viewOptions.map(view => (
+                                    <li key={view.key}>
+                                        <button
+                                            onClick={() => {
+                                                onViewChange(view.key as any);
+                                                setIsViewDropdownOpen(false);
+                                            }}
+                                            className="w-full text-left flex justify-between items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                        >
+                                            <span>{view.label}</span>
+                                            <span className="text-xs text-slate-400">{view.shortcut}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+                {isAdmin && (
+                    <button onClick={onNewEvent} className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm">
+                        <span>Novo Evento</span>
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 // --- Main Component ---
 
@@ -263,13 +423,117 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
     const isMobile = useIsMobile();
     const calendarRef = useRef<FullCalendar>(null);
     const [mobileView, setMobileView] = useState<MobileView>('dayGridMonth');
+    const [desktopView, setDesktopView] = useState('dayGridMonth');
+    const [calendarTitle, setCalendarTitle] = useState('');
+    const [statusFilters, setStatusFilters] = useState<string[]>(['Confirmado', 'Pendente']);
     const isAdmin = userRole === 'admin';
+
+    const ptBrLocale = useMemo(() => ({
+        ...ptBrBaseLocale,
+        week: { dow: 0, doy: 4, },
+    }), []);
+    
+    const handleStatusFilterChange = (status: string) => {
+        setStatusFilters(prev =>
+            prev.includes(status)
+                ? prev.filter(s => s !== status)
+                : [...prev, status]
+        );
+    };
+
+    const renderPillEventContent = (eventInfo: EventContentArg) => {
+        if (isMobile && mobileView === 'dayGridMonth') {
+            return <div className="fc-daygrid-day-dot" style={{ backgroundColor: eventInfo.borderColor }}></div>;
+        }
+
+        if (!isMobile && (eventInfo.view.type === 'timeGridWeek' || eventInfo.view.type === 'timeGridDay')) {
+            const eventData = eventInfo.event.extendedProps as Event;
+            const volunteersByDept = new Map<number, any[]>();
+            
+            (eventData.event_volunteers || []).forEach(ev => {
+                if (ev.volunteers && ev.department_id) {
+                    if (!volunteersByDept.has(ev.department_id)) {
+                        volunteersByDept.set(ev.department_id, []);
+                    }
+                    volunteersByDept.get(ev.department_id)!.push(ev.volunteers);
+                }
+            });
+
+            return (
+                <div className="fc-event-main-frame w-full h-full p-1.5 text-xs flex flex-col items-start overflow-y-auto">
+                    <div>
+                        <p className="font-bold" style={{color: eventInfo.event.textColor}}>{eventInfo.timeText}</p>
+                        <p className="font-semibold whitespace-normal mt-1" style={{color: eventInfo.event.textColor}}>{eventInfo.event.title}</p>
+                    </div>
+                    
+                    {(eventData.event_departments?.length > 0) && (
+                        <div className="mt-2 pt-2 border-t w-full space-y-2" style={{borderColor: eventInfo.event.textColor + '40'}}>
+                            {(eventData.event_departments).map(({ departments }) => {
+                                if (!departments) return null;
+                                const volunteers = volunteersByDept.get(departments.id) || [];
+                                return (
+                                    <div key={departments.id}>
+                                        <p className="font-bold mb-1" style={{color: eventInfo.event.textColor}}>{departments.name}</p>
+                                        {volunteers.length > 0 ? (
+                                            <ul className="space-y-1 pl-1">
+                                                {volunteers.map(v => (
+                                                    <li key={v.id} className="flex items-center space-x-1.5">
+                                                        <div className="w-5 h-5 rounded-full bg-black/20 text-white flex-shrink-0 flex items-center justify-center text-[10px] font-bold" style={{color: eventInfo.backgroundColor, backgroundColor: eventInfo.event.textColor}}>
+                                                            {v.initials || '??'}
+                                                        </div>
+                                                        <span style={{color: eventInfo.event.textColor}}>{v.name}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-xs italic pl-1" style={{color: eventInfo.event.textColor + '90'}}>Nenhum voluntário</p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        if (!isMobile && eventInfo.view.type === 'dayGridMonth') {
+            const startTime = eventInfo.event.extendedProps.start_time?.substring(0, 5);
+            const timeString = startTime ? `${startTime}` : '';
+            return (
+                <div className="fc-event-main-frame w-full px-1.5 py-0.5 text-xs overflow-hidden">
+                    <div className="flex items-start gap-1.5">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: eventInfo.borderColor }}></div>
+                        <div className="font-semibold whitespace-normal">
+                            {timeString && <span className="font-bold mr-1">{timeString}</span>}
+                            {eventInfo.event.title}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="fc-event-main-frame flex items-center gap-1.5 overflow-hidden w-full px-1.5 py-0.5 text-xs">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: eventInfo.borderColor }}></div>
+                <div className="font-semibold truncate">
+                    {eventInfo.timeText && <span className="font-bold mr-1">{eventInfo.timeText}</span>}
+                    {eventInfo.event.title}
+                </div>
+            </div>
+        );
+    };
+
+    const handleCloseForm = () => {
+        setIsFormOpen(false);
+        setEditingEvent(null);
+    };
 
     const fetchAllEvents = useCallback(async (setLoadingState = true) => {
         if (setLoadingState) setLoading(true);
         setError(null);
         try {
-            const { data, error: fetchError } = await supabase.from('events').select(`*, event_departments(department_id, departments(id, name)), event_volunteers(*)`);
+            const { data, error: fetchError } = await supabase.from('events').select(`*, event_departments(department_id, departments(id, name)), event_volunteers(*, volunteers(id, name, initials))`);
             if (fetchError) throw fetchError;
             setAllEvents((data as unknown as Event[]) || []);
         } catch (err) { setError(getErrorMessage(err)); } 
@@ -277,45 +541,56 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
     }, []);
 
     useEffect(() => { fetchAllEvents(); }, [fetchAllEvents]);
-
+    
     const handleDatesSet = (arg: DatesSetArg) => {
         const view = arg.view;
-        const midDate = new Date(view.currentStart.getTime() + (view.currentEnd.getTime() - view.currentStart.getTime()) / 2);
-        
-        if (mobileView === 'dayGridMonth') {
-            if (midDate.getMonth() !== monthViewDate.getMonth() || midDate.getFullYear() !== monthViewDate.getFullYear()) {
-                setMonthViewDate(midDate);
-            }
-        } else {
-            const needsUpdate = selectedDate < view.currentStart || selectedDate >= view.currentEnd;
-            if (needsUpdate) {
-                setSelectedDate(view.currentStart);
+        let title = view.title;
+        if (isMobile) {
+            const monthMap: { [key: string]: string } = { 'janeiro': 'jan.', 'fevereiro': 'fev.', 'março': 'mar.', 'abril': 'abr.', 'maio': 'mai.', 'junho': 'jun.', 'julho': 'jul.', 'agosto': 'ago.', 'setembro': 'set.', 'outubro': 'out.', 'novembro': 'nov.', 'dezembro': 'dez.' };
+            const lowerCaseTitle = title.toLowerCase();
+            for (const month in monthMap) {
+                if (lowerCaseTitle.includes(month)) {
+                    title = title.replace(new RegExp(month, 'i'), monthMap[month]);
+                    break;
+                }
             }
         }
+        setCalendarTitle(title);
+        if (isMobile) {
+            const midDate = new Date(view.currentStart.getTime() + (view.currentEnd.getTime() - view.currentStart.getTime()) / 2);
+            if (mobileView === 'dayGridMonth') {
+                if (midDate.getMonth() !== monthViewDate.getMonth() || midDate.getFullYear() !== monthViewDate.getFullYear()) setMonthViewDate(midDate);
+            } else {
+                if (selectedDate < view.currentStart || selectedDate >= view.currentEnd) setSelectedDate(view.currentStart);
+            }
+        } else {
+            setDesktopView(view.type);
+        }
     };
-    
+
     const handleDateScrollerSelect = (date: Date) => {
         setSelectedDate(date);
         calendarRef.current?.getApi().gotoDate(date);
     };
 
-    const calendarEvents = useMemo((): EventInput[] => allEvents.map(event => {
-        const colorKey = event.color || (event.event_departments[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
-        const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor(event.event_departments[0]?.department_id);
-        return {
-            id: String(event.id),
-            title: event.name,
-            start: `${event.date}T${event.start_time}`,
-            end: `${event.date}T${event.end_time}`,
-            backgroundColor: colors.bg,
-            borderColor: colors.border,
-            textColor: colors.text,
-            classNames: ['custom-event'],
-            extendedProps: { ...event, color: colorKey, dotColor: colors.border }
-        };
-    }), [allEvents]);
+    const calendarEvents = useMemo((): EventInput[] => allEvents
+        .filter(event => statusFilters.includes(event.status))
+        .map(event => {
+            const colorKey = event.color || (event.event_departments[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
+            const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor(event.event_departments[0]?.department_id);
+            return {
+                id: String(event.id),
+                title: event.name,
+                start: `${event.date}T${event.start_time}`,
+                end: `${event.date}T${event.end_time}`,
+                backgroundColor: colors.bg,
+                borderColor: colors.border,
+                textColor: colors.text,
+                classNames: ['custom-event'],
+                extendedProps: { ...event, color: colorKey, dotColor: colors.border }
+            };
+    }), [allEvents, statusFilters]);
 
-    // FIX: Replaced non-exported DateClickArg with an inline type for the used properties.
     const handleDateClick = (arg: { date: Date, dateStr: string }) => {
         if (mobileView === 'dayGridMonth') {
             setSelectedDate(arg.date);
@@ -326,8 +601,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setIsFormOpen(true);
     };
 
-    // FIX: Created a new handler for the custom mobile event list which passes an `Event` object,
-    // resolving a type mismatch with FullCalendar's `eventClick` handler which passes `EventClickArg`.
     const handleMobileEventClick = (eventData: Event) => {
         if (eventData) {
             setEditingEvent(eventData);
@@ -352,25 +625,69 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         const newStartTime = event.start.toTimeString().substring(0, 8);
         const newEndTime = event.end ? event.end.toTimeString().substring(0, 8) : newStartTime;
         try {
-            const { data: conflicts } = await supabase.from('events').select('id, name').eq('date', newDate).neq('id', eventId).or(`start_time.lt.${newEndTime},end_time.gt.${newStartTime}`);
-            if (conflicts && conflicts.length > 0) { throw new Error(`Conflito de horário com "${conflicts[0].name}".`); }
-        } catch (err) { alert('Erro ao verificar conflitos: ' + getErrorMessage(err)); info.revert(); return; }
+            const { data: conflicts, error: conflictError } = await supabase.from('events').select('id, name, start_time, end_time').eq('date', newDate).neq('id', eventId).lt('start_time', newEndTime).gt('end_time', newStartTime);
+            if (conflictError) throw conflictError;
+            if (conflicts && conflicts.length > 0) {
+                const c = conflicts[0];
+                throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
+            }
+        } catch (err) {
+            alert('Erro ao mover evento: ' + getErrorMessage(err));
+            info.revert();
+            return;
+        }
         const { error: updateError } = await supabase.from('events').update({ date: newDate, start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
         if (updateError) { alert('Falha ao atualizar o evento. ' + getErrorMessage(updateError)); info.revert(); } else { await fetchAllEvents(false); onDataChange(); }
     };
     
+    const handleEventResize = async (info: EventResizeDoneArg) => {
+        if (!isAdmin) { info.revert(); return; }
+        const { event } = info;
+        if (!event.start || !event.end) { info.revert(); return; }
+        const eventId = parseInt(event.id, 10);
+        const eventDate = event.start.toISOString().split('T')[0];
+        const newStartTime = event.start.toTimeString().substring(0, 8);
+        const newEndTime = event.end.toTimeString().substring(0, 8);
+        try {
+            const { data: conflicts, error: conflictError } = await supabase.from('events').select('id, name, start_time, end_time').eq('date', eventDate).neq('id', eventId).lt('start_time', newEndTime).gt('end_time', newStartTime);
+            if (conflictError) throw conflictError;
+            if (conflicts && conflicts.length > 0) {
+                const c = conflicts[0];
+                throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
+            }
+            const { error: updateError } = await supabase.from('events').update({ start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
+            if (updateError) throw updateError;
+            await fetchAllEvents(false);
+            onDataChange();
+        } catch (err) {
+            alert('Erro ao redimensionar evento: ' + getErrorMessage(err));
+            info.revert();
+        }
+    };
+
     const handleSaveEvent = async (eventPayload: any) => {
-        setIsSaving(true); setSaveError(null);
+        setIsSaving(true); 
+        setSaveError(null);
         try {
             const { volunteer_ids, ...upsertData } = eventPayload;
-            let conflictQuery = supabase.from('events').select('id, name').eq('date', upsertData.date).or(`start_time.lt.${upsertData.end_time},end_time.gt.${upsertData.start_time}`);
+            let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', upsertData.date).lt('start_time', upsertData.end_time).gt('end_time', upsertData.start_time);
             if (upsertData.id) conflictQuery = conflictQuery.neq('id', upsertData.id);
-            const { data: conflicts } = await conflictQuery;
-            if (conflicts && conflicts.length > 0) { throw new Error(`Conflito de horário com o evento "${conflicts[0].name}".`); }
+            const { data: conflicts, error: conflictError } = await conflictQuery;
+            if (conflictError) throw conflictError;
+            if (conflicts && conflicts.length > 0) {
+                const c = conflicts[0];
+                throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
+            }
             const { error: eventError } = await supabase.from('events').upsert(upsertData).select('id').single();
             if (eventError) throw eventError;
-            setIsFormOpen(false); setEditingEvent(null); onDataChange(); await fetchAllEvents(false);
-        } catch (err) { setSaveError(getErrorMessage(err)); } finally { setIsSaving(false); }
+            handleCloseForm();
+            onDataChange(); 
+            await fetchAllEvents(false);
+        } catch (err) { 
+            setSaveError(getErrorMessage(err)); 
+        } finally { 
+            setIsSaving(false); 
+        }
     };
 
     const handleAddNewEvent = () => {
@@ -379,61 +696,72 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setIsFormOpen(true);
     };
     
-    const handleMonthNavigatorChange = (newDate: Date) => {
-        setMonthViewDate(newDate);
-        setSelectedDate(newDate);
-        calendarRef.current?.getApi().gotoDate(newDate);
+    const handlePrev = () => calendarRef.current?.getApi().prev();
+    const handleNext = () => calendarRef.current?.getApi().next();
+    const handleToday = () => calendarRef.current?.getApi().today();
+    const handleViewChange = (view: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => {
+        calendarRef.current?.getApi().changeView(view);
+    };
+
+
+    const renderModal = () => {
+        if (!isFormOpen) return null;
+        return (
+            <div className="fixed inset-0 bg-black/60 z-40 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={handleCloseForm}>
+                <div className="w-full max-w-3xl my-8" onClick={e => e.stopPropagation()}>
+                    <NewEventForm initialData={editingEvent} onCancel={handleCloseForm} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} />
+                </div>
+            </div>
+        );
     };
 
     const calendarStyles = `
-        /* General */ .fc { font-family: inherit; --fc-border-color: #f1f5f9; --fc-today-bg-color: transparent; } .fc .fc-view-harness { background: transparent; border: none; } .fc .fc-view { border: none; }
-        /* Toolbar */ .fc .fc-toolbar.fc-header-toolbar { padding: 0 0 1.5rem 0; margin-bottom: 1.5rem; border-bottom: 1px solid #e2e8f0; } .fc .fc-toolbar-title { font-size: 2rem; font-weight: 800; color: #1e293b; text-transform: capitalize; } .fc .fc-button { background-color: #fff !important; border: 1px solid #e2e8f0 !important; color: #334155 !important; font-weight: 600 !important; border-radius: 0.5rem !important; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important; } .fc .fc-button-group { display: inline-flex; border-radius: 0.5rem; overflow: hidden; border: 1px solid #e2e8f0; } .fc .fc-button-group > .fc-button { border-radius: 0 !important; border: none !important; } .fc .fc-button-group > .fc-button:not(:first-child) { border-left: 1px solid #e2e8f0 !important; } .fc .fc-button-group > .fc-button.fc-button-active { background-color: #f1f5f9 !important; color: #1e293b !important; }
-        /* Desktop Day Headers */ .fc .fc-col-header-cell { border: none; padding-bottom: 1rem; } .fc .fc-col-header-cell-cushion { padding: 0 !important; } .day-header-container { text-align: center; } .day-header-container .day-name { font-size: 0.8rem; font-weight: 600; color: #9ca3af; text-transform: uppercase; } .day-header-container .day-number { font-size: 2.25rem; font-weight: 700; color: #475569; line-height: 1; margin-top: 0.5rem; } .fc .fc-day-today .day-header-container .day-name { color: #1e293b; } .fc .fc-day-today .day-header-container .day-number { background-color: #1e293b; color: #fff; border-radius: 9999px; width: 48px; height: 48px; line-height: 48px; margin: 0.5rem auto 0; }
-        /* Desktop Time Grid */ .fc-theme-standard .fc-scrollgrid { border: none; } .fc .fc-timegrid-slot-lane { border-color: #f1f5f9; } .fc .fc-timegrid-axis-frame { justify-content: flex-start; padding: 0 1rem 0 0; } .fc .fc-timegrid-slot-label-cushion { font-size: 0.8rem; color: #9ca3af; } .fc .fc-timegrid-now-indicator-line { border-color: #ef4444; }
-        /* Event styles */ .custom-event { border-width: 1px !important; border-radius: 0.5rem !important; font-weight: 500; cursor: pointer; }
-        /* Month View */ .fc-daygrid-day-frame { min-height: 120px; } .fc-daygrid-event { white-space: normal !important; }
-        
-        /* Mobile-specific overrides */
-        .mobile-calendar-view .fc-scrollgrid { border: none; }
-        .mobile-calendar-view.week-view .fc .fc-col-header { display: none; }
-        .mobile-calendar-view.week-view .fc-day-today { background-color: transparent !important; }
-        .mobile-calendar-view.day-view .fc .fc-col-header { display: none; }
+        .fc { font-family: inherit; --fc-border-color: #f1f5f9; --fc-today-bg-color: transparent; } .fc .fc-view-harness { background: transparent; border: none; } .fc .fc-view { border: none; }
+        .fc-dayGridMonth-view .fc-col-header-cell-cushion { text-decoration: none !important; pointer-events: none; color: #334155 !important; font-size: 1.5rem !important; font-weight: 700 !important; text-transform: uppercase; padding: 0.5rem 0 !important; }
+        .fc .fc-timeGridWeek-view .fc-col-header-cell, .fc .fc-timeGridDay-view .fc-col-header-cell { border: none; padding-bottom: 1rem; }
+        .fc .fc-timeGridWeek-view .fc-col-header-cell-cushion, .fc .fc-timeGridDay-view .fc-col-header-cell-cushion { padding: 0 !important; }
+        .day-header-container { text-align: center; } .day-header-container .day-name { font-size: 0.8rem; font-weight: 600; color: #9ca3af; text-transform: uppercase; } .day-header-container .day-number { font-size: 2.25rem; font-weight: 700; color: #475569; line-height: 1; margin-top: 0.5rem; } 
+        .fc .fc-day-today .day-header-container .day-name { color: #1e293b; } .fc .fc-day-today .day-header-container .day-number { background-color: #2563eb; color: #fff; border-radius: 9999px; width: 48px; height: 48px; line-height: 48px; margin: 0.5rem auto 0; }
+        .fc-theme-standard .fc-scrollgrid { border: none; } .fc .fc-timegrid-slot-lane { border-color: #f1f5f9; } .fc .fc-timegrid-axis-frame { justify-content: flex-start; padding: 0 1rem 0 0; } .fc .fc-timegrid-slot-label-cushion { font-size: 0.8rem; color: #9ca3af; } .fc .fc-timegrid-now-indicator-line { border-color: #ef4444; }
+        .custom-event { border-width: 1px !important; border-radius: 0.5rem !important; font-weight: 500; cursor: pointer; }
+        .fc-daygrid-event { white-space: normal !important; margin-bottom: 4px !important; }
+        .mobile-calendar-view .fc-scrollgrid { border: none; } .mobile-calendar-view .fc .fc-col-header { border-bottom: 1px solid #e2e8f0 !important; } .mobile-calendar-view.week-view .fc-day-today { background-color: transparent !important; }
+        .mobile-calendar-view.day-view .fc .fc-col-header, .mobile-calendar-view.week-view .fc .fc-col-header { display: none; }
         .mobile-calendar-view.day-view .fc-day-header { padding: 0.5rem 0; text-align: center; font-weight: 600; color: #1e293b; text-transform: capitalize; font-size: 1rem; }
-        .mobile-calendar-view.week-view .fc-col-header-cell-cushion { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
-        .mobile-calendar-view .fc-timegrid-slots { padding-bottom: 2rem; }
-        .mobile-calendar-view .fc .fc-timegrid-slot-lane { border-bottom: 1px solid #f1f5f9; }
-        .mobile-calendar-view .fc .fc-timegrid-slot-label { border: none; text-align: left; padding-left: 0.75rem; }
-        .mobile-calendar-view .fc .fc-timegrid-slot-label-cushion { font-size: 0.875rem; color: #94a3b8; position: relative; top: -0.7em; }
-        .mobile-calendar-view.day-view .fc-timegrid-event-harness { margin: 0 0.5rem 0 4rem !important; right: 0 !important; }
-        .mobile-calendar-view.week-view .fc-timegrid-event-harness { margin: 1px 2px 0 2px !important; }
-        .mobile-calendar-view.week-view .custom-event { font-size: 0.7rem; padding: 2px 4px !important; border-radius: 4px !important; line-height: 1.2; }
-
-        /* New Month View Styles */
-        .mobile-calendar-view.month-view .fc-daygrid-day-top { display: flex; justify-content: center; }
-        .mobile-calendar-view.month-view .fc-daygrid-day-frame { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 8px; min-height: 50px; }
-        .mobile-calendar-view.month-view .fc-daygrid-body { width: 100% !important; }
-        .mobile-calendar-view.month-view .fc-daygrid-day-number { font-size: 0.875rem; font-weight: 600; color: #334155; width: 28px; height: 28px; line-height: 28px; border-radius: 9999px; text-align: center; }
-        .mobile-calendar-view.month-view .fc-day-today > .fc-daygrid-day-frame { background-color: #eff6ff; border-radius: 0.75rem; }
-        .mobile-calendar-view.month-view .fc-day-today .fc-daygrid-day-number { background-color: #2563eb; color: white; }
-        .mobile-calendar-view.month-view .fc-day.fc-day-selected > .fc-daygrid-day-frame { background-color: #dbeafe; border-radius: 0.75rem; }
-        .mobile-calendar-view.month-view .fc-daygrid-day-dots { display: flex; justify-content: center; gap: 3px; margin-top: 4px; height: 4px; }
-        .mobile-calendar-view.month-view .fc-daygrid-day-dot { width: 4px; height: 4px; border-radius: 50%; }
-        .mobile-calendar-view.month-view .fc-day-other .fc-daygrid-day-top { opacity: 0.4; }
-        .mobile-calendar-view.month-view .fc-col-header-cell-cushion { text-transform: uppercase; font-size: 0.8rem; color: #64748b; font-weight: 600; }
-        .mobile-calendar-view.month-view .fc-theme-standard .fc-scrollgrid { border-left: none; border-right: none; }
-        .mobile-calendar-view.month-view .fc-daygrid-day, .mobile-calendar-view.month-view .fc-col-header-cell { border-color: #f8fafc; }
+        .mobile-calendar-view.week-view .fc-col-header-cell-cushion { padding-top: 0 !important; padding-bottom: 0 !important; }
+        .mobile-calendar-view .fc-timegrid-body { padding-top: 0.5rem; } .mobile-calendar-view .fc-timegrid-slots { padding-bottom: 2rem; } .mobile-calendar-view .fc .fc-timegrid-slot-lane { border-bottom: 1px solid #f1f5f9; }
+        .mobile-calendar-view .fc .fc-timegrid-slot-label { border: none; text-align: left; padding-left: 0.75rem; } .mobile-calendar-view .fc .fc-timegrid-slot-label-cushion { font-size: 0.875rem; color: #94a3b8; position: relative; top: -0.7em; }
+        .mobile-calendar-view.day-view .fc-timegrid-event-harness { margin: 0 0.5rem 0 4rem !important; right: 0 !important; } .mobile-calendar-view.week-view .fc-timegrid-event-harness { margin: 1px 2px 0 2px !important; }
+        .mobile-calendar-view.month-view .fc-daygrid-day-top { display: flex; justify-content: center; } .mobile-calendar-view.month-view .fc-daygrid-day-frame { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 8px; min-height: 50px; }
+        .mobile-calendar-view.month-view .fc-daygrid-body { width: 100% !important; } .mobile-calendar-view.month-view .fc-daygrid-day-number { font-size: 0.875rem; font-weight: 600; color: #334155; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 9999px; text-align: center; }
+        .mobile-calendar-view.month-view .fc-day-today > .fc-daygrid-day-frame { background-color: transparent; } .mobile-calendar-view.month-view .fc-day.fc-day-selected > .fc-daygrid-day-frame { background-color: transparent; border-radius: 0.75rem; }
+        .mobile-calendar-view.month-view .fc-day-today:not(.fc-day-selected) .fc-daygrid-day-number { color: #2563eb; font-weight: 700; } .mobile-calendar-view.month-view .fc-day.fc-day-selected .fc-daygrid-day-number { background-color: #2563eb; color: white; }
+        .mobile-calendar-view.month-view .fc-daygrid-day-events { display: flex; justify-content: center; gap: 3px; margin-top: 4px; height: auto; flex-direction: row; flex-wrap: wrap; padding: 0 2px; }
+        .mobile-calendar-view.month-view .fc-daygrid-day-dot { width: 5px; height: 5px; border-radius: 50%; } .mobile-calendar-view.month-view .fc-day-other .fc-daygrid-day-top { opacity: 0.4; }
+        .mobile-calendar-view.month-view .fc-col-header-cell-cushion { font-size: 1rem; color: #334155; font-weight: 700; text-transform: uppercase; padding: 0.5rem 0; }
+        .mobile-calendar-view.month-view .fc-theme-standard .fc-scrollgrid { border-left: none; border-right: none; } .mobile-calendar-view.month-view .fc-daygrid-day, .mobile-calendar-view.month-view .fc-col-header-cell { border-color: #f8fafc; }
+        .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-col-header-cell:first-child, .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-daygrid-day:first-child { border-left-width: 0; }
+        .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-col-header-cell:last-child, .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-daygrid-day:last-child { border-right-width: 0; }
     `;
 
     if (isMobile) {
         return (
-            <div className="bg-white h-full flex flex-col">
+            <div className={`bg-white flex flex-col ${mobileView === 'dayGridMonth' ? '' : 'h-full'}`}>
                 <style>{calendarStyles}</style>
-                <MobileHeader selectedDate={selectedDate} onMenuClick={() => setIsSidebarOpen(true)} currentView={mobileView} onViewChange={setMobileView} />
-                
+                <MobileHeader
+                    title={calendarTitle}
+                    onMenuClick={() => setIsSidebarOpen(true)}
+                    currentView={mobileView}
+                    onViewChange={setMobileView}
+                    onPrev={handlePrev}
+                    onNext={handleNext}
+                    onToday={handleToday}
+                    statusFilters={statusFilters}
+                    onStatusFilterChange={handleStatusFilterChange}
+                />
                 {mobileView === 'dayGridMonth' ? (
-                    <div className="flex flex-col flex-grow min-h-0">
-                         <MonthNavigator currentDate={monthViewDate} onDateChange={handleMonthNavigatorChange} />
-                         <div className={`px-2 pb-2 mobile-calendar-view month-view`}>
+                    <div className="flex flex-col">
+                         <div className={`mobile-calendar-view month-view`}>
                             <FullCalendar
                                 key={`month-${monthViewDate.toISOString()}`}
                                 ref={calendarRef}
@@ -441,68 +769,113 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                                 initialView="dayGridMonth"
                                 initialDate={monthViewDate}
                                 locale={ptBrLocale}
+                                firstDay={0}
                                 headerToolbar={false}
                                 events={calendarEvents}
-                                eventDisplay="list-item"
-                                eventContent={() => null}
+                                eventDisplay="block"
+                                eventContent={renderPillEventContent}
                                 dateClick={handleDateClick}
-                                dayCellDidMount={(arg) => {
-                                    const eventsOnDay = calendarEvents.filter(e => isSameDay(new Date(e.start as string), arg.date));
-                                    if(eventsOnDay.length > 0) {
-                                        const dotsContainer = document.createElement('div');
-                                        dotsContainer.className = 'fc-daygrid-day-dots';
-                                        const uniqueColors = [...new Set(eventsOnDay.map(e => e.extendedProps?.dotColor).filter(Boolean))];
-                                        uniqueColors.slice(0, 3).forEach(color => {
-                                            const dot = document.createElement('div');
-                                            dot.className = 'fc-daygrid-day-dot';
-                                            dot.style.backgroundColor = color as string;
-                                            dotsContainer.appendChild(dot);
-                                        });
-                                        arg.el.querySelector('.fc-daygrid-day-frame')?.appendChild(dotsContainer);
-                                    }
-                                    if (isSameDay(arg.date, selectedDate)) {
-                                        arg.el.classList.add('fc-day-selected');
-                                    }
-                                }}
+                                dayCellClassNames={({ date }) => isSameDay(date, selectedDate) ? 'fc-day-selected' : ''}
                                 datesSet={handleDatesSet}
                                 height="auto"
+                                dayHeaderContent={(arg) => {
+                                    const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat).format(arg.date) : arg.text;
+                                    return headerText.replace('.', '');
+                                }}
                             />
-                         </div>
-                         <MobileMonthEventList events={allEvents} selectedDate={selectedDate} onEventClick={handleMobileEventClick} />
+                        </div>
+                        <MobileMonthEventList events={allEvents.filter(e => statusFilters.includes(e.status))} selectedDate={selectedDate} onEventClick={handleMobileEventClick} />
                     </div>
                 ) : (
-                    <>
-                        {mobileView === 'timeGridWeek' && <DateScroller selectedDate={selectedDate} onDateSelect={handleDateScrollerSelect} />}
-                        <main className={`flex-grow bg-white rounded-t-2xl -mt-2 relative mobile-calendar-view ${mobileView === 'timeGridWeek' ? 'overflow-y-auto' : 'overflow-hidden'} ${mobileView === 'timeGridDay' ? 'day-view' : 'week-view'}`}>
-                            {loading ? <div className="p-4 text-center text-slate-500">Carregando...</div> : error ? <div className="p-4 text-center text-red-500">{error}</div> :
-                                <FullCalendar key={mobileView} ref={calendarRef} plugins={[timeGridPlugin, interactionPlugin]} initialDate={selectedDate} initialView={mobileView} locale={ptBrLocale} headerToolbar={false} events={calendarEvents} eventClick={handleEventClick} editable={isAdmin} eventDrop={handleEventDrop} datesSet={handleDatesSet} height={mobileView === 'timeGridWeek' ? 'auto' : '100%'} allDaySlot={false} nowIndicator={false} slotMinTime="06:00:00" slotMaxTime="24:00:00" slotLabelContent={(arg) => <span className="mobile-slot-label">{String(arg.date.getHours()).padStart(2, '0')}</span>} dayHeaderContent={mobileView === 'timeGridWeek' ? renderMobileWeekDayHeader : (arg) => <div className="fc-day-header">{arg.date.toLocaleDateString('pt-BR', { weekday: 'long' })}</div>} />
-                            }
-                        </main>
-                    </>
+                    <div className="flex flex-col flex-grow h-full">
+                        {(mobileView === 'timeGridDay' || mobileView === 'timeGridWeek') && <DateScroller selectedDate={selectedDate} onDateSelect={handleDateScrollerSelect} />}
+                        <div className={`mobile-calendar-view flex-grow ${mobileView === 'timeGridDay' ? 'day-view' : 'week-view'}`}>
+                            <FullCalendar
+                                key={mobileView}
+                                ref={calendarRef}
+                                plugins={[timeGridPlugin, interactionPlugin]}
+                                initialView={mobileView}
+                                initialDate={selectedDate}
+                                locale={ptBrLocale}
+                                firstDay={0}
+                                headerToolbar={false}
+                                allDaySlot={false}
+                                slotMinTime="06:00:00"
+                                slotMaxTime="24:00:00"
+                                scrollTime={new Date().getHours() + ':00:00'}
+                                height="100%"
+                                dayHeaderContent={renderMobileWeekDayHeader}
+                                events={calendarEvents}
+                                eventClick={handleEventClick}
+                                editable={isAdmin}
+                                droppable={isAdmin}
+                                eventDrop={handleEventDrop}
+                                eventResizableFromStart={isAdmin}
+                                eventResize={handleEventResize}
+                                datesSet={handleDatesSet}
+                            />
+                        </div>
+                    </div>
                 )}
-                
                 {isAdmin && (
-                    <button onClick={handleAddNewEvent} className="fixed bottom-6 right-6 z-30 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" aria-label="Adicionar Novo Evento">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    <button onClick={handleAddNewEvent} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center z-20">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     </button>
                 )}
-                {isFormOpen && <div className="fixed inset-0 bg-black/60 z-40 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={() => setIsFormOpen(false)}><div className="w-full max-w-3xl my-8" onClick={e => e.stopPropagation()}><NewEventForm initialData={editingEvent} onCancel={() => { setIsFormOpen(false); setEditingEvent(null); }} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} /></div></div>}
+                {renderModal()}
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full relative p-4 sm:p-6 bg-slate-50">
+        <div className="bg-white p-6 rounded-2xl shadow-sm h-full flex flex-col">
             <style>{calendarStyles}</style>
-            <button onClick={() => setIsSidebarOpen(true)} className="absolute top-4 left-4 z-20 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-slate-800 lg:hidden" aria-label="Show sidebar">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" /></svg>
-            </button>
+             <CalendarHeader
+                title={calendarTitle}
+                currentView={desktopView}
+                onPrev={handlePrev}
+                onNext={handleNext}
+                onToday={handleToday}
+                onViewChange={handleViewChange}
+                onNewEvent={handleAddNewEvent}
+                isAdmin={isAdmin}
+                statusFilters={statusFilters}
+                onStatusFilterChange={handleStatusFilterChange}
+            />
             <div className="flex-grow">
-                {loading ? <div className="text-center p-10">Carregando...</div> : error ? <div className="text-center p-10 text-red-500">{error}</div> :
-                    <FullCalendar plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]} initialView="timeGridWeek" locale={ptBrLocale} headerToolbar={{ left: 'title', center: 'dayGridMonth,timeGridWeek,timeGridDay', right: `${isAdmin ? 'newEventButton ' : ''}today prev,next` }} customButtons={isAdmin ? { newEventButton: { text: 'Novo Evento', click: () => { setEditingEvent({ name: '', date: new Date().toISOString().split('T')[0], start_time: new Date().toTimeString().substring(0, 5), end_time: new Date(new Date().getTime() + 60*60*1000).toTimeString().substring(0, 5), status: 'Pendente' } as Event); setIsFormOpen(true); } } } : {}} buttonText={{ today: 'Hoje', month: 'Mês', week: 'Semana', day: 'Dia' }} titleFormat={{ month: 'long', year: 'numeric' }} dayHeaderContent={renderDayHeaderContentDesktop} events={calendarEvents} eventContent={(info) => <div className="p-1.5 overflow-hidden h-full"><div className="font-semibold text-sm">{info.event.title}</div><div className="text-xs opacity-80">{info.timeText}</div></div>} eventClick={handleEventClick} dateClick={handleDateClick} editable={isAdmin} eventDrop={handleEventDrop} height="100%" allDaySlot={false} nowIndicator={true} slotMinTime="06:00:00" slotMaxTime="24:00:00" slotLabelFormat={{ hour: 'numeric', hour12: false, meridiem: false }} />
-                }
+                <FullCalendar
+                    ref={calendarRef}
+                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    headerToolbar={false}
+                    locale={ptBrLocale}
+                    firstDay={0}
+                    events={calendarEvents}
+                    editable={isAdmin}
+                    selectable={isAdmin}
+                    droppable={isAdmin}
+                    eventResizableFromStart={isAdmin}
+                    nowIndicator
+                    dayHeaderContent={(arg) => {
+                        if (arg.view.type === 'timeGridWeek' || arg.view.type === 'timeGridDay') {
+                            return renderDayHeaderContent(arg);
+                        }
+                        const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat).format(arg.date) : arg.text;
+                        return headerText.replace('.', '');
+                    }}
+                    eventContent={renderPillEventContent}
+                    eventClick={handleEventClick}
+                    dateClick={(arg) => handleDateClick({ date: arg.date, dateStr: arg.dateStr })}
+                    eventDrop={handleEventDrop}
+                    eventResize={handleEventResize}
+                    dayMaxEvents={desktopView === 'dayGridMonth' ? 4 : false}
+                    height="100%"
+                    datesSet={handleDatesSet}
+                    slotMinTime="06:00:00"
+                    slotMaxTime="24:00:00"
+                />
             </div>
-            {isFormOpen && <div className="fixed inset-0 bg-black/60 z-40 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={() => setIsFormOpen(false)}><div className="w-full max-w-3xl my-8" onClick={e => e.stopPropagation()}><NewEventForm initialData={editingEvent} onCancel={() => { setIsFormOpen(false); setEditingEvent(null); }} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} /></div></div>}
+            {renderModal()}
         </div>
     );
 };

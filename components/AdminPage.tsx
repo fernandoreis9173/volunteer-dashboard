@@ -8,7 +8,7 @@ import { EnrichedUser } from '../types';
 import { getErrorMessage } from '../lib/utils';
 
 interface AdminPageProps {
-  onDataChange: () => void;
+  onDataChange: () => void; // Kept for now if global changes are needed, but component logic is self-contained
 }
 
 const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
@@ -87,7 +87,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             setName('');
             setRole('leader');
             await fetchInvitedUsers();
-            onDataChange();
 
         } catch (err) {
             const errorMessage = getErrorMessage(err);
@@ -108,7 +107,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
         } else {
             await fetchInvitedUsers();
             setIsEditModalOpen(false);
-            onDataChange();
         }
     };
 
@@ -132,7 +130,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
         } else {
             await fetchInvitedUsers();
-            onDataChange();
         }
 
         setIsActionModalOpen(false);

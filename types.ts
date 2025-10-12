@@ -65,16 +65,6 @@ export interface DetailedVolunteer {
     created_at?: string;
 }
 
-// Added for Dashboard performance and type safety
-export interface DashboardVolunteer {
-    id: number;
-    name: string;
-    email: string;
-    initials: string;
-    departments: string[];
-}
-
-
 export interface Department {
   id?: number;
   name: string;
@@ -90,6 +80,14 @@ export interface Department {
 export interface Stat {
     value: string;
     change: number;
+}
+
+// FIX: Added ChartDataPoint interface for use in Dashboard and TrafficChart components.
+export interface ChartDataPoint {
+    date: string;
+    scheduledVolunteers: number;
+    involvedDepartments: number;
+    eventNames: string[];
 }
 
 

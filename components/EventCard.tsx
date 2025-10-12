@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Event } from '../types';
 
 interface EventCardProps {
@@ -9,15 +9,36 @@ interface EventCardProps {
     onDelete: (id: number) => void;
     onAddDepartment: (event: Event) => void;
     isHighlighted?: boolean;
+    isFilteredByMyDepartment?: boolean;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartmentId, onEdit, onDelete, onAddDepartment, isHighlighted = false }) => {
+const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartmentId, onEdit, onDelete, onAddDepartment, isHighlighted = false, isFilteredByMyDepartment = false }) => {
     const [expanded, setExpanded] = useState(false);
+    const [expandedDepartments, setExpandedDepartments] = useState<Set<number>>(new Set());
     
     const isLeader = userRole === 'leader' || userRole === 'lider';
     const isAdmin = userRole === 'admin';
     const isDepartmentInvolved = !!leaderDepartmentId && event.event_departments.some(ed => Number(ed.department_id) === Number(leaderDepartmentId));
     const canLeaderSchedule = isLeader && event.status === 'Confirmado';
+
+    const departmentsToDisplay = useMemo(() => {
+        if (isLeader && isFilteredByMyDepartment && leaderDepartmentId) {
+            return event.event_departments.filter(ed => Number(ed.department_id) === Number(leaderDepartmentId));
+        }
+        return event.event_departments;
+    }, [event.event_departments, isLeader, isFilteredByMyDepartment, leaderDepartmentId]);
+
+    const toggleDepartmentExpansion = (departmentId: number) => {
+        setExpandedDepartments(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(departmentId)) {
+                newSet.delete(departmentId);
+            } else {
+                newSet.add(departmentId);
+            }
+            return newSet;
+        });
+    };
 
     return (
         <div 
@@ -59,11 +80,18 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
             <div className="mt-4 pt-4 border-t border-slate-200">
                 <h4 className="text-sm font-bold text-slate-600 uppercase mb-3">Departamentos e Voluntários</h4>
                 <div className="space-y-4">
-                    {event.event_departments.length > 0 ? event.event_departments.map(({ departments }) => {
+                    {departmentsToDisplay.length > 0 ? departmentsToDisplay.map(({ departments }) => {
                         if (!departments) return null;
                         const volunteersForDept = event.event_volunteers.filter(ev => ev.department_id === departments.id);
                         const hasScheduled = volunteersForDept.length > 0;
                         const isLeadersDept = isLeader && departments.id === leaderDepartmentId;
+
+                        const MAX_VISIBLE_VOLUNTEERS = 3;
+                        const isLongList = volunteersForDept.length > MAX_VISIBLE_VOLUNTEERS;
+                        const isDeptExpanded = expandedDepartments.has(departments.id);
+                        const visibleVolunteers = isLongList && !isDeptExpanded
+                            ? volunteersForDept.slice(0, MAX_VISIBLE_VOLUNTEERS)
+                            : volunteersForDept;
 
                         return (
                         <div key={departments.id} className={`p-4 rounded-lg ${isLeadersDept ? 'bg-blue-50' : 'bg-slate-50/70'}`}>
@@ -85,24 +113,37 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
                                 </span>
                             </div>
                             {hasScheduled && (
-                                <div className="flex flex-wrap gap-2 mt-3">
-                                    {volunteersForDept.map(v => {
-                                        if (!v.volunteers) return null;
-                                        const volunteerName = v.volunteers.name || '';
-                                        return (
-                                            <div key={v.volunteer_id} className="flex items-center space-x-2 pl-1 pr-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                                                <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs bg-slate-500">
-                                                    {v.volunteers.initials}
+                                <div className="mt-3">
+                                    <div className="flex flex-wrap gap-2">
+                                        {visibleVolunteers.map(v => {
+                                            if (!v.volunteers) return null;
+                                            const volunteerName = v.volunteers.name || '';
+                                            return (
+                                                <div key={v.volunteer_id} className="flex items-center space-x-2 pl-1 pr-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                                    <div className="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs bg-slate-500">
+                                                        {v.volunteers.initials}
+                                                    </div>
+                                                    <span>{volunteerName}</span>
                                                 </div>
-                                                <span>{volunteerName}</span>
-                                            </div>
-                                        )
-                                    })}
+                                            )
+                                        })}
+                                    </div>
+                                    {isLongList && (
+                                        <button 
+                                            onClick={() => toggleDepartmentExpansion(departments.id)}
+                                            className="text-sm font-semibold text-blue-600 hover:text-blue-800 mt-2"
+                                        >
+                                            {isDeptExpanded
+                                                ? 'Ver menos'
+                                                : `+ ${volunteersForDept.length - MAX_VISIBLE_VOLUNTEERS} voluntário(s)`
+                                            }
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>
                         )
-                    }) : <p className="text-sm text-slate-500">Nenhum departamento adicionado a este evento ainda.</p>}
+                    }) : <p className="text-sm text-slate-500">Nenhum departamento para exibir com os filtros atuais.</p>}
                 </div>
             </div>
             )}

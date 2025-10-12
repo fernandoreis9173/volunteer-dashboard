@@ -20,48 +20,68 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error('Supabase URL and Service Role Key are required.');
     }
-
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // 2. Fetch all users from Supabase Auth
+    // 2. Safely parse body to check for context
+    let body: { context?: string } = {};
+    if (req.body) {
+        try {
+            body = await req.json();
+        } catch (e) {
+            // Ignore parsing error if body is empty or invalid
+        }
+    }
+    const context = body.context;
+
+    // 3. Optimized path for Dashboard
+    if (context === 'dashboard') {
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
+            page: 1,
+            perPage: 200, // Fetch a reasonable number to find active leaders
+        });
+
+        if (authError) throw authError;
+
+        const users = (authData?.users || [])
+            .filter(user => {
+                const role = user.user_metadata?.role;
+                return (role === 'admin' || role === 'leader' || role === 'lider') && user.user_metadata?.status !== 'Inativo' && user.last_sign_in_at;
+            })
+            .sort((a, b) => new Date(b.last_sign_in_at || 0).getTime() - new Date(a.last_sign_in_at || 0).getTime())
+            .slice(0, 5)
+            .map(user => ({ ...user, app_status: 'Ativo' }));
+
+        return new Response(JSON.stringify({ users }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+    }
+
+    // 4. Default path for AdminPage
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
         page: 1,
-        perPage: 1000, // Adjust if you have more users
+        perPage: 1000,
     });
 
     if (authError) throw authError;
 
-    // 3. Safely handle the response data and filter out volunteers
     const users = (authData?.users || []).filter(user => user.user_metadata?.role !== 'volunteer');
 
-
-    // Enriched user logic to determine a definitive status.
     const enrichedUsers = users.map(user => {
-        // A user who has been invited but has never signed in is always 'Pendente'.
-        // This is a more robust check than relying solely on metadata.
         if (user.invited_at && !user.last_sign_in_at) {
-            return {
-                ...user,
-                app_status: 'Pendente',
-            };
+            return { ...user, app_status: 'Pendente' };
         }
         
-        // For users who have signed in, their status is determined by metadata.
         const metadataStatus = user.user_metadata?.status;
-        let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Ativo'; // Default to 'Ativo' for any user who has signed in.
+        let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Ativo';
 
         if (metadataStatus === 'Ativo' || metadataStatus === 'Inativo') {
             status = metadataStatus;
         } else if (metadataStatus === 'Pendente') {
-            // This is an edge case where a user signed in, but activation failed.
-            // We keep the status as 'Pendente' to signal an issue.
             status = 'Pendente';
         }
 
-        return {
-          ...user,
-          app_status: status,
-        }
+        return { ...user, app_status: status };
       });
 
     return new Response(JSON.stringify({ users: enrichedUsers }), {
@@ -73,7 +93,7 @@ Deno.serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro inesperado na função.';
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500, // Internal Server Error for function failures
+      status: 500,
     })
   }
 })

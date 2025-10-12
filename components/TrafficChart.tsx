@@ -1,7 +1,8 @@
 
 
 import React, { useState, useMemo, useEffect } from 'react';
-import type { ChartDataPoint } from '../App';
+// FIX: Moved ChartDataPoint to types.ts and updated import path.
+import type { ChartDataPoint } from '../types';
 import { ResponsiveContainer, AreaChart, XAxis, YAxis, Tooltip, Area, CartesianGrid } from 'recharts';
 
 interface AnalysisChartProps {

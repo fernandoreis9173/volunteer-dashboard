@@ -2,8 +2,7 @@ import React from 'react';
 import type { EnrichedUser } from '../types';
 
 interface ActivityFeedProps {
-  leaders: EnrichedUser[];
-  loading: boolean;
+  leaders: EnrichedUser[] | undefined;
 }
 
 const timeAgo = (dateString?: string): string => {
@@ -37,7 +36,9 @@ const getInitials = (name?: string): string => {
     return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
 };
 
-const ActivityFeed: React.FC<ActivityFeedProps> = ({ leaders, loading }) => {
+const ActivityFeed: React.FC<ActivityFeedProps> = ({ leaders }) => {
+  const loading = leaders === undefined;
+
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
       <div className="flex justify-between items-center mb-2">
@@ -56,10 +57,10 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ leaders, loading }) => {
                     </div>
                 </div>
             ))
-        ) : leaders.length > 0 ? (
+        ) : leaders && leaders.length > 0 ? (
             <ul className="relative">
                  <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-slate-200" aria-hidden="true"></div>
-                 {leaders.map((leader, index) => {
+                 {leaders.map((leader) => {
                     // FIX: Removed optional chaining as the corrected EnrichedUser type ensures user_metadata exists.
                     const leaderName = leader.user_metadata.name || leader.email || 'Líder';
                     const initials = getInitials(leaderName);
@@ -77,7 +78,7 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ leaders, loading }) => {
                                     <span className="font-normal text-slate-500"> está ativo no sistema.</span>
                                 </p>
                                 {/* FIX: Removed optional chaining as the corrected EnrichedUser type ensures created_at exists. */}
-                                <p className="text-xs text-slate-400 mt-1">{timeAgo(leader.created_at)}</p>
+                                <p className="text-xs text-slate-400 mt-1">{timeAgo(leader.last_sign_in_at)}</p>
                             </div>
                         </li>
                     )

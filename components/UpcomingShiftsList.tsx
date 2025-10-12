@@ -2,9 +2,8 @@ import React, { useState, useMemo } from 'react';
 import type { DashboardEvent } from '../types';
 
 interface UpcomingShiftsListProps {
-  todaySchedules: DashboardEvent[];
-  upcomingSchedules: DashboardEvent[];
-  loading: boolean;
+  todaySchedules: DashboardEvent[] | undefined;
+  upcomingSchedules: DashboardEvent[] | undefined;
   onViewDetails: (event: DashboardEvent) => void;
 }
 
@@ -104,11 +103,18 @@ const FilterButton: React.FC<{ label: string; value: EventFilter; activeValue: E
 );
 
 
-const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules, upcomingSchedules, loading, onViewDetails }) => {
+const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules, upcomingSchedules, onViewDetails }) => {
   const [activeFilter, setActiveFilter] = useState<EventFilter>('upcoming');
   
+  const loading = useMemo(() => {
+    if (activeFilter === 'today') return todaySchedules === undefined;
+    if (activeFilter === 'upcoming') return upcomingSchedules === undefined;
+    return true;
+  }, [activeFilter, todaySchedules, upcomingSchedules]);
+
   const displayedSchedules = useMemo(() => {
-    return activeFilter === 'today' ? todaySchedules : upcomingSchedules;
+    if (activeFilter === 'today') return todaySchedules || [];
+    return upcomingSchedules || [];
   }, [activeFilter, todaySchedules, upcomingSchedules]);
 
   return (

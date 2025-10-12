@@ -1,34 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import VolunteerCard from './VolunteerCard';
 import NewVolunteerForm from './NewVolunteerForm';
 import ConfirmationModal from './ConfirmationModal';
 import { DetailedVolunteer, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
-
-// Debounce hook
-function useDebounce(value: string, delay: number) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-}
+import Pagination from './Pagination';
 
 interface VolunteersPageProps {
   isFormOpen: boolean;
   setIsFormOpen: (isOpen: boolean) => void;
   userRole: string | null;
-  onDataChange: () => void;
 }
 
-const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOpen, userRole, onDataChange }) => {
-  const [allVolunteers, setAllVolunteers] = useState<DetailedVolunteer[]>([]);
+const ITEMS_PER_PAGE = 6;
+
+const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOpen, userRole }) => {
+  const [masterVolunteers, setMasterVolunteers] = useState<DetailedVolunteer[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,32 +26,26 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   const [searchQuery, setSearchQuery] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [volunteerToDeleteId, setVolunteerToDeleteId] = useState<number | null>(null);
-  
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const fetchVolunteers = useCallback(async (query: string) => {
+  const fetchVolunteers = useCallback(async () => {
       setLoading(true);
       setError(null);
       
       try {
-        let queryBuilder = supabase
+        const { data, error: fetchError } = await supabase
             .from('volunteers')
             .select('id, user_id, name, email, phone, initials, status, departments:departaments, skills, availability, created_at')
             .order('created_at', { ascending: false });
 
-        if (query) {
-            queryBuilder = queryBuilder.or(`name.ilike.%${query}%,email.ilike.%${query}%`);
-        }
-
-        const { data, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;
 
-        setAllVolunteers(data as DetailedVolunteer[] || []);
+        setMasterVolunteers(data as DetailedVolunteer[] || []);
       } catch (error: any) {
         const errorMessage = getErrorMessage(error);
         console.error('Error fetching volunteers:', errorMessage);
         setError(`Falha ao carregar voluntários: ${errorMessage}`);
-        setAllVolunteers([]);
+        setMasterVolunteers([]);
       } finally {
         setLoading(false);
       }
@@ -83,12 +65,31 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   }, []);
 
   useEffect(() => {
-    fetchVolunteers(debouncedSearchQuery);
-  }, [debouncedSearchQuery, fetchVolunteers]);
+    fetchVolunteers();
+    fetchActiveDepartments();
+  }, [fetchVolunteers, fetchActiveDepartments]);
+
+  const filteredVolunteers = useMemo(() => {
+    if (!searchQuery) {
+        return masterVolunteers;
+    }
+    const lowercasedQuery = searchQuery.toLowerCase();
+    return masterVolunteers.filter(v => 
+        v.name.toLowerCase().includes(lowercasedQuery) ||
+        v.email.toLowerCase().includes(lowercasedQuery)
+    );
+  }, [searchQuery, masterVolunteers]);
+
+  const paginatedVolunteers = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredVolunteers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [currentPage, filteredVolunteers]);
+
+  const totalPages = Math.ceil(filteredVolunteers.length / ITEMS_PER_PAGE);
 
   useEffect(() => {
-    fetchActiveDepartments();
-  }, [fetchActiveDepartments]);
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   const showForm = () => {
     setSaveError(null);
@@ -126,8 +127,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     if (deleteError) {
         alert(`Falha ao excluir voluntário: ${getErrorMessage(deleteError)}`);
     } else {
-        setAllVolunteers(allVolunteers.filter(v => v.id !== volunteerToDeleteId));
-        onDataChange();
+        await fetchVolunteers();
     }
 
     handleCancelDelete();
@@ -146,16 +146,12 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                 departaments: departments,
             };
 
-            const { data, error } = await supabase
+            const { error } = await supabase
                 .from('volunteers')
                 .update(dbPayload)
-                .eq('id', volunteerData.id)
-                .select('id, user_id, name, email, phone, initials, status, departments:departaments, skills, availability, created_at')
-                .single();
+                .eq('id', volunteerData.id);
                 
             if (error) throw error;
-            
-            setAllVolunteers(allVolunteers.map(v => v.id === data.id ? (data as DetailedVolunteer) : v));
         } else { // Invite new volunteer
             const invitePayload = {
                 name: volunteerData.name,
@@ -169,11 +165,11 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
             if (invokeError) {
                 throw invokeError;
             }
-            
-            await fetchVolunteers(searchQuery);
         }
+        
+        await fetchVolunteers();
         hideForm();
-        onDataChange();
+
     } catch(error: any) {
         const errorMessage = getErrorMessage(error);
         setSaveError(`Falha ao salvar: ${errorMessage}`);
@@ -210,17 +206,24 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
             </div>
           </div>
 
-          {allVolunteers.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {allVolunteers.map((volunteer) => (
-                <VolunteerCard 
-                    key={volunteer.id} 
-                    volunteer={volunteer} 
-                    onEdit={handleEditVolunteer}
-                    onDelete={handleDeleteRequest}
-                />
-                ))}
-            </div>
+          {paginatedVolunteers.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {paginatedVolunteers.map((volunteer) => (
+                  <VolunteerCard 
+                      key={volunteer.id} 
+                      volunteer={volunteer} 
+                      onEdit={handleEditVolunteer}
+                      onDelete={handleDeleteRequest}
+                  />
+                  ))}
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </>
           ) : (
             <div className="text-center py-12 text-slate-500">
                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">

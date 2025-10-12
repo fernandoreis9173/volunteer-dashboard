@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Event as VolunteerEvent, DetailedVolunteer } from '../types';
+import { supabase } from '../lib/supabaseClient';
+import { type Session } from '@supabase/supabase-js';
+import { getErrorMessage } from '../lib/utils';
 
 interface VolunteerDashboardProps {
-  initialData: {
-    schedules?: VolunteerEvent[];
-    volunteerProfile?: DetailedVolunteer;
-  } | null;
+  session: Session | null;
 }
 
 const parseArrayData = (data: string[] | string | null | undefined): string[] => {
@@ -46,10 +46,53 @@ const ScheduleCard: React.FC<{ schedule: VolunteerEvent; isNext?: boolean }> = (
     );
 };
 
-const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ initialData }) => {
-  const schedules = initialData?.schedules ?? [];
-  const volunteerProfile = initialData?.volunteerProfile;
-  const loading = !initialData;
+const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session }) => {
+  const [schedules, setSchedules] = useState<VolunteerEvent[]>([]);
+  const [volunteerProfile, setVolunteerProfile] = useState<DetailedVolunteer | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchVolunteerData = useCallback(async () => {
+    if (!session) return;
+    setLoading(true);
+
+    try {
+        const { data: volunteerData, error: volunteerError } = await supabase
+            .from('volunteers')
+            .select('id, name, phone, initials, status, departments:departaments, skills, availability')
+            .eq('user_id', session.user.id)
+            .single();
+
+        if (volunteerError || !volunteerData) {
+            throw volunteerError || new Error("Volunteer profile not found.");
+        }
+        
+        setVolunteerProfile(volunteerData as DetailedVolunteer);
+
+        const today = new Date().toISOString().slice(0, 10);
+        const { data: scheduleQueryData, error: scheduleError } = await supabase
+          .from('event_volunteers')
+          .select('events(*, event_departments(departments(name)))')
+          .eq('volunteer_id', volunteerData.id)
+          .gte('events.date', today)
+          .order('date', { referencedTable: 'events', ascending: true });
+        
+        if (scheduleError) throw scheduleError;
+
+        const fetchedSchedules = (scheduleQueryData || []).flatMap(item => item.events || []).filter((event): event is VolunteerEvent => event !== null);
+        setSchedules(fetchedSchedules);
+
+    } catch (error) {
+        console.error("Error fetching volunteer dashboard data:", getErrorMessage(error));
+        setSchedules([]);
+        setVolunteerProfile(null);
+    } finally {
+        setLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    fetchVolunteerData();
+  }, [fetchVolunteerData]);
 
   const nextEvent = schedules.length > 0 ? schedules[0] : null;
   const otherEvents = schedules.length > 1 ? schedules.slice(1) : [];
@@ -67,7 +110,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ initialData }) 
         <h2 className="text-xl font-bold text-slate-800 mb-4">Minhas Informações</h2>
         <div className="flex flex-wrap gap-2 items-center">
             <span className="text-sm font-semibold text-slate-500">Meus Departamentos:</span>
-            {volunteerDepartments.length > 0 ? (
+            {loading ? <span className="text-sm text-slate-500">Carregando...</span> : volunteerDepartments.length > 0 ? (
                 volunteerDepartments.map(dept => (
                     <span key={dept} className="px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">{dept}</span>
                 ))

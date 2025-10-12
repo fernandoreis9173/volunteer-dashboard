@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import React, { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { type Session } from '@supabase/supabase-js';
 import { DetailedVolunteer } from '../types';
+import { getErrorMessage } from '../lib/utils';
 
 interface VolunteerProfileProps {
-    supabase: SupabaseClient | null;
-    volunteerData: DetailedVolunteer | undefined;
+    session: Session | null;
     onUpdate: () => void;
 }
 
-// Helper to render array data that might be a string
 const renderArrayData = (data: string[] | string | null | undefined, emptyText: string = 'Nenhuma'): string => {
     let items: string[] = [];
     if (!data) return emptyText;
@@ -16,20 +16,15 @@ const renderArrayData = (data: string[] | string | null | undefined, emptyText: 
     if (Array.isArray(data)) {
         items = data;
     } else if (typeof data === 'string') {
-        // Handle JSON array format "[\"item1\",\"item2\"]"
         if (data.startsWith('[') && data.endsWith(']')) {
             try {
                 const parsed = JSON.parse(data);
-                if (Array.isArray(parsed)) {
-                    items = parsed;
-                }
-            } catch (e) { /* ignore parse error */ }
+                if (Array.isArray(parsed)) items = parsed;
+            } catch (e) { /* ignore */ }
         }
-        // Handle Supabase array format "{item1,item2}"
         else if (data.startsWith('{') && data.endsWith('}')) {
              items = data.substring(1, data.length - 1).split(',').map(s => s.trim().replace(/^"|"$/g, ''));
         }
-        // If it's just a non-empty string, show it (could be a single value)
         else if (data.trim()) {
             items = data.split(',').map(s => s.trim());
         }
@@ -38,13 +33,13 @@ const renderArrayData = (data: string[] | string | null | undefined, emptyText: 
     if (items.length === 0 || (items.length === 1 && items[0] === '')) {
         return emptyText;
     }
-
-    // Capitalize each item for better display
     return items.map(item => item ? item.charAt(0).toUpperCase() + item.slice(1) : '').join(', ');
 };
 
 
-const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteerData, onUpdate }) => {
+const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }) => {
+    const [volunteerData, setVolunteerData] = useState<DetailedVolunteer | null>(null);
+    const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -55,27 +50,39 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
         quarta: false, quinta: false, sexta: false, sabado: false,
     });
     
+    const fetchProfileData = useCallback(async () => {
+        if (!session) return;
+        setLoading(true);
+        try {
+            const { data, error: fetchError } = await supabase
+                .from('volunteers')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .single();
+            if (fetchError) throw fetchError;
+            setVolunteerData(data as DetailedVolunteer);
+        } catch (err) {
+            setError(getErrorMessage(err));
+        } finally {
+            setLoading(false);
+        }
+    }, [session]);
+
+    useEffect(() => {
+        fetchProfileData();
+    }, [fetchProfileData]);
+
     useEffect(() => {
         if (volunteerData) {
             setFormData({
                 name: volunteerData.name || '',
                 phone: volunteerData.phone || ''
             });
-            setSkills(volunteerData.skills || []);
-
+            setSkills(renderArrayData(volunteerData.skills, '').split(', ').filter(Boolean));
+            
             const availabilityKeys = { domingo: false, segunda: false, terca: false, quarta: false, quinta: false, sexta: false, sabado: false };
-            let availabilityArray: string[] = [];
-            const rawAvailability = volunteerData.availability;
-            if (Array.isArray(rawAvailability)) {
-                availabilityArray = rawAvailability;
-            } else if (typeof rawAvailability === 'string' && rawAvailability.startsWith('[')) {
-                try {
-                    const parsed = JSON.parse(rawAvailability);
-                    if (Array.isArray(parsed)) {
-                        availabilityArray = parsed;
-                    }
-                 } catch (e) {}
-            }
+            const availabilityArray = renderArrayData(volunteerData.availability, '').toLowerCase().split(', ').filter(Boolean);
+            
             availabilityArray.forEach(day => {
                 if (day in availabilityKeys) {
                     availabilityKeys[day as keyof typeof availabilityKeys] = true;
@@ -106,16 +113,16 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
                     name: formData.name,
                     phone: formData.phone,
                     skills: skills,
-                    availability: JSON.stringify(selectedAvailability) // Save as JSON string for consistency
+                    availability: JSON.stringify(selectedAvailability)
                 })
                 .eq('id', volunteerData.id);
             
             if (updateError) throw updateError;
             
-            // Also update the name in auth.users.user_metadata
             await supabase.auth.updateUser({ data: { name: formData.name } });
 
-            onUpdate(); // Refetch data in App.tsx
+            await fetchProfileData(); // Refetch local data
+            onUpdate(); // Propagate global changes if needed (like notification count)
             setIsEditing(false);
 
         } catch (e: any) {
@@ -125,8 +132,11 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
         }
     };
 
-    if (!volunteerData) {
+    if (loading) {
         return <p>Carregando perfil...</p>;
+    }
+    if (error || !volunteerData) {
+        return <p className="text-red-500">Erro ao carregar perfil: {error}</p>;
     }
 
     return (
@@ -145,7 +155,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
                     <div className="space-y-6">
                         <div><label className="block text-sm font-medium text-slate-700">Nome Completo</label><input type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md"/></div>
                         <div><label className="block text-sm font-medium text-slate-700">Telefone</label><input type="text" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md"/></div>
-                        <div><label className="block text-sm font-medium text-slate-700 mb-2">Habilidades</label>{/* Basic tag input for skills */}<input type="text" value={skills.join(', ')} onChange={e => setSkills(e.target.value.split(',').map(s => s.trim()))} className="w-full mt-1 p-2 border rounded-md" placeholder="Ex: Canto, Fotografia, etc"/></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-2">Habilidades</label><input type="text" value={skills.join(', ')} onChange={e => setSkills(e.target.value.split(',').map(s => s.trim()))} className="w-full mt-1 p-2 border rounded-md" placeholder="Ex: Canto, Fotografia, etc"/></div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

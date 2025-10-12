@@ -1,6 +1,6 @@
 {
   "name": "Voluntários - Sistema da Igreja",
-  "short_name": "Voluntários App",
+  "short_name": "Volunteers",
   "description": "Dashboard e gestão de voluntários e eventos da Igreja.",
   "start_url": "/#/dashboard",
   "display": "standalone",
