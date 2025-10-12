@@ -139,7 +139,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
             </button>
         </div>
 
-        <nav className="flex-1 flex flex-col space-y-4">
+        <nav className="flex-1 flex flex-col space-y-4 overflow-y-auto pr-1">
           <div>
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Navegação</h2>
             <div className="space-y-1">
@@ -186,52 +186,32 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
             </div>
           )}
         </nav>
-
-        <div className="mt-auto">
-          <div className="w-full h-px bg-slate-200 mb-4"></div>
-           <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3 overflow-hidden">
-                  <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center bg-blue-100 rounded-full text-blue-600 font-bold">{initials}</div>
-                  <div className="flex-1 overflow-hidden">
-                      <p className="font-semibold text-slate-800 text-sm truncate" title={userName}>{userName}</p>
-                      {roleDisplayName && <span className={`text-xs font-semibold rounded-full capitalize px-2 py-0.5 mt-1 ${normalizedRole === 'admin' ? 'bg-indigo-100 text-indigo-800' : normalizedRole === 'leader' ? 'bg-slate-100 text-slate-700' : 'bg-green-100 text-green-800'}`}>{roleDisplayName}</span>}
-                  </div>
-              </div>
-              <div className="relative" ref={userMenuRef}>
-                <button onClick={() => setIsUserMenuOpen(prev => !prev)} className="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 transition-colors flex-shrink-0" title="Opções do usuário">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
-                    </svg>
-                </button>
-                {isUserMenuOpen && (
-                    <div className="absolute bottom-full right-0 mb-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-20 py-1">
-                        <ul>
-                            <li>
-                                <button
-                                    onClick={() => { onNavigate('my-profile'); setIsUserMenuOpen(false); }}
-                                    className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
-                                    <span>Meu Perfil</span>
-                                </button>
-                            </li>
-                            <li>
-                                <button
-                                    onClick={handleLogout}
-                                    className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-700 hover:bg-red-50 transition-colors"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" /></svg>
-                                    <span>Sair</span>
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                )}
-              </div>
-          </div>
+        <div ref={userMenuRef} className="mt-auto pt-6 border-t border-slate-200 relative">
+            <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="flex items-center space-x-3 w-full p-2 rounded-lg hover:bg-slate-100">
+                <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm">
+                    {initials}
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                    <p className="font-semibold text-slate-800 text-sm truncate">{userName}</p>
+                    <p className="text-xs text-slate-500">{roleDisplayName}</p>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+            </button>
+            {isUserMenuOpen && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 w-full bg-white rounded-lg shadow-lg border border-slate-200 py-1">
+                    <button onClick={() => { onNavigate('my-profile'); setIsUserMenuOpen(false); }} className="w-full text-left flex items-center space-x-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+                         <span>Meu Perfil</span>
+                    </button>
+                    <button onClick={handleLogout} className="w-full text-left flex items-center space-x-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" /></svg>
+                        <span>Sair</span>
+                    </button>
+                </div>
+            )}
         </div>
       </aside>
-      {isOpen && <div onClick={() => setIsOpen(false)} className="lg:hidden fixed inset-0 bg-black/50 z-20"></div>}
+      {isOpen && <div onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black bg-opacity-30 z-20 lg:hidden"></div>}
     </>
   );
 };

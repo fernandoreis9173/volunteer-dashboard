@@ -7,7 +7,7 @@ import { EventInput, EventClickArg, EventDropArg, DayHeaderContentArg, EventCont
 import ptBrBaseLocale from '@fullcalendar/core/locales/pt-br';
 
 import NewEventForm from './NewScheduleForm';
-import { Event } from '../types';
+import { Event, NotificationRecord } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 
@@ -433,6 +433,50 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         week: { dow: 0, doy: 4, },
     }), []);
     
+    const createAndSendNotifications = async (notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[]) => {
+        if (notifications.length === 0) return;
+        try {
+            const { error: invokeError } = await supabase.functions.invoke('create-notifications', {
+                body: { notifications },
+            });
+            if (invokeError) throw invokeError;
+        } catch (err) {
+            console.error("Falha ao enviar notificações:", getErrorMessage(err));
+        }
+    };
+
+    const notifyScheduledVolunteers = async (eventId: number, message: string) => {
+        const { data: eventVolunteers, error: evError } = await supabase
+            .from('event_volunteers')
+            .select('volunteers(user_id)')
+            .eq('event_id', eventId);
+
+        if (evError) {
+            console.error("Error fetching users for update notification:", evError);
+            return;
+        }
+
+        if (eventVolunteers) {
+            const userIdsToNotify = new Set<string>();
+            eventVolunteers.forEach(ev => {
+                const volunteer = Array.isArray(ev.volunteers) ? ev.volunteers[0] : ev.volunteers;
+                if (volunteer?.user_id) {
+                    userIdsToNotify.add(volunteer.user_id);
+                }
+            });
+            
+            if (userIdsToNotify.size > 0) {
+                const notifications = Array.from(userIdsToNotify).map(userId => ({
+                    user_id: userId,
+                    message: message,
+                    type: 'event_update' as const,
+                    related_event_id: eventId,
+                }));
+                await createAndSendNotifications(notifications);
+            }
+        }
+    };
+
     const handleStatusFilterChange = (status: string) => {
         setStatusFilters(prev =>
             prev.includes(status)
@@ -631,13 +675,17 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                 const c = conflicts[0];
                 throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
             }
+            const { error: updateError } = await supabase.from('events').update({ date: newDate, start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
+            if (updateError) throw updateError;
+            
+            await fetchAllEvents(false); 
+            onDataChange();
+            await notifyScheduledVolunteers(eventId, `O evento "${event.title}" foi reagendado para um novo dia/horário.`);
+
         } catch (err) {
             alert('Erro ao mover evento: ' + getErrorMessage(err));
             info.revert();
-            return;
         }
-        const { error: updateError } = await supabase.from('events').update({ date: newDate, start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
-        if (updateError) { alert('Falha ao atualizar o evento. ' + getErrorMessage(updateError)); info.revert(); } else { await fetchAllEvents(false); onDataChange(); }
     };
     
     const handleEventResize = async (info: EventResizeDoneArg) => {
@@ -659,6 +707,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             if (updateError) throw updateError;
             await fetchAllEvents(false);
             onDataChange();
+            await notifyScheduledVolunteers(eventId, `O horário do evento "${event.title}" foi alterado.`);
         } catch (err) {
             alert('Erro ao redimensionar evento: ' + getErrorMessage(err));
             info.revert();
@@ -666,27 +715,65 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
     };
 
     const handleSaveEvent = async (eventPayload: any) => {
-        setIsSaving(true); 
+        setIsSaving(true);
         setSaveError(null);
         try {
             const { volunteer_ids, ...upsertData } = eventPayload;
+            
             let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', upsertData.date).lt('start_time', upsertData.end_time).gt('end_time', upsertData.start_time);
-            if (upsertData.id) conflictQuery = conflictQuery.neq('id', upsertData.id);
+            if (upsertData.id) {
+                conflictQuery = conflictQuery.neq('id', upsertData.id);
+            }
             const { data: conflicts, error: conflictError } = await conflictQuery;
             if (conflictError) throw conflictError;
             if (conflicts && conflicts.length > 0) {
                 const c = conflicts[0];
                 throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
             }
-            const { error: eventError } = await supabase.from('events').upsert(upsertData).select('id').single();
-            if (eventError) throw eventError;
+
+            let savedEvent;
+            const isCreating = !upsertData.id;
+
+            if (isCreating) {
+                const { id, ...insertPayload } = upsertData;
+                const { data: newEvent, error } = await supabase.from('events').insert(insertPayload).select().single();
+                if (error) throw error;
+                savedEvent = newEvent;
+
+                const { data: profiles, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .or('role.eq.leader,role.eq.lider,role.eq.admin');
+
+                if (profileError) {
+                    console.error("Could not fetch leaders/admins for notification:", profileError);
+                } else if (profiles) {
+                    const notifications = profiles.map(p => ({
+                        user_id: p.id,
+                        message: `Novo evento criado: "${savedEvent.name}".`,
+                        type: 'new_event_for_leader' as const,
+                        related_event_id: savedEvent.id,
+                    }));
+                    await createAndSendNotifications(notifications);
+                }
+
+            } else { // Updating
+                const eventId = upsertData.id;
+                const { id, ...updatePayload } = upsertData;
+                const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
+                if (error) throw error;
+                savedEvent = updatedEvent;
+                
+                await notifyScheduledVolunteers(savedEvent.id, `O evento "${savedEvent.name}" foi atualizado. Confira os detalhes.`);
+            }
+
             handleCloseForm();
-            onDataChange(); 
+            onDataChange();
             await fetchAllEvents(false);
-        } catch (err) { 
-            setSaveError(getErrorMessage(err)); 
-        } finally { 
-            setIsSaving(false); 
+        } catch (err) {
+            setSaveError(getErrorMessage(err));
+        } finally {
+            setIsSaving(false);
         }
     };
 

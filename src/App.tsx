@@ -371,37 +371,39 @@ const App: React.FC = () => {
     }
     
     return (
-        <div className="flex min-h-screen bg-slate-50">
-            <Sidebar
-                activePage={activePage}
-                onNavigate={handleNavigate}
-                onNewVolunteer={handleNewVolunteer}
-                onNewEvent={handleNewEvent}
-                isOpen={isSidebarOpen}
-                setIsOpen={setIsSidebarOpen}
-                userRole={userProfile?.role ?? null}
-                session={session}
-                unreadCount={unreadCount}
-                pushPermissionStatus={pushPermissionStatus}
-                onSubscribeToPush={() => setIsPushPromptOpen(true)}
-            />
-            <div className="flex-1 flex flex-col min-w-0">
-                {activePage !== 'calendar' && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
-                <main className={`flex-1 bg-slate-50 ${activePage === 'calendar' ? 'p-0 lg:p-6' : 'p-6'}`}>
-                    {renderPage()}
-                </main>
+        <>
+            <div className="flex min-h-screen bg-slate-50">
+                <Sidebar
+                    activePage={activePage}
+                    onNavigate={handleNavigate}
+                    onNewVolunteer={handleNewVolunteer}
+                    onNewEvent={handleNewEvent}
+                    isOpen={isSidebarOpen}
+                    setIsOpen={setIsSidebarOpen}
+                    userRole={userProfile?.role ?? null}
+                    session={session}
+                    unreadCount={unreadCount}
+                    pushPermissionStatus={pushPermissionStatus}
+                    onSubscribeToPush={() => setIsPushPromptOpen(true)}
+                />
+                <div className="flex-1 flex flex-col min-w-0">
+                    {activePage !== 'calendar' && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
+                    <main className={`flex-1 bg-slate-50 ${activePage === 'calendar' ? 'p-0 lg:p-6' : 'p-6'}`}>
+                        {renderPage()}
+                    </main>
+                </div>
+                <PushNotificationModal
+                    isOpen={isPushPromptOpen}
+                    onClose={() => setIsPushPromptOpen(false)}
+                    onConfirm={subscribeToPushNotifications}
+                />
             </div>
-            <div className="fixed top-4 right-4 z-50 space-y-2">
+            <div className="fixed top-4 right-4 z-[100] space-y-2">
                 {notifications.map(n => (
                     <NotificationToast key={n.id} notification={n} onClose={removeNotification} />
                 ))}
             </div>
-            <PushNotificationModal
-                isOpen={isPushPromptOpen}
-                onClose={() => setIsPushPromptOpen(false)}
-                onConfirm={subscribeToPushNotifications}
-            />
-        </div>
+        </>
     );
 };
 
