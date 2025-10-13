@@ -1,11 +1,12 @@
-/** @type {import('tailwindcss').Config} */
-export default {
+import { defineConfig } from 'tailwindcss';
+
+export default defineConfig({
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}", // Isso cobre todos os seus arquivos dentro da pasta src
+    './index.html',
+    './src/**/*.{js,ts,jsx,tsx}', // todos os arquivos React
   ],
   theme: {
     extend: {},
   },
   plugins: [],
-}
+});
