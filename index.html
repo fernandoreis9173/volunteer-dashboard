@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Volunteer Dashboard</title>
 
-    <link rel="manifest" href="/manifest.webmanifest">
+    <!-- Progressive Web App (PWA) Config -->
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#2563EB" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -14,6 +15,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Volunteers" />
 
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Import Map (corrigido e padronizado) -->
     <script type="importmap">
 {
   "imports": {
@@ -37,7 +42,8 @@
   }
 }
 </script>
-  </head>
+  <link rel="stylesheet" href="/index.css">
+</head>
 
   <body class="bg-slate-50 antialiased">
     <div id="root"></div>

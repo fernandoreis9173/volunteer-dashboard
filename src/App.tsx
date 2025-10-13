@@ -25,6 +25,7 @@ import { supabase } from './lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
 
+// CORREÇÃO 1: Usar import.meta.env para variáveis de ambiente no Vite.
 // Check for required environment variables for the frontend
 const areApiKeysConfigured = 
     import.meta.env.VITE_SUPABASE_URL &&
@@ -32,20 +33,22 @@ const areApiKeysConfigured =
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 interface UserProfileState {
-  role: string | null;
-  department_id: number | null;
-  volunteer_id: number | null;
-  status: string | null;
+    role: string | null;
+    department_id: number | null;
+    volunteer_id: number | null;
+    status: string | null;
 }
 
+// CORREÇÃO 2: Incluir explicitamente 'lider' na lista de permissões
+// para garantir que líderes logados tenham acesso.
 const pagePermissions: Record<Page, string[]> = {
-    'dashboard': ['admin', 'leader', 'volunteer'],
-    'notifications': ['leader', 'volunteer'],
-    'my-profile': ['admin', 'leader', 'volunteer'],
-    'volunteers': ['admin', 'leader'],
+    'dashboard': ['admin', 'leader', 'lider', 'volunteer'],
+    'notifications': ['leader', 'lider', 'volunteer'],
+    'my-profile': ['admin', 'leader', 'lider', 'volunteer'],
+    'volunteers': ['admin', 'leader', 'lider'],
     'departments': ['admin'],
-    'events': ['admin', 'leader'],
-    'calendar': ['admin', 'leader'],
+    'events': ['admin', 'leader', 'lider'],
+    'calendar': ['admin', 'leader', 'lider'],
     'admin': ['admin'],
 };
 
@@ -75,132 +78,134 @@ const urlBase64ToUint8Array = (base64String: string) => {
 };
 
 const App: React.FC = () => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [activePage, setActivePage] = useState<Page>(getPageFromHash());
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
-  const [isEventFormOpen, setIsEventFormOpen] = useState(false);
-  const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
-  const [isUserDisabled, setIsUserDisabled] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
-  const [notifications, setNotifications] = useState<ToastNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
-  const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
-  const lastUserId = useRef<string | null>(null);
-  
-  // VAPID key is now from environment variables
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY!;
+    const [session, setSession] = useState<Session | null>(null);
+    const [activePage, setActivePage] = useState<Page>(getPageFromHash());
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
+    const [isEventFormOpen, setIsEventFormOpen] = useState(false);
+    const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
+    const [isUserDisabled, setIsUserDisabled] = useState(false);
+    const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
+    const [notifications, setNotifications] = useState<ToastNotification[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
+    const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
+    const lastUserId = useRef<string | null>(null);
+    
+    // CORREÇÃO 1: Usar import.meta.env para acessar a chave VAPID.
+    const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY!;
 
-  const hasPermission = useMemo(() => {
-    if (!userProfile?.role) {
-        return false;
-    }
-    const normalizedRole = userProfile.role === 'lider' ? 'leader' : userProfile.role;
-    const allowedRolesForPage = pagePermissions[activePage];
-    return allowedRolesForPage && allowedRolesForPage.includes(normalizedRole);
-  }, [userProfile, activePage]);
-
-  const fetchCoreData = useCallback(async (currentSession: Session) => {
-    try {
-        const userStatus = currentSession.user.user_metadata?.status;
-        const userRole = currentSession.user.user_metadata?.role;
-
-        if (userStatus === 'Inativo') {
-            setIsUserDisabled(true);
-            setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
-            setIsLoading(false); // Stop loading, render disabled page.
-            return;
+    const hasPermission = useMemo(() => {
+        if (!userProfile?.role) {
+            return false;
         }
-        setIsUserDisabled(false);
+        // Normalize o papel para inglês (leader) ou mantenha (lider) se a permissão foi definida com ambos.
+        // Já que pagePermissions agora inclui 'lider', basta checar o role original.
+        const allowedRolesForPage = pagePermissions[activePage];
+        // Checa se o papel do usuário (ex: 'lider' ou 'admin') está na lista de permissões da página.
+        return allowedRolesForPage && allowedRolesForPage.includes(userProfile.role);
+    }, [userProfile, activePage]);
 
-        if (!userRole) {
-            console.error("User role not found in metadata.");
-            setUserProfile(null);
-            return;
-        }
-        
-        // If the user status is pending, we don't need to fetch detailed profiles yet.
-        // The registration page will handle the profile creation.
-        if (userStatus === 'Pendente') {
-             setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null });
-             return;
-        }
+    const fetchCoreData = useCallback(async (currentSession: Session) => {
+        try {
+            const userStatus = currentSession.user.user_metadata?.status;
+            const userRole = currentSession.user.user_metadata?.role;
 
-        let profile: UserProfileState | null = null;
-        if (userRole === 'volunteer') {
-            const { data: volunteerData, error: volunteerError } = await supabase
-                .from('volunteers')
-                .select('id')
+            if (userStatus === 'Inativo') {
+                setIsUserDisabled(true);
+                setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
+                setIsLoading(false); // Stop loading, render disabled page.
+                return;
+            }
+            setIsUserDisabled(false);
+
+            if (!userRole) {
+                console.error("User role not found in metadata.");
+                setUserProfile(null);
+                return;
+            }
+            
+            // If the user status is pending, we don't need to fetch detailed profiles yet.
+            // The registration page will handle the profile creation.
+            if (userStatus === 'Pendente') {
+                 setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null });
+                 return;
+            }
+
+            let profile: UserProfileState | null = null;
+            if (userRole === 'volunteer') {
+                const { data: volunteerData, error: volunteerError } = await supabase
+                    .from('volunteers')
+                    .select('id')
+                    .eq('user_id', currentSession.user.id)
+                    .single();
+
+                if (volunteerError) console.error("Error fetching volunteer profile:", getErrorMessage(volunteerError));
+                
+                profile = {
+                    role: userRole,
+                    department_id: null,
+                    volunteer_id: volunteerData?.id ?? null,
+                    status: userStatus,
+                };
+
+            } else { // Admin/Leader
+                const { data: profileData, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('department_id')
+                    .eq('id', currentSession.user.id)
+                    .single();
+                
+                if (profileError) console.error("Error fetching admin/leader profile:", getErrorMessage(profileError));
+
+                profile = {
+                    role: userRole,
+                    department_id: profileData?.department_id ?? null,
+                    volunteer_id: null,
+                    status: userStatus,
+                };
+            }
+            setUserProfile(profile);
+
+            // Fetch global data (like unread notifications count) for active users
+            const { count } = await supabase
+                .from('notifications')
+                .select('*', { count: 'exact', head: true })
                 .eq('user_id', currentSession.user.id)
-                .single();
-
-            if (volunteerError) console.error("Error fetching volunteer profile:", getErrorMessage(volunteerError));
-            
-            profile = {
-                role: userRole,
-                department_id: null,
-                volunteer_id: volunteerData?.id ?? null,
-                status: userStatus,
-            };
-
-        } else { // Admin/Leader
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('department_id')
-                .eq('id', currentSession.user.id)
-                .single();
-            
-            if (profileError) console.error("Error fetching admin/leader profile:", getErrorMessage(profileError));
-
-            profile = {
-                role: userRole,
-                department_id: profileData?.department_id ?? null,
-                volunteer_id: null,
-                status: userStatus,
-            };
+                .eq('is_read', false);
+            setUnreadCount(count ?? 0);
+        } catch (err) {
+            console.error("Error fetching core user data:", getErrorMessage(err));
+            setUserProfile(null); // Clear profile on error
+        } finally {
+            setIsLoading(false); // Signal that all initial data loading is complete.
         }
-        setUserProfile(profile);
+    }, []);
 
-        // Fetch global data (like unread notifications count) for active users
-        const { count } = await supabase
-            .from('notifications')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', currentSession.user.id)
-            .eq('is_read', false);
-        setUnreadCount(count ?? 0);
-    } catch (err) {
-        console.error("Error fetching core user data:", getErrorMessage(err));
-        setUserProfile(null); // Clear profile on error
-    } finally {
-        setIsLoading(false); // Signal that all initial data loading is complete.
-    }
-  }, []);
+    const refetchUserData = useCallback(() => {
+        if (session) {
+            setIsLoading(true);
+            fetchCoreData(session);
+        }
+    }, [session, fetchCoreData]);
+    
+    const handleRegistrationComplete = useCallback(() => {
+        // After registration, user status is 'Ativo'. We just need to refetch the profile data.
+        refetchUserData();
+        window.location.hash = '#/dashboard';
+    }, [refetchUserData]);
 
-  const refetchUserData = useCallback(() => {
-    if (session) {
-        setIsLoading(true);
-        fetchCoreData(session);
-    }
-  }, [session, fetchCoreData]);
-  
-  const handleRegistrationComplete = useCallback(() => {
-    // After registration, user status is 'Ativo'. We just need to refetch the profile data.
-    refetchUserData();
-    window.location.hash = '#/dashboard';
-  }, [refetchUserData]);
-
-  const refetchNotificationCount = useCallback(async () => {
-    if (session) {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', session.user.id)
-        .eq('is_read', false);
-      setUnreadCount(count ?? 0);
-    }
-  }, [session]);
+    const refetchNotificationCount = useCallback(async () => {
+        if (session) {
+            const { count } = await supabase
+                .from('notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', session.user.id)
+                .eq('is_read', false);
+            setUnreadCount(count ?? 0);
+        }
+    }, [session]);
 
     useEffect(() => {
         // Initialize push notification permission status
@@ -253,6 +258,7 @@ const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY!;
     useEffect(() => {
         // Prompt for push notifications after login if permission is 'default'
         if (!isLoading && userProfile) {
+            // CORREÇÃO: Já que pagePermissions inclui 'lider', a checagem aqui pode ser mais simples ou manter a redundância.
             const isTargetRole = userProfile.role === 'leader' || userProfile.role === 'lider' || userProfile.role === 'volunteer';
             if (isTargetRole && pushPermissionStatus === 'default' && !sessionStorage.getItem('pushPromptedThisSession')) {
                 // Delay slightly to ensure UI is stable before showing modal
@@ -379,6 +385,7 @@ const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY!;
     }
 
     // Full-screen permission check, runs after all data is loaded and user status is confirmed as not 'Pendente'.
+    // Esta checagem agora inclui o role 'lider' graças à atualização no pagePermissions.
     if (!hasPermission) {
         return <PermissionDeniedPage onNavigate={handleNavigate} />;
     }
