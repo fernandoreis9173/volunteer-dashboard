@@ -35,7 +35,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # A porta padrão do Nginx é 80
-EXPOSE 80
+EXPOSE 3000
 
 # Comando para iniciar o Nginx
 CMD ["nginx", "-g", "daemon off;"]
