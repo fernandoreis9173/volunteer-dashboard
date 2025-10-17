@@ -234,46 +234,55 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
         <h2 className="text-xl font-bold text-slate-800 mb-6">{title}</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Título do Evento *</label>
-                    <input type="text" name="name" value={formData.name} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" />
+            {isSchedulingMode ? (
+                 <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-sm text-slate-700">
+                    <p><strong>Data:</strong> {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                    <p><strong>Horário:</strong> {formData.start_time.substring(0,5)} - {formData.end_time.substring(0,5)}</p>
+                    {formData.local && <p><strong>Local:</strong> {formData.local}</p>}
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                    <select name="status" value={formData.status} onChange={handleInputChange} disabled={!isAdminMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:cursor-not-allowed">
-                        <option value="Pendente">Pendente</option>
-                        <option value="Confirmado">Confirmado</option>
-                        <option value="Cancelado">Cancelado</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div><label className="block text-sm font-medium text-slate-700 mb-1">Data *</label><input type="date" name="date" value={formData.date} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
-                <div><label className="block text-sm font-medium text-slate-700 mb-1">Início *</label><input type="time" name="start_time" value={formData.start_time} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
-                <div><label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label><input type="time" name="end_time" value={formData.end_time} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
-            </div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
-            {isAdminMode && (
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Cor do Evento</label>
-                    <div className="flex items-center space-x-3">
-                        {colorOptions.map(option => (
-                        <button
-                            type="button"
-                            key={option.value}
-                            onClick={() => handleColorChange(option.value)}
-                            className={`w-8 h-8 rounded-full ${option.bg} transition-transform duration-150 transform hover:scale-110 focus:outline-none ${formData.color === option.value ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
-                            aria-label={option.name}
-                        >
-                           {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                        </button>
-                        ))}
+            ) : (
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Título do Evento *</label>
+                            <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                            <select name="status" value={formData.status} onChange={handleInputChange} disabled={!isAdminMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:cursor-not-allowed">
+                                <option value="Pendente">Pendente</option>
+                                <option value="Confirmado">Confirmado</option>
+                                <option value="Cancelado">Cancelado</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Data *</label><input type="date" name="date" value={formData.date} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Início *</label><input type="time" name="start_time" value={formData.start_time} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label><input type="time" name="end_time" value={formData.end_time} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                    </div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                    {isAdminMode && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Cor do Evento</label>
+                            <div className="flex items-center space-x-3">
+                                {colorOptions.map(option => (
+                                <button
+                                    type="button"
+                                    key={option.value}
+                                    onClick={() => handleColorChange(option.value)}
+                                    className={`w-8 h-8 rounded-full ${option.bg} transition-transform duration-150 transform hover:scale-110 focus:outline-none ${formData.color === option.value ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+                                    aria-label={option.name}
+                                >
+                                {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"></textarea></div>
+                </>
             )}
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed"></textarea></div>
 
             {isSchedulingMode && !isSchedulingAllowed && (
                  <div className="pt-5 border-t border-slate-200">
@@ -301,8 +310,8 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                                 onChange={(e) => setVolunteerSearch(e.target.value)}
                                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
                             />
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{maxHeight: '400px', overflow: 'hidden'}}>
-                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col h-72">
                                    <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
                                         Disponíveis ({filteredAvailableVolunteers.length})
                                     </h4>
@@ -312,7 +321,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                                         )) : <p className="text-sm text-slate-500 text-center pt-4">Nenhum voluntário encontrado.</p>}
                                     </div>
                                 </div>
-                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col">
+                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col h-72">
                                     <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
                                         Selecionados ({selectedVolunteers.length})
                                     </h4>

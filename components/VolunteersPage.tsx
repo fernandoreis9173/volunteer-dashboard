@@ -11,11 +11,23 @@ interface VolunteersPageProps {
   isFormOpen: boolean;
   setIsFormOpen: (isOpen: boolean) => void;
   userRole: string | null;
+  leaderDepartmentId: number | null;
 }
 
 const ITEMS_PER_PAGE = 6;
 
-const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOpen, userRole }) => {
+const useIsMobile = (breakpoint = 768) => { // md breakpoint
+    const [isMobile, setIsMobile] = useState(window.innerWidth < breakpoint);
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [breakpoint]);
+    return isMobile;
+};
+
+
+const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOpen, userRole, leaderDepartmentId }) => {
   const [masterVolunteers, setMasterVolunteers] = useState<DetailedVolunteer[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +39,20 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [volunteerToDeleteId, setVolunteerToDeleteId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pendingInvites, setPendingInvites] = useState<Set<number>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [volunteerToInvite, setVolunteerToInvite] = useState<DetailedVolunteer | null>(null);
+  const [isInviting, setIsInviting] = useState(false);
+
+  const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
+  const [volunteerToRemove, setVolunteerToRemove] = useState<DetailedVolunteer | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const isMobile = useIsMobile();
+
+
+  const isLeader = userRole === 'leader' || userRole === 'lider';
 
   const fetchVolunteers = useCallback(async () => {
       setLoading(true);
@@ -64,10 +90,32 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     }
   }, []);
 
+  const fetchPendingInvites = useCallback(async () => {
+    if (!isLeader) return;
+    const { data, error } = await supabase
+      .from('invitations')
+      .select('volunteer_id')
+      .eq('status', 'pendente');
+    if (error) {
+      console.error('Error fetching pending invites:', getErrorMessage(error));
+    } else {
+      setPendingInvites(new Set(data.map(i => i.volunteer_id)));
+    }
+  }, [isLeader]);
+
+
   useEffect(() => {
     fetchVolunteers();
     fetchActiveDepartments();
-  }, [fetchVolunteers, fetchActiveDepartments]);
+    fetchPendingInvites();
+  }, [fetchVolunteers, fetchActiveDepartments, fetchPendingInvites]);
+
+  const leaderDepartmentName = useMemo(() => {
+    if (isLeader && leaderDepartmentId && departments.length > 0) {
+        return departments.find(d => d.id === leaderDepartmentId)?.name || null;
+    }
+    return null;
+  }, [isLeader, leaderDepartmentId, departments]);
 
   const filteredVolunteers = useMemo(() => {
     if (!searchQuery) {
@@ -86,10 +134,12 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   }, [currentPage, filteredVolunteers]);
 
   const totalPages = Math.ceil(filteredVolunteers.length / ITEMS_PER_PAGE);
+  
+  const volunteersToDisplay = isMobile ? filteredVolunteers : paginatedVolunteers;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, isMobile]);
 
   const showForm = () => {
     setSaveError(null);
@@ -121,7 +171,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         handleCancelDelete();
         return;
     }
-
+    setIsDeleting(true);
     const { error: deleteError } = await supabase.from('volunteers').delete().eq('id', volunteerToDeleteId);
 
     if (deleteError) {
@@ -129,9 +179,77 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     } else {
         await fetchVolunteers();
     }
-
+    setIsDeleting(false);
     handleCancelDelete();
   };
+  
+  const handleInviteRequest = (volunteer: DetailedVolunteer) => {
+    setVolunteerToInvite(volunteer);
+    setIsInviteModalOpen(true);
+  };
+
+  const handleCancelInvite = () => {
+    setIsInviteModalOpen(false);
+    setVolunteerToInvite(null);
+  };
+
+  const handleConfirmInvite = async () => {
+    if (!volunteerToInvite || !volunteerToInvite.id) return;
+    setIsInviting(true);
+    try {
+      const { error } = await supabase.functions.invoke('invite-to-department', {
+        body: { volunteerId: volunteerToInvite.id }
+      });
+      if (error) throw error;
+      await fetchPendingInvites();
+    } catch (err) {
+      alert(`Falha ao enviar convite: ${getErrorMessage(err)}`);
+    } finally {
+      setIsInviting(false);
+      handleCancelInvite();
+    }
+  };
+
+  const handleRemoveFromDepartmentRequest = (volunteer: DetailedVolunteer) => {
+    setVolunteerToRemove(volunteer);
+    setIsRemoveModalOpen(true);
+  };
+
+  const handleCancelRemove = () => {
+    setIsRemoveModalOpen(false);
+    setVolunteerToRemove(null);
+  };
+
+  const handleConfirmRemoveFromDepartment = async () => {
+    if (!volunteerToRemove) return;
+    setIsRemoving(true);
+    try {
+      const { error } = await supabase.functions.invoke('remove-from-department', {
+        body: { volunteerId: volunteerToRemove.id }
+      });
+      if (error) throw error;
+      await fetchVolunteers();
+    } catch (err) {
+      alert(`Falha ao remover voluntário: ${getErrorMessage(err)}`);
+    } finally {
+      setIsRemoving(false);
+      handleCancelRemove();
+    }
+  };
+
+  const handleStatusChange = async (volunteerId: number, newStatus: 'Ativo' | 'Inativo') => {
+    const { error } = await supabase
+      .from('volunteers')
+      .update({ status: newStatus })
+      .eq('id', volunteerId);
+
+    if (error) {
+      alert(`Falha ao atualizar status: ${getErrorMessage(error)}`);
+    } else {
+      await fetchVolunteers();
+    }
+  };
+
 
   const handleSaveVolunteer = async (volunteerData: Omit<DetailedVolunteer, 'created_at'> & { id?: number }) => {
     setIsSaving(true);
@@ -189,6 +307,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     }
     return (
         <div className="space-y-6">
+          <style>{`
+              .no-scrollbar::-webkit-scrollbar { display: none; }
+              .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+          `}</style>
           <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2">
             <div className="relative flex-grow w-full">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -206,23 +328,31 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
             </div>
           </div>
 
-          {paginatedVolunteers.length > 0 ? (
+          {volunteersToDisplay.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {paginatedVolunteers.map((volunteer) => (
+              <div className="flex overflow-x-auto space-x-4 pb-4 md:grid md:grid-cols-2 md:space-x-0 xl:grid-cols-3 md:gap-6 no-scrollbar">
+                  {volunteersToDisplay.map((volunteer) => (
                   <VolunteerCard 
                       key={volunteer.id} 
                       volunteer={volunteer} 
                       onEdit={handleEditVolunteer}
                       onDelete={handleDeleteRequest}
+                      onInvite={handleInviteRequest}
+                      onRemoveFromDepartment={handleRemoveFromDepartmentRequest}
+                      onStatusChange={handleStatusChange}
+                      isInvitePending={pendingInvites.has(volunteer.id!)}
+                      userRole={userRole}
+                      leaderDepartmentName={leaderDepartmentName}
                   />
                   ))}
               </div>
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
+              {!isMobile && totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              )}
             </>
           ) : (
             <div className="text-center py-12 text-slate-500">
@@ -275,6 +405,27 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         onConfirm={handleConfirmDelete}
         title="Confirmar Exclusão"
         message="Tem certeza que deseja excluir este voluntário? Esta ação não pode ser desfeita."
+        isLoading={isDeleting}
+      />
+
+      <ConfirmationModal
+        isOpen={isInviteModalOpen}
+        onClose={handleCancelInvite}
+        onConfirm={handleConfirmInvite}
+        title="Confirmar Convite"
+        message={`Tem certeza que deseja convidar ${volunteerToInvite?.name} para o seu departamento?`}
+        isLoading={isInviting}
+        iconType="info"
+        confirmButtonClass="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+      />
+
+      <ConfirmationModal
+        isOpen={isRemoveModalOpen}
+        onClose={handleCancelRemove}
+        onConfirm={handleConfirmRemoveFromDepartment}
+        title="Confirmar Remoção"
+        message={`Tem certeza que deseja remover ${volunteerToRemove?.name} do seu departamento?`}
+        isLoading={isRemoving}
       />
     </div>
   );

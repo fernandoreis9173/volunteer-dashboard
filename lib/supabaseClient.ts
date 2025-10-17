@@ -1,15 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// **CORREÇÃO CRÍTICA:** Usar import.meta.env para variáveis de ambiente no Vite.
-// O Vite injeta variáveis de ambiente com o prefixo VITE_.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+// Production keys for the application.
+const supabaseUrl = 'https://zmgwuttcqmpyonvtjprw.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZ3d1dHRjcW1weW9udnRqcHJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2Nzg2NjAsImV4cCI6MjA3NDI1NDY2MH0.IVpZfKrZUTQ6x9gfkBzV9t6NxSuUbmVnOAIn8AU3CfY';
 
-// A verificação de advertência também precisa ser atualizada para usar import.meta.env.
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-    // Esta advertência é útil para desenvolvedores no console.
-    console.warn("URL do Supabase ou Chave Anon estão ausentes nas variáveis de ambiente. A página de configuração será exibida.");
-}
-
-// Inicializa o cliente.
+// Initialize the client.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

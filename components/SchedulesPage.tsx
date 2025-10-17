@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import EventCard from './EventCard';
 import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
+import CustomDatePicker from './CustomDatePicker'; // Import the new component
+import QRScannerModal from './QRScannerModal'; // Import the QR scanner modal
 import { Event, NotificationRecord } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
@@ -30,6 +32,10 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
   const [eventToDeleteId, setEventToDeleteId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [highlightedEventId, setHighlightedEventId] = useState<number | null>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scanningEvent, setScanningEvent] = useState<Event | null>(null);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+
 
   // Filters State
   const [dateFilters, setDateFilters] = useState<{ start: string; end: string }>({ start: '', end: '' });
@@ -45,7 +51,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
     try {
       const { data, error: fetchError } = await supabase
         .from('events')
-        .select('*, event_departments(department_id, departments(id, name, leader)), event_volunteers(volunteer_id, department_id, volunteers(id, user_id, name, email, initials, departments:departaments))')
+        .select('*, event_departments(department_id, departments(id, name, leader)), event_volunteers(volunteer_id, department_id, present, volunteers(id, user_id, name, email, initials, departments:departaments))')
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -59,6 +65,72 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
       setLoading(false);
     }
   }, []);
+  
+  const showNotification = useCallback((message: string, type: 'success' | 'error') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 5000);
+  }, []);
+
+  const handleScanSuccess = useCallback((decodedText: string) => {
+    setIsScannerOpen(false);
+    
+    const processScan = async () => {
+        try {
+            const data = JSON.parse(decodedText);
+            if (!data.vId || !data.eId || !data.dId) {
+                throw new Error("QR Code inválido: Faltando dados essenciais.");
+            }
+            if (data.eId !== scanningEvent?.id) {
+                throw new Error("Este QR Code é para um evento diferente.");
+            }
+            if (data.dId !== leaderDepartmentId) {
+                throw new Error("Este voluntário não pertence ao seu departamento para este evento.");
+            }
+
+            const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
+                body: { volunteerId: data.vId, eventId: data.eId, departmentId: data.dId },
+            });
+
+            if (invokeError) throw invokeError;
+            
+            const volunteerName = scanningEvent?.event_volunteers.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
+            showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
+            
+            setMasterEvents(prevEvents => prevEvents.map(event => {
+                if (event.id === scanningEvent.id) {
+                    const updatedVolunteers = event.event_volunteers.map(v => {
+                        if (v.volunteer_id === data.vId && v.department_id === data.dId) {
+                            return { ...v, present: true };
+                        }
+                        return v;
+                    });
+                    return { ...event, event_volunteers: updatedVolunteers };
+                }
+                return event;
+            }));
+
+        } catch (err: any) {
+            if (err.context && typeof err.context.json === 'function') {
+                try {
+                    const errorJson = await err.context.json();
+                    if (errorJson && errorJson.error) {
+                        showNotification(errorJson.error, 'error');
+                    } else {
+                        showNotification(getErrorMessage(err), 'error');
+                    }
+                } catch (parseError) {
+                    showNotification(getErrorMessage(err), 'error');
+                }
+            } else {
+                showNotification(getErrorMessage(err), 'error');
+            }
+        } finally {
+            setScanningEvent(null);
+        }
+    };
+
+    processScan();
+  }, [scanningEvent, leaderDepartmentId, showNotification]);
 
   useEffect(() => {
     fetchEvents();
@@ -123,8 +195,12 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
     setEditingEvent(null);
   };
   
-  const handleDateFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDateFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleStartDateChange = (value: string) => {
+    setDateFilters(prev => ({ ...prev, start: value }));
+  };
+
+  const handleEndDateChange = (value: string) => {
+      setDateFilters(prev => ({ ...prev, end: value }));
   };
 
   const handleClearFilters = () => {
@@ -172,6 +248,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         let departmentName = '';
         let leaderName = '';
         let totalVolunteersForDept = 0;
+        let totalPresentForDept = 0;
 
         for (const event of filteredEvents) {
             const deptInfo = event.event_departments.find(ed => ed.department_id === leaderDepartmentId)?.departments;
@@ -183,7 +260,9 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         }
         
         filteredEvents.forEach(event => {
-            totalVolunteersForDept += event.event_volunteers.filter(ev => ev.department_id === leaderDepartmentId).length;
+            const volunteersInEventForDept = event.event_volunteers.filter(ev => ev.department_id === leaderDepartmentId);
+            totalVolunteersForDept += volunteersInEventForDept.length;
+            totalPresentForDept += volunteersInEventForDept.filter(ev => ev.present === true).length;
         });
 
         if (departmentName) {
@@ -200,6 +279,12 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
             doc.text('Total de Voluntários Escalados:', 14, y);
             doc.setFont('helvetica', 'normal');
             doc.text(String(totalVolunteersForDept), 75, y);
+            y += 6;
+
+            doc.setFont('helvetica', 'bold');
+            doc.text('Total de Presenças Confirmadas:', 14, y);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${totalPresentForDept} de ${totalVolunteersForDept}`, 75, y);
             y += 10;
 
             doc.setDrawColor(226, 232, 240);
@@ -212,7 +297,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         doc.text('Resumo por Departamento', 14, y);
         y += 8;
 
-        const departmentSummary = new Map<number, { name: string; leader: string; volunteerCount: number; }>();
+        const departmentSummary = new Map<number, { name: string; leader: string; volunteerCount: number; presentCount: number }>();
 
         filteredEvents.forEach(event => {
             event.event_departments.forEach(ed => {
@@ -220,7 +305,8 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                     departmentSummary.set(ed.department_id, {
                         name: ed.departments.name,
                         leader: ed.departments.leader || 'N/A',
-                        volunteerCount: 0
+                        volunteerCount: 0,
+                        presentCount: 0,
                     });
                 }
             });
@@ -231,6 +317,9 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 const summary = departmentSummary.get(ev.department_id);
                 if (summary) {
                     summary.volunteerCount += 1;
+                    if (ev.present === true) {
+                        summary.presentCount += 1;
+                    }
                 }
             });
         });
@@ -238,13 +327,13 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         const summaryBody = Array.from(departmentSummary.values()).map(summary => [
             summary.name,
             summary.leader,
-            summary.volunteerCount.toString()
+            `${summary.presentCount}/${summary.volunteerCount}`,
         ]);
         
         if (summaryBody.length > 0) {
             autoTable(doc, {
                 startY: y,
-                head: [["Departamento", "Líder", "Total de Voluntários Escalados"]],
+                head: [["Departamento", "Líder", "Presença Total"]],
                 body: summaryBody,
                 theme: 'striped',
                 headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' }, // Blue color for summary
@@ -294,16 +383,22 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         doc.setTextColor(100);
         doc.text(details, 20, y);
         y += 6;
-
+        
         let totalVolunteersInEvent = 0;
+        let totalPresentInEvent = 0;
         if (isFilteredByMyDept && leaderDepartmentId) {
-            totalVolunteersInEvent = event.event_volunteers.filter(ev => ev.department_id === leaderDepartmentId).length;
+            const volunteersForMyDept = event.event_volunteers.filter(ev => ev.department_id === leaderDepartmentId);
+            totalVolunteersInEvent = volunteersForMyDept.length;
+            totalPresentInEvent = volunteersForMyDept.filter(ev => ev.present === true).length;
         } else {
             totalVolunteersInEvent = event.event_volunteers.length;
+            totalPresentInEvent = event.event_volunteers.filter(ev => ev.present === true).length;
         }
         
         doc.setFont('helvetica', 'bold');
         doc.text(`Total de Voluntários: ${totalVolunteersInEvent}`, 20, y);
+        y += 6;
+        doc.text(`Presenças Confirmadas: ${totalPresentInEvent} de ${totalVolunteersInEvent}`, 20, y);
         y += 8;
 
         const tableBody: any[][] = [];
@@ -318,22 +413,35 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 if (!deptInfo) return;
                 const leaderName = deptInfo.leader || 'N/A';
                 const volunteersForDept = event.event_volunteers
-                    .filter(ev => ev.department_id === deptInfo.id)
-                    .map(ev => ev.volunteers?.name)
-                    .filter(Boolean)
-                    .join('\n');
+                    .filter(ev => ev.department_id === deptInfo.id);
+
+                const presentCount = volunteersForDept.filter(v => v.present).length;
+                const totalCount = volunteersForDept.length;
+                const presenceSummary = `${presentCount}/${totalCount}`;
                 
-                tableBody.push([deptInfo.name, leaderName, volunteersForDept || 'Nenhum voluntário']);
+                const volunteersList = volunteersForDept.map(ev => {
+                    const name = ev.volunteers?.name || 'Voluntário';
+                    if (ev.present === true) return `${name} (Presente)`;
+                    if (ev.present === false) return `${name} (Faltou)`;
+                    return `${name} (Não marcado)`;
+                }).join('\n');
+                
+                tableBody.push([deptInfo.name, leaderName, presenceSummary, volunteersList || 'Nenhum voluntário']);
             });
 
             autoTable(doc, {
                 startY: y,
-                head: [["Departamento", "Líder", "Voluntários Escalados"]],
+                head: [["Departamento", "Líder", "Presença", "Voluntários Escalados"]],
                 body: tableBody,
                 theme: 'striped',
                 headStyles: { fillColor: [45, 88, 108], textColor: 255, fontStyle: 'bold' },
                 styles: { font: "helvetica", fontSize: 10, cellPadding: 2, halign: 'left' },
-                columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 50 }, 2: { cellWidth: 'auto' } },
+                columnStyles: { 
+                    0: { cellWidth: 40 }, 
+                    1: { cellWidth: 40 }, 
+                    2: { cellWidth: 20, halign: 'center' }, 
+                    3: { cellWidth: 'auto' } 
+                },
                 alternateRowStyles: { fillColor: [248, 249, 250] },
                 margin: { left: 14, right: 14 },
                 didDrawPage: () => pageHeader(doc)
@@ -349,12 +457,17 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         }
     });
 
-    doc.output('dataurlnewwindow');
+    doc.save('relatorio-eventos.pdf');
   };
 
   const handleEditEvent = (event: Event) => {
     setEditingEvent(event);
     showForm();
+  };
+  
+   const handleMarkAttendance = (event: Event) => {
+    setScanningEvent(event);
+    setIsScannerOpen(true);
   };
 
   const handleDeleteRequest = (id: number) => {
@@ -635,8 +748,8 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <input type="text" placeholder="Buscar por nome do evento..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
-                        <input type="date" name="start" value={dateFilters.start} onChange={handleDateFilterChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
-                        <input type="date" name="end" value={dateFilters.end} onChange={handleDateFilterChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                        <CustomDatePicker name="start" value={dateFilters.start} onChange={handleStartDateChange} />
+                        <CustomDatePicker name="end" value={dateFilters.end} onChange={handleEndDateChange} />
                         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
                             <option value="all">Todos os Status</option>
                             <option value="Confirmado">Confirmado</option>
@@ -667,6 +780,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                             onEdit={handleEditEvent}
                             onDelete={handleDeleteRequest}
                             onAddDepartment={handleAddDepartment}
+                            onMarkAttendance={handleMarkAttendance}
                             isHighlighted={event.id === highlightedEventId}
                             isFilteredByMyDepartment={showOnlyMyDepartmentEvents}
                         />
@@ -690,6 +804,11 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
 
     return (
         <div className="space-y-6">
+             {notification && (
+                <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                    {notification.message}
+                </div>
+            )}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                 <h1 className="text-3xl font-bold text-slate-800">Eventos (Lista)</h1>
@@ -736,6 +855,14 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 title="Confirmar Exclusão"
                 message="Tem certeza de que deseja excluir este evento? Todos os dados de escala associados serão perdidos."
             />
+            {isScannerOpen && (
+                <QRScannerModal
+                    isOpen={isScannerOpen}
+                    onClose={() => {setIsScannerOpen(false); setScanningEvent(null);}}
+                    onScanSuccess={handleScanSuccess}
+                    scanningEventName={scanningEvent?.name}
+                />
+            )}
         </div>
     );
 }

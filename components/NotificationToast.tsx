@@ -54,7 +54,7 @@ const NotificationToast: React.FC<NotificationToastProps> = ({ notification, onC
                     <div className="flex-shrink-0">
                         {icons[notification.type]}
                     </div>
-                    <div className="ml-3 w-0 flex-1 pt-0.5">
+                    <div className="ml-3 flex-1 pt-0.5">
                         <p className="text-sm font-medium text-slate-800">Nova Notificação</p>
                         <p className="mt-1 text-sm text-slate-600 break-words">{notification.message}</p>
                     </div>

@@ -12,12 +12,13 @@ export interface Volunteer {
 export interface EventVolunteer {
   volunteer_id: number;
   department_id: number;
+  present: boolean | null;
   volunteers?: { id: number; name: string; email: string; initials: string; departments: string[]; };
 }
 
 export interface EventDepartment {
   department_id: number;
-  departments: { id: number; name: string; leader?: string; };
+  departments: { id: number; name:string; leader?: string; };
 }
 
 export interface Event {
@@ -44,10 +45,10 @@ export interface DashboardEvent {
   end_time: string;
   status: string;
   event_departments: { departments: { name: string } }[] | null; // Can be null from DB join
-  event_volunteers: { volunteers: { name: string } }[] | null; // Can be null from DB join
+  event_volunteers: { volunteer_id: number; present: boolean | null; volunteers: { name: string } }[] | null;
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'admin' | 'my-profile' | 'notifications';
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'admin' | 'my-profile' | 'notifications' | 'frequency';
 
 export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 
@@ -104,7 +105,18 @@ export interface NotificationRecord {
     created_at: string;
     user_id: string;
     message: string;
-    type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader';
+    type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader' | 'invitation_received';
     is_read: boolean;
     related_event_id: number | null;
+}
+
+export interface Invitation {
+  id: number;
+  leader_id: string;
+  volunteer_id: number;
+  department_id: number;
+  status: 'pendente' | 'aceito' | 'recusado';
+  created_at: string;
+  departments?: { name: string; leader: string };
+  volunteers?: { name: string };
 }

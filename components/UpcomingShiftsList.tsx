@@ -5,11 +5,13 @@ interface UpcomingShiftsListProps {
   todaySchedules: DashboardEvent[] | undefined;
   upcomingSchedules: DashboardEvent[] | undefined;
   onViewDetails: (event: DashboardEvent) => void;
+  userRole: string | null;
+  onMarkAttendance: (event: DashboardEvent) => void;
 }
 
 type EventFilter = 'today' | 'upcoming';
 
-const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: DashboardEvent) => void; }> = ({ schedule, onViewDetails }) => {
+const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: DashboardEvent) => void; userRole: string | null; onMarkAttendance: (event: DashboardEvent) => void; isToday: boolean; }> = ({ schedule, onViewDetails, userRole, onMarkAttendance, isToday }) => {
   const formattedDate = new Date(schedule.date + 'T00:00:00').toLocaleDateString('pt-BR', {
     weekday: 'long',
     year: 'numeric',
@@ -28,20 +30,35 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
   const visibleDepartments = departmentNames.slice(0, MAX_DISPLAY).join(', ');
   const remainingDepartments = departmentNames.length - MAX_DISPLAY;
 
+  const isLeader = userRole === 'leader' || userRole === 'lider';
 
   return (
     <div className="bg-white p-5 rounded-xl border border-slate-200 relative w-80 flex-shrink-0 flex flex-col">
       <span className={`absolute top-4 right-4 text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'Confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
-       <button 
-        onClick={() => onViewDetails(schedule)} 
-        className="absolute bottom-4 right-4 p-1.5 text-slate-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
-        aria-label="Ver detalhes do evento"
-        title="Ver detalhes"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-      </button>
+       <div className="absolute bottom-4 right-4 flex items-center space-x-1">
+        {isLeader && isToday && (
+            <button
+                onClick={() => onMarkAttendance(schedule)}
+                className="p-1.5 text-slate-400 hover:text-teal-600 rounded-md hover:bg-teal-50 transition-colors"
+                aria-label="Marcar presença"
+                title="Marcar Presença"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /><path d="M3 8V6a2 2 0 0 1 2-2h2" /><path d="M3 16v2a2 2 0 0 0 2 2h2" /><path d="M21 8V6a2 2 0 0 0-2-2h-2" /><path d="M21 16v2a2 2 0 0 1-2 2h-2" />
+                </svg>
+            </button>
+        )}
+        <button 
+            onClick={() => onViewDetails(schedule)} 
+            className="p-1.5 text-slate-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+            aria-label="Ver detalhes do evento"
+            title="Ver detalhes"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </button>
+      </div>
 
       <h3 className="font-bold text-slate-800 mb-2 pr-24">{schedule.name}</h3>
       <div className="space-y-2 text-sm text-slate-500">
@@ -103,7 +120,7 @@ const FilterButton: React.FC<{ label: string; value: EventFilter; activeValue: E
 );
 
 
-const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules, upcomingSchedules, onViewDetails }) => {
+const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules, upcomingSchedules, onViewDetails, userRole, onMarkAttendance }) => {
   const [activeFilter, setActiveFilter] = useState<EventFilter>('upcoming');
   
   const loading = useMemo(() => {
@@ -116,6 +133,8 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
     if (activeFilter === 'today') return todaySchedules || [];
     return upcomingSchedules || [];
   }, [activeFilter, todaySchedules, upcomingSchedules]);
+
+  const isToday = activeFilter === 'today';
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm h-full flex flex-col">
@@ -146,7 +165,14 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
             ))
         ) : displayedSchedules.length > 0 ? (
           displayedSchedules.map((schedule) => (
-            <ScheduleCard key={schedule.id} schedule={schedule} onViewDetails={onViewDetails} />
+            <ScheduleCard 
+              key={schedule.id} 
+              schedule={schedule} 
+              onViewDetails={onViewDetails} 
+              userRole={userRole}
+              onMarkAttendance={onMarkAttendance}
+              isToday={isToday}
+            />
           ))
         ) : (
           <div className="w-full flex items-center justify-center h-48">

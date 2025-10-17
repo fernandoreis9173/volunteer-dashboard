@@ -703,7 +703,9 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             
             await fetchAllEvents(false); 
             onDataChange();
-            const message = `O evento "${event.title}" foi reagendado para um novo dia/horário.`;
+            const formattedDate = event.start.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
+            const formattedStartTime = event.start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const message = `O evento "${event.title}" foi reagendado para ${formattedDate} às ${formattedStartTime}.`;
             await notifyScheduledVolunteers(eventId, message);
             await notifyLeadersAndAdmins(message, eventId);
 
@@ -732,7 +734,9 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             if (updateError) throw updateError;
             await fetchAllEvents(false);
             onDataChange();
-            const message = `O horário do evento "${event.title}" foi alterado.`;
+            const formattedStartTime = event.start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const formattedEndTime = event.end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const message = `O horário do evento "${event.title}" foi alterado para ${formattedStartTime} - ${formattedEndTime}.`;
             await notifyScheduledVolunteers(eventId, message);
             await notifyLeadersAndAdmins(message, eventId);
         } catch (err) {
@@ -893,7 +897,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         .mobile-calendar-view.month-view .fc-day-today:not(.fc-day-selected) .fc-daygrid-day-number { color: #2563eb; font-weight: 700; } .mobile-calendar-view.month-view .fc-day.fc-day-selected .fc-daygrid-day-number { background-color: #2563eb; color: white; }
         .mobile-calendar-view.month-view .fc-daygrid-day-events { display: flex; justify-content: center; gap: 3px; margin-top: 4px; height: auto; flex-direction: row; flex-wrap: wrap; padding: 0 2px; }
         .mobile-calendar-view.month-view .fc-daygrid-day-dot { width: 5px; height: 5px; border-radius: 50%; } .mobile-calendar-view.month-view .fc-day-other .fc-daygrid-day-top { opacity: 0.4; }
-        .mobile-calendar-view.month-view .fc-col-header-cell-cushion { font-size: 0.75rem; color: #334155; font-weight: 700; text-transform: uppercase; padding: 0.5rem 0; }
+        .mobile-calendar-view.month-view .fc-col-header-cell-cushion { font-size: 0.875rem !important; color: #334155; font-weight: 700; text-transform: uppercase; padding: 0.5rem 0; }
         .mobile-calendar-view.month-view .fc-theme-standard .fc-scrollgrid { border-left: none; border-right: none; } .mobile-calendar-view.month-view .fc-daygrid-day, .mobile-calendar-view.month-view .fc-col-header-cell { border-color: #f8fafc; }
         .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-col-header-cell:first-child, .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-daygrid-day:first-child { border-left-width: 0; }
         .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-col-header-cell:last-child, .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-daygrid-day:last-child { border-right-width: 0; }

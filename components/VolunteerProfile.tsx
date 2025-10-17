@@ -9,9 +9,18 @@ interface VolunteerProfileProps {
     onUpdate: () => void;
 }
 
-const renderArrayData = (data: string[] | string | null | undefined, emptyText: string = 'Nenhuma'): string => {
+const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
+  const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";
+  const colorClasses = {
+    yellow: "bg-yellow-100 text-yellow-800",
+    blue: "bg-blue-100 text-blue-800",
+  };
+  return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
+};
+
+const parseArrayFromString = (data: string[] | string | null | undefined): string[] => {
     let items: string[] = [];
-    if (!data) return emptyText;
+    if (!data) return [];
 
     if (Array.isArray(data)) {
         items = data;
@@ -29,16 +38,13 @@ const renderArrayData = (data: string[] | string | null | undefined, emptyText: 
             items = data.split(',').map(s => s.trim());
         }
     }
-
-    if (items.length === 0 || (items.length === 1 && items[0] === '')) {
-        return emptyText;
-    }
-    return items.map(item => item ? item.charAt(0).toUpperCase() + item.slice(1) : '').join(', ');
+    return items.filter(item => item && item.trim() !== '');
 };
 
 
 const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }) => {
     const [volunteerData, setVolunteerData] = useState<DetailedVolunteer | null>(null);
+    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null }[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -53,14 +59,30 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }
     const fetchProfileData = useCallback(async () => {
         if (!session) return;
         setLoading(true);
+        setError(null);
         try {
             const { data, error: fetchError } = await supabase
                 .from('volunteers')
-                .select('*')
+                .select('*, departments:departaments')
                 .eq('user_id', session.user.id)
                 .single();
             if (fetchError) throw fetchError;
             setVolunteerData(data as DetailedVolunteer);
+
+            const departmentNames = parseArrayFromString(data?.departments);
+
+            if (departmentNames.length > 0) {
+                const { data: departmentsData, error: deptsError } = await supabase
+                    .from('departments')
+                    .select('name, leader')
+                    .in('name', departmentNames);
+                
+                if (deptsError) throw deptsError;
+                setDepartmentDetails(departmentsData || []);
+            } else {
+                setDepartmentDetails([]);
+            }
+
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
@@ -78,10 +100,10 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }
                 name: volunteerData.name || '',
                 phone: volunteerData.phone || ''
             });
-            setSkills(renderArrayData(volunteerData.skills, '').split(', ').filter(Boolean));
+            setSkills(parseArrayFromString(volunteerData.skills));
             
             const availabilityKeys = { domingo: false, segunda: false, terca: false, quarta: false, quinta: false, sexta: false, sabado: false };
-            const availabilityArray = renderArrayData(volunteerData.availability, '').toLowerCase().split(', ').filter(Boolean);
+            const availabilityArray = parseArrayFromString(volunteerData.availability).map(d => d.toLowerCase());
             
             availabilityArray.forEach(day => {
                 if (day in availabilityKeys) {
@@ -138,6 +160,10 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }
     if (error || !volunteerData) {
         return <p className="text-red-500">Erro ao carregar perfil: {error}</p>;
     }
+    
+    const skillsList = parseArrayFromString(volunteerData.skills);
+    const availabilityList = parseArrayFromString(volunteerData.availability);
+
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
@@ -171,13 +197,43 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4 text-slate-700">
-                        <p><strong>Nome:</strong> {volunteerData.name}</p>
-                        <p><strong>Email:</strong> {volunteerData.email}</p>
-                        <p><strong>Telefone:</strong> {volunteerData.phone || 'Não informado'}</p>
-                        <p><strong>Departamentos:</strong> {renderArrayData(volunteerData.departments, 'Nenhum')}</p>
-                        <p><strong>Habilidades:</strong> {renderArrayData(volunteerData.skills, 'Nenhuma')}</p>
-                        <p><strong>Disponibilidade:</strong> {renderArrayData(volunteerData.availability, 'Nenhuma')}</p>
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-slate-700">
+                            <p><strong>Nome:</strong> {volunteerData.name}</p>
+                            <p><strong>Email:</strong> {volunteerData.email}</p>
+                            <p><strong>Telefone:</strong> {volunteerData.phone || 'Não informado'}</p>
+                            <p><strong>Disponibilidade:</strong> {availabilityList.map(item => item ? item.charAt(0).toUpperCase() + item.slice(1) : '').join(', ') || 'Nenhuma'}</p>
+                        </div>
+
+                        <div className="pt-6 border-t border-slate-200">
+                            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Departamentos</h4>
+                            {departmentDetails.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {departmentDetails.map(dept => (
+                                        <div key={dept.name} className="p-4 rounded-xl bg-yellow-50 border border-yellow-200">
+                                            <p className="font-bold text-yellow-900">{dept.name}</p>
+                                            {dept.leader ? (
+                                                <p className="text-xs text-yellow-700 mt-1 flex items-center gap-1.5">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
+                                                    {dept.leader}
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs text-yellow-600 mt-1 italic">Líder não definido</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : <p className="text-sm text-slate-500">Nenhum departamento associado.</p>}
+                        </div>
+
+                        <div className="pt-6 border-t border-slate-200">
+                            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Habilidades</h4>
+                            {skillsList.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {skillsList.map(skill => <Tag key={skill} color="blue">{skill}</Tag>)}
+                                </div>
+                            ) : <p className="text-sm text-slate-500">Nenhuma habilidade registrada.</p>}
+                        </div>
                     </div>
                 )}
             </div>

@@ -12,6 +12,8 @@ interface NotificationsPageProps {
   onNavigate: (page: Page) => void;
 }
 
+const NOTIFICATIONS_PER_PAGE = 15;
+
 const timeAgo = (dateString?: string): string => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -39,6 +41,8 @@ const NotificationIcon: React.FC<{ type: NotificationRecord['type'] }> = ({ type
     switch (type) {
         case 'new_schedule':
             return <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>;
+        case 'invitation_received':
+            return <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></div>;
         case 'event_update':
         case 'new_event_for_department':
         case 'new_event_for_leader':
@@ -48,13 +52,14 @@ const NotificationIcon: React.FC<{ type: NotificationRecord['type'] }> = ({ type
     }
 };
 
-
 const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataChange, onNavigate }) => {
     const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
-
+    
     const fetchNotifications = useCallback(async () => {
         if (!session) return;
         setLoading(true);
@@ -64,10 +69,12 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
                 .from('notifications')
                 .select('*')
                 .eq('user_id', session.user.id)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(NOTIFICATIONS_PER_PAGE);
             
             if (fetchError) throw fetchError;
             setNotifications(data || []);
+            setHasMore((data || []).length === NOTIFICATIONS_PER_PAGE);
         } catch (err: any) {
             setError('Falha ao carregar notificações.');
             console.error(err);
@@ -79,6 +86,33 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
     useEffect(() => {
         fetchNotifications();
     }, [fetchNotifications]);
+
+    const handleLoadMore = async () => {
+        if (!session || loadingMore || !hasMore) return;
+        setLoadingMore(true);
+        try {
+            const { data, error: fetchError } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .order('created_at', { ascending: false })
+                .range(notifications.length, notifications.length + NOTIFICATIONS_PER_PAGE - 1);
+            
+            if (fetchError) throw fetchError;
+
+            if (data && data.length > 0) {
+                setNotifications(prev => [...prev, ...data]);
+                setHasMore(data.length === NOTIFICATIONS_PER_PAGE);
+            } else {
+                setHasMore(false);
+            }
+        } catch (err) {
+            console.error("Failed to load more notifications:", err);
+            setError("Falha ao carregar mais notificações.");
+        } finally {
+            setLoadingMore(false);
+        }
+    };
 
     const markAsRead = async (id: number) => {
         const originalNotifications = [...notifications];
@@ -143,15 +177,14 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
             alert(`Falha ao excluir todas as notificações: ${getErrorMessage(deleteError)}`);
         }
     };
-
-
+    
     const handleNotificationClick = (notification: NotificationRecord) => {
         if (!notification.is_read) {
             markAsRead(notification.id);
         }
         if (notification.related_event_id) {
-            sessionStorage.setItem('highlightEventId', String(notification.related_event_id));
-            onNavigate('events');
+            sessionStorage.setItem('showEventDetailsForId', String(notification.related_event_id));
+            onNavigate('dashboard');
         }
     };
 
@@ -188,32 +221,35 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
                 </div>
             </div>
             
-            <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
                 <ul className="divide-y divide-slate-200">
                     {notifications.length > 0 ? notifications.map(n => (
-                        <li 
-                            key={n.id} 
-                            className={`group flex items-start space-x-4 p-4 -mx-4 sm:-mx-6 transition-colors ${!n.is_read ? 'bg-blue-50/50' : ''} ${n.related_event_id ? 'cursor-pointer hover:bg-slate-50' : ''}`}
-                            onClick={() => handleNotificationClick(n)}
-                        >
-                            <NotificationIcon type={n.type} />
-                            <div className="flex-1">
-                                <p className="text-sm text-slate-700">{n.message}</p>
-                                <p className="text-xs text-slate-500 mt-1">{timeAgo(n.created_at)}</p>
-                            </div>
-                            <div className="flex-shrink-0 flex items-center gap-4">
-                                {!n.is_read && (
-                                    <span className="w-2.5 h-2.5 bg-blue-500 rounded-full" title="Não lida"></span>
-                                )}
-                                <button
-                                    onClick={(e) => handleDeleteNotification(n.id, e)}
-                                    className="p-1 rounded-full text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-slate-600 transition-opacity"
-                                    aria-label="Dispensar notificação"
+                        <li key={n.id} className="group">
+                            <div className={`flex items-center space-x-4 p-4 ${!n.is_read ? 'bg-blue-50/50' : 'bg-white'}`}>
+                                <div 
+                                    className="flex-grow flex items-start space-x-4 cursor-pointer"
+                                    onClick={() => handleNotificationClick(n)}
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
+                                    <NotificationIcon type={n.type} />
+                                    <div className="flex-1">
+                                        <p className="text-sm text-slate-700">{n.message}</p>
+                                        <p className="text-xs text-slate-500 mt-1">{timeAgo(n.created_at)}</p>
+                                    </div>
+                                </div>
+                                <div className="flex-shrink-0 flex items-center gap-2">
+                                    {!n.is_read && (
+                                        <span className="w-2.5 h-2.5 bg-blue-500 rounded-full" title="Não lida"></span>
+                                    )}
+                                    <button
+                                        onClick={(e) => handleDeleteNotification(n.id, e)}
+                                        className="p-1.5 rounded-full text-slate-400 hover:bg-red-100 hover:text-red-600 transition-colors"
+                                        aria-label="Apagar notificação"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.067-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                         </li>
                     )) : (
@@ -223,6 +259,17 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
                         </li>
                     )}
                 </ul>
+                {hasMore && notifications.length > 0 && (
+                    <div className="mt-6 text-center p-4">
+                        <button
+                            onClick={handleLoadMore}
+                            disabled={loadingMore}
+                            className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                        >
+                            {loadingMore ? 'Carregando...' : 'Ver mais notificações'}
+                        </button>
+                    </div>
+                )}
             </div>
              <ConfirmationModal
                 isOpen={isDeleteAllModalOpen}

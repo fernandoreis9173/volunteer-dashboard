@@ -3,6 +3,10 @@ export const getErrorMessage = (error: any): string => {
     if (!error) {
         return 'Ocorreu um erro desconhecido.';
     }
+    // NEW: Handle specific error message from Supabase function response body
+    if (typeof error.context?.json?.error === 'string') {
+        return error.context.json.error;
+    }
     // Supabase Edge Function error structure
     if (typeof error.context?.error?.error === 'string') {
         return error.context.error.error;
