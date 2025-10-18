@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 // FIX: Moved ChartDataPoint to types.ts and updated import path.
 import type { ChartDataPoint } from '../types';
@@ -87,7 +85,8 @@ const useIsMobile = (breakpoint = 768) => {
     return isMobile;
 };
   
-const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
+// FIX: Changed to a named export to resolve module resolution error in Dashboard.tsx
+export const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
   const [timeframe, setTimeframe] = useState<Timeframe>('monthly');
   const isMobile = useIsMobile();
 
@@ -170,7 +169,8 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
     for (let i = 0; i < 12; i++) {
         const monthDate = new Date(currentYear, i, 2);
         const monthKey = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-        const monthName = monthDate.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+        const monthNameRaw = monthDate.toLocaleDateString('pt-BR', { month: 'long' });
+        const monthName = monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1);
         
         yearChartData.push({
             name: monthName,
@@ -233,16 +233,14 @@ const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} stroke="#e2e8f0" axisLine={false} tickLine={false} interval={xAxisInterval} />
-                    <YAxis tick={{ fontSize: 12, fill: '#64748b' }} stroke="#e2e8f0" axisLine={false} tickLine={false} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' }} />
-                    <Area type="monotone" dataKey="scheduledVolunteers" name="Voluntários nos Eventos" stroke="#3b82f6" fill="url(#colorScheduledVolunteers)" strokeWidth={2.5} activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }} />
-                    <Area type="monotone" dataKey="involvedDepartments" name="Departamentos nos Eventos" stroke="#8b5cf6" fill="url(#colorInvolvedDepartments)" strokeWidth={2.5} activeDot={{ r: 6, strokeWidth: 2, fill: '#fff' }} />
+                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} interval={xAxisInterval} />
+                    <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                    <Area type="monotone" dataKey="scheduledVolunteers" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorScheduledVolunteers)" name="Voluntários Escalados" />
+                    <Area type="monotone" dataKey="involvedDepartments" stroke="#8b5cf6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorInvolvedDepartments)" name="Departamentos Envolvidos" />
                 </AreaChart>
             </ResponsiveContainer>
         </div>
     </div>
   );
 };
-
-export default AnalysisChart;

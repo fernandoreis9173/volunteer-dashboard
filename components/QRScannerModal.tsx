@@ -25,6 +25,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
         fps: 10,
         qrbox: { width: 250, height: 250 },
         supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+        videoConstraints: {
+            facingMode: "environment"
+        }
       },
       /* verbose= */ false
     );
@@ -89,9 +92,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
       aria-labelledby="modal-title"
       role="dialog"
       aria-modal="true"
+      onClick={onClose}
     >
       <div
         className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 m-4 text-center transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale"
+        onClick={(e) => e.stopPropagation()}
       >
         <h3 id="modal-title" className="text-xl font-bold text-slate-900">Escanear QR Code</h3>
         <p className="text-sm text-slate-500 mt-1">

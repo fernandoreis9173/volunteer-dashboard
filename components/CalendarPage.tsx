@@ -147,15 +147,15 @@ const MobileHeader: React.FC<{
             <div className="flex justify-between items-center gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                     <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Anterior">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                     </button>
                     <h2 className="text-base font-bold text-slate-800 capitalize text-center truncate">{title}</h2>
                     <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Próximo">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                     </button>
                 </div>
                 <button onClick={onMenuClick} className="p-2 text-slate-600 hover:text-slate-900 flex-shrink-0" aria-label="Open menu">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
             </div>
             
@@ -173,7 +173,7 @@ const MobileHeader: React.FC<{
                             aria-expanded={isViewDropdownOpen}
                         >
                             <span>{currentViewLabel}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>
@@ -347,10 +347,10 @@ const CalendarHeader: React.FC<{
                 </button>
                 <div className="flex items-center">
                     <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors" aria-label="Anterior">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                     </button>
                     <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors" aria-label="Próximo">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                     </button>
                 </div>
                  <h2 className="text-3xl font-bold text-slate-800 capitalize">{title}</h2>
@@ -366,7 +366,7 @@ const CalendarHeader: React.FC<{
                         aria-expanded={isViewDropdownOpen}
                     >
                         <span>{currentViewLabel}</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                         </svg>
                     </button>
@@ -434,72 +434,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         week: { dow: 0, doy: 4, },
     }), []);
     
-    const createAndSendNotifications = async (notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[]) => {
-        if (notifications.length === 0) return;
-        try {
-            const { error: invokeError } = await supabase.functions.invoke('create-notifications', {
-                body: { notifications },
-            });
-            if (invokeError) throw invokeError;
-        } catch (err) {
-            console.error("Falha ao enviar notificações:", getErrorMessage(err));
-        }
-    };
-
-    const notifyScheduledVolunteers = async (eventId: number, message: string) => {
-        const { data: eventVolunteers, error: evError } = await supabase
-            .from('event_volunteers')
-            .select('volunteers(user_id)')
-            .eq('event_id', eventId);
-
-        if (evError) {
-            console.error("Error fetching users for update notification:", evError);
-            return;
-        }
-
-        if (eventVolunteers) {
-            const userIdsToNotify = new Set<string>();
-            eventVolunteers.forEach(ev => {
-                const volunteer = Array.isArray(ev.volunteers) ? ev.volunteers[0] : ev.volunteers;
-                if (volunteer?.user_id) {
-                    userIdsToNotify.add(volunteer.user_id);
-                }
-            });
-            
-            if (userIdsToNotify.size > 0) {
-                const notifications = Array.from(userIdsToNotify).map(userId => ({
-                    user_id: userId,
-                    message: message,
-                    type: 'event_update' as const,
-                    related_event_id: eventId,
-                }));
-                await createAndSendNotifications(notifications);
-            }
-        }
-    };
-
-    const notifyLeadersAndAdmins = async (message: string, related_event_id: number) => {
-        const { data: profiles, error: profileError } = await supabase
-            .from('profiles')
-            .select('id')
-            .or('role.eq.leader,role.eq.lider,role.eq.admin');
-
-        if (profileError) {
-            console.error("Could not fetch leaders/admins for notification:", profileError);
-            return;
-        }
-
-        if (profiles) {
-            const notifications = profiles.map(p => ({
-                user_id: p.id,
-                message: message,
-                type: 'event_update' as const,
-                related_event_id: related_event_id,
-            }));
-            await createAndSendNotifications(notifications);
-        }
-    };
-
     const handleStatusFilterChange = (status: string) => {
         setStatusFilters(prev =>
             prev.includes(status)
@@ -703,11 +637,15 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             
             await fetchAllEvents(false); 
             onDataChange();
-            const formattedDate = event.start.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' });
-            const formattedStartTime = event.start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const message = `O evento "${event.title}" foi reagendado para ${formattedDate} às ${formattedStartTime}.`;
-            await notifyScheduledVolunteers(eventId, message);
-            await notifyLeadersAndAdmins(message, eventId);
+            
+            // Notify leaders and volunteers via centralized function
+            const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                body: { 
+                    notifyType: 'event_updated',
+                    event: { id: eventId, name: event.title, date: newDate, start_time: newStartTime, end_time: newEndTime },
+                },
+            });
+            if (notifyError) console.error("Falha ao notificar sobre reagendamento:", getErrorMessage(notifyError));
 
         } catch (err) {
             alert('Erro ao mover evento: ' + getErrorMessage(err));
@@ -734,11 +672,16 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             if (updateError) throw updateError;
             await fetchAllEvents(false);
             onDataChange();
-            const formattedStartTime = event.start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const formattedEndTime = event.end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const message = `O horário do evento "${event.title}" foi alterado para ${formattedStartTime} - ${formattedEndTime}.`;
-            await notifyScheduledVolunteers(eventId, message);
-            await notifyLeadersAndAdmins(message, eventId);
+            
+            // Notify leaders and volunteers via centralized function
+            const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                body: { 
+                    notifyType: 'event_updated',
+                    event: { id: eventId, name: event.title, date: eventDate, start_time: newStartTime, end_time: newEndTime },
+                },
+            });
+            if (notifyError) console.error("Falha ao notificar sobre alteração de horário:", getErrorMessage(notifyError));
+            
         } catch (err) {
             alert('Erro ao redimensionar evento: ' + getErrorMessage(err));
             info.revert();
@@ -801,7 +744,10 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                     }
                 });
                 
-                if (notifications.length > 0) await createAndSendNotifications(notifications);
+                if (notifications.length > 0) {
+                     const { error: invokeError } = await supabase.functions.invoke('create-notifications', { body: { notifications } });
+                     if (invokeError) throw invokeError;
+                }
             
             } else if (isAdmin) {
                 const { volunteer_ids, ...upsertData } = eventPayload;
@@ -824,17 +770,33 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                     if (error) throw error;
                     if (!newEvent) throw new Error("Falha ao criar o evento.");
                     savedEvent = newEvent;
-                    await notifyLeadersAndAdmins(`Novo evento criado: "${savedEvent.name}".`, savedEvent.id);
-                } else {
+                    
+                    const { error: leaderNotifyError } = await supabase.functions.invoke('create-notifications', {
+                        body: {
+                            notifyType: 'event_created',
+                            event: savedEvent,
+                        },
+                    });
+                    if (leaderNotifyError) {
+                        console.error("Falha ao acionar notificações para líderes na criação do evento:", getErrorMessage(leaderNotifyError));
+                    }
+                } else { // Updating
                     const eventId = upsertData.id;
                     const { id, ...updatePayload } = upsertData;
                     const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
                     if (error) throw error;
                     if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
                     savedEvent = updatedEvent;
-                    const message = `O evento "${savedEvent.name}" foi atualizado. Confira os detalhes.`;
-                    await notifyScheduledVolunteers(savedEvent.id, message);
-                    await notifyLeadersAndAdmins(message, savedEvent.id);
+
+                    const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                        body: { 
+                            notifyType: 'event_updated',
+                            event: savedEvent,
+                        },
+                    });
+                    if (notifyError) {
+                        console.error("Falha ao acionar notificações na atualização do evento:", getErrorMessage(notifyError));
+                    }
                 }
             }
     
@@ -978,7 +940,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                 )}
                 {isAdmin && (
                     <button onClick={handleAddNewEvent} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center z-20">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     </button>
                 )}
                 {renderModal()}

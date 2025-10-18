@@ -39,7 +39,7 @@ Deno.serve(async (req: any) => {
     }
 
     try {
-        const { notifications, broadcastMessage } = await req.json();
+        const { notifications, broadcastMessage, notifyType, event } = await req.json();
         
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -51,23 +51,154 @@ Deno.serve(async (req: any) => {
         if (!vapidPublicKey || !vapidPrivateKey) throw new Error("VAPID keys are not configured.");
 
         webpush.setVapidDetails('mailto:leovieiradefreitas@gmail.com', vapidPublicKey, vapidPrivateKey);
+        
+        let notificationsToProcess: any[] = Array.isArray(notifications) ? [...notifications] : [];
 
-        if (notifications && Array.isArray(notifications) && notifications.length > 0) {
-            // Step 1: Save notifications to the database for all targeted users.
-            const { error: insertError } = await supabaseAdmin.from('notifications').insert(notifications);
+        if (notifyType === 'event_created' && event) {
+            console.log("Buscando todos os líderes para notificação de criação de evento...");
+            const { data: leadersFromProfiles, error: profileError } = await supabaseAdmin
+              .from('profiles')
+              .select('id')
+              .or('role.eq.leader,role.eq.lider,role.eq.líder');
+
+            if (profileError) throw profileError;
+
+            let leaders = leadersFromProfiles || [];
+
+            if (leaders.length === 0) {
+                console.log("Nenhum líder encontrado em 'profiles'. Buscando no 'auth.users' como fallback.");
+                const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+                if (authError) {
+                    console.error("Erro ao buscar usuários do auth como fallback:", authError);
+                } else {
+                    leaders = authData.users
+                        .filter(u => ['leader', 'lider', 'líder'].includes(u.user_metadata?.role))
+                        .map(u => ({ id: u.id }));
+                    console.log(`Encontrados ${leaders.length} líderes no fallback do auth.`);
+                }
+            } else {
+                console.log(`Encontrados ${leaders.length} líderes diretamente em 'profiles'.`);
+            }
+            
+            if (leaders.length > 0) {
+                const newNotifications = leaders.map(l => ({
+                    user_id: l.id,
+                    message: `Novo evento: "${event.name}". Verifique se o seu departamento precisa participar.`,
+                    type: 'new_event_for_leader',
+                    related_event_id: event.id,
+                }));
+                notificationsToProcess.push(...newNotifications);
+            } else {
+                console.log("⚠️ Nenhum líder encontrado para receber notificação de criação de evento.");
+            }
+        } else if (notifyType === 'event_updated' && event) {
+            const { data: deptsFromAssoc, error: edError } = await supabaseAdmin.from('event_departments').select('department_id').eq('event_id', event.id);
+            const { data: deptsFromVols, error: evError } = await supabaseAdmin.from('event_volunteers').select('department_id').eq('event_id', event.id);
+
+            if (edError || evError) {
+                console.error("Error fetching depts for update notification:", edError || evError);
+            } else {
+                const deptIdsFromAssoc = deptsFromAssoc?.map(d => d.department_id) || [];
+                const deptIdsFromVols = deptsFromVols?.map(d => d.department_id) || [];
+                const allDepartmentIds = [...new Set([...deptIdsFromAssoc, ...deptIdsFromVols])];
+
+                if (allDepartmentIds.length > 0) {
+                    console.log(`Buscando líderes dos departamentos [${allDepartmentIds.join(', ')}] para notificação de atualização.`);
+                    const { data: leadersFromProfiles, error: leaderError } = await supabaseAdmin
+                        .from('profiles')
+                        .select('id')
+                        .in('department_id', allDepartmentIds)
+                        .or('role.eq.leader,role.eq.lider,role.eq.líder');
+                    
+                    if (leaderError) throw leaderError;
+                    
+                    let leaders = leadersFromProfiles || [];
+
+                    if (leaders.length === 0) {
+                        console.log("Nenhum líder encontrado em 'profiles' para os departamentos. Buscando no 'auth.users' como fallback.");
+                        const { data: usersInDepts, error: profileFallbackError } = await supabaseAdmin
+                            .from('profiles')
+                            .select('id')
+                            .in('department_id', allDepartmentIds);
+
+                        if (profileFallbackError) {
+                             console.error("Erro ao buscar perfis de fallback:", profileFallbackError);
+                        } else if (usersInDepts && usersInDepts.length > 0) {
+                            const userIdsInDepts = new Set(usersInDepts.map(p => p.id));
+                            const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+                            
+                            if (authError) {
+                                console.error("Erro ao buscar usuários do auth como fallback:", authError);
+                            } else {
+                                leaders = authData.users
+                                    .filter(u => userIdsInDepts.has(u.id) && ['leader', 'lider', 'líder'].includes(u.user_metadata?.role))
+                                    .map(u => ({ id: u.id }));
+                                console.log(`Encontrados ${leaders.length} líderes no fallback do auth para os departamentos especificados.`);
+                            }
+                        }
+                    } else {
+                         console.log(`Encontrados ${leaders.length} líderes diretamente em 'profiles'.`);
+                    }
+
+                    if (leaders.length > 0) {
+                        const newNotifications = leaders.map(l => ({
+                            user_id: l.id,
+                            message: `O evento "${event.name}", do qual seu departamento participa, foi alterado. Verifique as mudanças.`,
+                            type: 'event_update',
+                            related_event_id: event.id,
+                        }));
+                        notificationsToProcess.push(...newNotifications);
+                    }
+                }
+            }
+            // --- UNIFIED VOLUNTEER NOTIFICATION LOGIC ---
+            console.log(`Buscando voluntários escalados no evento ${event.id} para notificação de atualização.`);
+            const { data: eventVolunteers, error: evNotifyError } = await supabaseAdmin
+                .from('event_volunteers')
+                .select('volunteers(user_id)')
+                .eq('event_id', event.id);
+
+            if (evNotifyError) {
+                console.error("Erro ao buscar voluntários do evento para notificação:", evNotifyError);
+            } else if (eventVolunteers && eventVolunteers.length > 0) {
+                const notifiedVolunteerUserIds = new Set<string>();
+                const volunteerNotifications = eventVolunteers
+                    .map(ev => (Array.isArray(ev.volunteers) ? ev.volunteers[0] : ev.volunteers)?.user_id)
+                    .filter((userId): userId is string => {
+                        if (userId && !notifiedVolunteerUserIds.has(userId)) {
+                            notifiedVolunteerUserIds.add(userId);
+                            return true;
+                        }
+                        return false;
+                    })
+                    .map(userId => ({
+                        user_id: userId,
+                        message: `O evento "${event.name}" em que você está escalado foi alterado. Verifique as mudanças.`,
+                        type: 'event_update',
+                        related_event_id: event.id,
+                    }));
+                
+                console.log(`Encontrados ${volunteerNotifications.length} voluntários únicos para notificar.`);
+                notificationsToProcess.push(...volunteerNotifications);
+            }
+        }
+
+        if (notificationsToProcess && notificationsToProcess.length > 0) {
+            console.log("🔔 Notificações geradas:", notificationsToProcess.map(n => ({
+              user_id: n.user_id,
+              message: n.message
+            })));
+
+            const { error: insertError } = await supabaseAdmin.from('notifications').insert(notificationsToProcess);
             if (insertError) throw insertError;
 
-            // Group notifications by user to create tailored push messages.
             const notificationsByUser = new Map();
-            notifications.forEach(n => {
+            notificationsToProcess.forEach(n => {
                 if (!notificationsByUser.has(n.user_id)) notificationsByUser.set(n.user_id, []);
                 notificationsByUser.get(n.user_id)?.push(n);
             });
             const userIdsToNotify = Array.from(notificationsByUser.keys());
 
-            // Step 2: Query for active push subscriptions. This is the key step.
-            // It filters the user list, ensuring we only attempt to send pushes
-            // to users who have opted in. This prevents errors for users without subscriptions.
             const { data: activeSubscriptions, error: subsError } = await supabaseAdmin
                 .from('push_subscriptions')
                 .select('endpoint, subscription_data, user_id')
@@ -76,11 +207,14 @@ Deno.serve(async (req: any) => {
             if (subsError) {
                 console.error("Error fetching push subscriptions, push notifications will be skipped:", subsError);
             }
+            
+            if (activeSubscriptions) {
+                console.log("📡 IDs com subscription ativa:", activeSubscriptions.map(s => s.user_id));
+            }
 
             if (activeSubscriptions && activeSubscriptions.length > 0) {
                 console.log(`Found ${activeSubscriptions.length} active subscriptions for ${userIdsToNotify.length} targeted users.`);
 
-                // Step 3: Send push notifications in parallel ONLY to active subscriptions.
                 const pushPromises = activeSubscriptions.map(sub => {
                     const userNotifications = notificationsByUser.get(sub.user_id) || [];
                     const title = 'Nova Notificação';
@@ -129,24 +263,35 @@ Deno.serve(async (req: any) => {
                     user_id: userId,
                     message: broadcastMessage,
                     type: 'info' as const,
-                    is_read: false
+                    is_read: false,
                 }));
+
+                if(broadcastNotificationsToInsert.length > 0) {
+                    await supabaseAdmin.from('notifications').insert(broadcastNotificationsToInsert);
+                }
                 
-                await supabaseAdmin.from('notifications').insert(broadcastNotificationsToInsert);
+                return new Response(JSON.stringify({ message: `Broadcast enviado para ${allSubscriptions.length} inscrições.` }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    status: 200,
+                });
+            } else {
+                 return new Response(JSON.stringify({ message: 'Nenhuma inscrição de push ativa encontrada para o broadcast.' }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    status: 200,
+                });
             }
-            return new Response(JSON.stringify({
-                success: true,
-                message: `Broadcast sent to ${allSubscriptions?.length || 0} devices.`
-            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
-        } else {
-            return new Response(JSON.stringify({ error: "Invalid payload." }), {
-                status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
         }
+
+        return new Response(JSON.stringify({ message: 'Nenhuma notificação para processar.' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+        });
+
     } catch (error) {
-        console.error('Critical error in create-notifications function:', error);
+        console.error('Erro na função create-notifications:', error);
         return new Response(JSON.stringify({ error: error.message }), {
-            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500,
         });
     }
 });

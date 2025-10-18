@@ -1,16 +1,20 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { DashboardEvent } from '../types';
 
 interface EventDetailsModalProps {
   event: DashboardEvent | null;
   isOpen: boolean;
   onClose: () => void;
+  userRole?: string | null;
+  leaderDepartmentId?: number | null;
 }
 
-const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, onClose }) => {
+const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, onClose, userRole, leaderDepartmentId }) => {
   if (!isOpen || !event) {
     return null;
   }
+
+  const isLeader = userRole === 'leader' || userRole === 'lider';
 
   const formattedDate = new Date(event.date + 'T00:00:00').toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -19,12 +23,25 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
     day: 'numeric',
   });
 
-  const volunteerNames = Array.isArray(event.event_volunteers)
-    ? event.event_volunteers.map(sv => sv.volunteers?.name).filter(Boolean)
-    : [];
-  const departmentNames = Array.isArray(event.event_departments)
-    ? event.event_departments.map(ed => ed.departments?.name).filter(Boolean)
-    : [];
+  const relevantVolunteers = useMemo(() => {
+    if (!Array.isArray(event.event_volunteers)) return [];
+    if (isLeader && leaderDepartmentId) {
+        return event.event_volunteers.filter(sv => sv.department_id === leaderDepartmentId);
+    }
+    return event.event_volunteers;
+  }, [event.event_volunteers, isLeader, leaderDepartmentId]);
+
+  const volunteerNames = relevantVolunteers.map(sv => sv.volunteers?.name).filter(Boolean);
+
+  const relevantDepartments = useMemo(() => {
+    if (!Array.isArray(event.event_departments)) return [];
+    if (isLeader && leaderDepartmentId) {
+        return event.event_departments.filter(ed => ed.departments?.id === leaderDepartmentId);
+    }
+    return event.event_departments;
+  }, [event.event_departments, isLeader, leaderDepartmentId]);
+  
+  const departmentNames = relevantDepartments.map(ed => ed.departments?.name).filter(Boolean);
   
   const getStatusInfo = () => {
     switch (event.status) {
@@ -50,7 +67,7 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
                 <h2 className="text-2xl font-bold text-slate-800 mt-2">{event.name}</h2>
             </div>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
@@ -58,18 +75,20 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
             <div className="flex items-center space-x-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" /></svg>
                 <span className="font-medium">{formattedDate}</span>
             </div>
              <div className="flex items-center space-x-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                 <span className="font-medium">{event.start_time} - {event.end_time}</span>
             </div>
         </div>
         
         <div className="mt-6 pt-6 border-t border-slate-200 space-y-4">
             <div>
-                <h3 className="text-lg font-bold text-slate-800 mb-3">Departamentos Envolvidos ({departmentNames.length})</h3>
+                <h3 className="text-lg font-bold text-slate-800 mb-3">
+                    {isLeader ? 'Seu Departamento' : `Departamentos Envolvidos (${departmentNames.length})`}
+                </h3>
                 {departmentNames.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                         {departmentNames.map(name => (

@@ -44,11 +44,26 @@ export interface DashboardEvent {
   start_time: string;
   end_time: string;
   status: string;
-  event_departments: { departments: { name: string } }[] | null; // Can be null from DB join
-  event_volunteers: { volunteer_id: number; present: boolean | null; volunteers: { name: string } }[] | null;
+  event_departments: { departments: { id: number; name: string } }[] | null;
+  event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } }[] | null;
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'admin' | 'my-profile' | 'notifications' | 'frequency';
+export interface DashboardData {
+    stats?: {
+        activeVolunteers: Stat;
+        departments: Stat;
+        schedulesToday: Stat;
+        upcomingSchedules?: Stat;
+        presencesToday?: Stat;
+        annualAttendance?: Stat;
+    };
+    todaySchedules?: DashboardEvent[];
+    upcomingSchedules?: DashboardEvent[];
+    chartData?: ChartDataPoint[];
+    activeLeaders?: EnrichedUser[];
+}
+
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin';
 
 export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 

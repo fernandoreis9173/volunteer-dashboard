@@ -146,11 +146,11 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
 
     if (!dateFilters.start && !dateFilters.end) {
         const now = new Date();
-        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const firstDayOfYear = new Date(now.getFullYear(), 0, 1);
+        const lastDayOfYear = new Date(now.getFullYear(), 11, 31);
         events = events.filter(event => {
             const eventDate = new Date(event.date + 'T00:00:00');
-            return eventDate >= firstDay && eventDate <= lastDay;
+            return eventDate >= firstDayOfYear && eventDate <= lastDayOfYear;
         });
     } else {
         if (dateFilters.start) events = events.filter(event => event.date >= dateFilters.start);
@@ -387,7 +387,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         let totalVolunteersInEvent = 0;
         let totalPresentInEvent = 0;
         if (isFilteredByMyDept && leaderDepartmentId) {
-            const volunteersForMyDept = event.event_volunteers.filter(ev => ev.department_id === leaderDepartmentId);
+             const volunteersForMyDept = event.event_volunteers.filter(ev => ev.department_id === leaderDepartmentId);
             totalVolunteersInEvent = volunteersForMyDept.length;
             totalPresentInEvent = volunteersForMyDept.filter(ev => ev.present === true).length;
         } else {
@@ -572,121 +572,64 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                     await createAndSendNotifications(notifications);
                 }
 
-            } else {
+            } else { // Admin creating or editing an event
                 const { volunteer_ids, ...eventPayload } = eventData;
 
-                // --- CONFLICT CHECK ---
                 let conflictQuery = supabase
                     .from('events')
                     .select('id, name, start_time, end_time')
                     .eq('date', eventPayload.date)
-                    .lt('start_time', eventPayload.end_time) // Other event starts before this one ends
-                    .gt('end_time', eventPayload.start_time); // Other event ends after this one starts
+                    .lt('start_time', eventPayload.end_time)
+                    .gt('end_time', eventPayload.start_time);
                 
                 if (eventPayload.id) {
-                    // If editing, exclude the current event from the check
                     conflictQuery = conflictQuery.neq('id', eventPayload.id);
                 }
-
                 const { data: conflictingEvents, error: conflictError } = await conflictQuery;
-
-                if (conflictError) {
-                    throw new Error(`Erro ao verificar conflitos: ${getErrorMessage(conflictError)}`);
-                }
-
+                if (conflictError) throw new Error(`Erro ao verificar conflitos: ${getErrorMessage(conflictError)}`);
                 if (conflictingEvents && conflictingEvents.length > 0) {
                     const conflict = conflictingEvents[0];
                     const conflictMessage = `Conflito de horário com o evento "${conflict.name}" (${conflict.start_time.substring(0,5)} - ${conflict.end_time.substring(0,5)}).`;
                     throw new Error(conflictMessage);
                 }
-                // --- END CONFLICT CHECK ---
                 
                 let savedEvent;
                 const isCreating = !eventPayload.id;
 
                 if (isCreating) {
-                    // Logic for creating a new event
                     const { id, ...insertPayload } = eventPayload;
-                    const { data: newEvent, error } = await supabase
-                        .from('events')
-                        .insert(insertPayload)
-                        .select()
-                        .single();
+                    const { data: newEvent, error } = await supabase.from('events').insert(insertPayload).select().single();
                     if (error) throw error;
                     if (!newEvent) throw new Error("Falha ao criar o evento.");
                     savedEvent = newEvent;
-                } else {
-                    // Logic for updating an existing event
+    
+                    // Notify leaders via Edge Function
+                    const { error: leaderNotifyError } = await supabase.functions.invoke('create-notifications', {
+                        body: {
+                            notifyType: 'event_created',
+                            event: savedEvent,
+                        },
+                    });
+                    if (leaderNotifyError) {
+                        console.error("Falha ao acionar notificações para líderes na criação do evento:", getErrorMessage(leaderNotifyError));
+                    }
+                } else { // Is Updating
                     const eventId = eventPayload.id;
                     const { id, ...updatePayload } = eventPayload;
-                    const { data: updatedEvent, error } = await supabase
-                        .from('events')
-                        .update(updatePayload)
-                        .eq('id', eventId)
-                        .select()
-                        .single();
+                    const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
                     if (error) throw error;
                     if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
                     savedEvent = updatedEvent;
-                }
-
-                if (isCreating) {
-                    const { data: profiles, error: profileError } = await supabase
-                        .from('profiles')
-                        .select('id')
-                        .or('role.eq.leader,role.eq.lider');
-
-                    if (profileError) {
-                        console.error("Não foi possível buscar líderes para notificação:", profileError);
-                    } else if (profiles) {
-                        const notifications = profiles.map(p => ({
-                            user_id: p.id,
-                            message: `Novo evento criado: "${savedEvent.name}". Verifique se é relevante para seu departamento.`,
-                            type: 'new_event_for_leader' as const,
-                            related_event_id: savedEvent.id,
-                        }));
-                        await createAndSendNotifications(notifications);
-                    }
-                } else {
-                    const { data: eventVolunteers, error: evError } = await supabase
-                        .from('event_volunteers')
-                        .select('volunteers(user_id)')
-                        .eq('event_id', savedEvent.id);
-
-                    if (evError) {
-                        console.error("Erro ao buscar usuários para notificação de atualização:", evError);
-                    } else if (eventVolunteers) {
-                        const userIdsToNotify = new Set<string>();
-                        eventVolunteers.forEach(ev => {
-                            const volunteer = Array.isArray(ev.volunteers) ? ev.volunteers[0] : ev.volunteers;
-                            if (volunteer?.user_id) {
-                                userIdsToNotify.add(volunteer.user_id);
-                            }
-                        });
-
-                        // Also fetch leaders and admins to notify them of the update
-                        const { data: profiles, error: profileError } = await supabase
-                            .from('profiles')
-                            .select('id')
-                            .or('role.eq.leader,role.eq.lider,role.eq.admin');
-
-                        if (profileError) {
-                            console.error("Could not fetch leaders/admins for update notification:", profileError);
-                        } else if (profiles) {
-                            profiles.forEach(p => {
-                                if (p.id) {
-                                    userIdsToNotify.add(p.id);
-                                }
-                            });
-                        }
-                        
-                        const notifications = Array.from(userIdsToNotify).map(userId => ({
-                            user_id: userId,
-                            message: `O evento "${savedEvent.name}" foi atualizado. Confira os detalhes.`,
-                            type: 'event_update' as const,
-                            related_event_id: savedEvent.id,
-                        }));
-                        await createAndSendNotifications(notifications);
+    
+                    // Notify leaders and volunteers via Edge Function
+                    const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                        body: { 
+                            notifyType: 'event_updated',
+                            event: savedEvent,
+                        },
+                    });
+                    if (notifyError) {
+                        console.error("Falha ao acionar notificações na atualização do evento:", getErrorMessage(notifyError));
                     }
                 }
             }
@@ -748,8 +691,8 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <input type="text" placeholder="Buscar por nome do evento..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
-                        <CustomDatePicker name="start" value={dateFilters.start} onChange={handleStartDateChange} />
-                        <CustomDatePicker name="end" value={dateFilters.end} onChange={handleEndDateChange} />
+                        <CustomDatePicker name="start" value={dateFilters.start} onChange={(value: string) => setDateFilters(prev => ({ ...prev, start: value }))} />
+                        <CustomDatePicker name="end" value={dateFilters.end} onChange={(value: string) => setDateFilters(prev => ({ ...prev, end: value }))} />
                         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
                             <option value="all">Todos os Status</option>
                             <option value="Confirmado">Confirmado</option>
@@ -819,7 +762,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                         onClick={handleExportPDF}
                         className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                         <span>Exportar PDF</span>
                     </button>
                     {isAdmin && (
@@ -827,7 +770,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                         onClick={() => { setEditingEvent(null); showForm(); }}
                         className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                             <span>Novo Evento</span>
                         </button>
                     )}

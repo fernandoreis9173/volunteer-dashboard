@@ -62,9 +62,28 @@ const FrequencyPage: React.FC = () => {
         // This page is now only for confirmed events, simplifying the view.
         events = events.filter(event => event.status === 'Confirmado');
         
-        if (dateFilters.start) events = events.filter(event => event.date >= dateFilters.start);
-        if (dateFilters.end) events = events.filter(event => event.date <= dateFilters.end);
+        // If no date filters are set, default to showing the entire current year.
+        if (!dateFilters.start && !dateFilters.end) {
+            const now = new Date();
+            const firstDayOfYear = new Date(now.getFullYear(), 0, 1);
+            const lastDayOfYear = new Date(now.getFullYear(), 11, 31);
+            events = events.filter(event => {
+                const eventDate = new Date(event.date + 'T00:00:00');
+                return eventDate >= firstDayOfYear && eventDate <= lastDayOfYear;
+            });
+        } else {
+            // Otherwise, apply the user's selected date filters.
+            if (dateFilters.start) events = events.filter(event => event.date >= dateFilters.start);
+            if (dateFilters.end) events = events.filter(event => event.date <= dateFilters.end);
+        }
         
+        // Ensure ascending chronological order (Jan -> Dec)
+        events.sort((a, b) => {
+            const dateComparison = a.date.localeCompare(b.date);
+            if (dateComparison !== 0) return dateComparison;
+            return a.start_time.localeCompare(b.start_time);
+        });
+
         return events;
     }, [masterEvents, dateFilters]);
 
@@ -80,8 +99,12 @@ const FrequencyPage: React.FC = () => {
     }, [dateFilters, attendanceFilter]);
     
     const handleSetToday = () => {
-        const today = new Date().toISOString().split('T')[0];
-        setDateFilters({ start: today, end: today });
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${month}-${day}`;
+        setDateFilters({ start: todayStr, end: todayStr });
     };
 
     const handleClearFilters = () => {
@@ -316,7 +339,7 @@ const FrequencyPage: React.FC = () => {
                                         <p className="font-semibold text-slate-700">Presença</p>
                                         <p className="text-lg font-bold text-blue-600">{presentVolunteers}/{totalVolunteers}</p>
                                     </div>
-                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
                                 </div>
                             </div>
                             {isExpanded && (
@@ -381,7 +404,7 @@ const FrequencyPage: React.FC = () => {
                     onClick={handleExportPDF}
                     className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm w-full md:w-auto justify-center"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                     <span>Exportar PDF</span>
                 </button>
             </div>

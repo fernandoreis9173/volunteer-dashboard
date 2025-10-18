@@ -317,6 +317,50 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
   useEffect(() => {
     fetchVolunteerData();
   }, [fetchVolunteerData]);
+
+  useEffect(() => {
+    if (!session?.user?.id || !volunteerProfile?.id) {
+        return;
+    }
+
+    const channel = supabase
+        .channel(`realtime-attendance:${volunteerProfile.id}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'event_volunteers',
+                filter: `volunteer_id=eq.${volunteerProfile.id}`,
+            },
+            (payload) => {
+                const updatedRecord = payload.new as { event_id: number; present: boolean };
+                
+                if (updatedRecord.present === true) {
+                    setTodaySchedules(prevSchedules => 
+                        prevSchedules.map(schedule => {
+                            if (schedule.id === updatedRecord.event_id) {
+                                // Close QR code modal if it's open for this event
+                                if (qrCodeData && (qrCodeData as any).eId === updatedRecord.event_id) {
+                                    setQrCodeData(null);
+                                }
+                                return {
+                                    ...schedule,
+                                    is_present_for_volunteer: true,
+                                };
+                            }
+                            return schedule;
+                        })
+                    );
+                }
+            }
+        )
+        .subscribe();
+    
+    return () => {
+        supabase.removeChannel(channel);
+    };
+  }, [session, volunteerProfile, qrCodeData]);
   
   const handleGenerateQr = (schedule: VolunteerEvent & { department_id_for_volunteer?: number }) => {
     if (volunteerProfile && schedule.id && schedule.department_id_for_volunteer) {

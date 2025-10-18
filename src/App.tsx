@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import Dashboard from './components/Dashboard';
+import LeaderDashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
 import DepartmentsPage from './components/DepartmentsPage';
 // FIX: Corrected import name from SchedulesPage to EventsPage to match the component.
 import EventsPage from './components/SchedulesPage';
 import CalendarPage from './components/CalendarPage';
 import AdminPage from './components/AdminPage';
+import AdminDashboard from './components/AdminDashboard';
 import FrequencyPage from './components/FrequencyPage';
 import LoginPage from './components/LoginPage';
 import { AcceptInvitationPage } from './components/AcceptInvitationPage';
@@ -19,6 +20,7 @@ import UserProfilePage from './components/UserProfilePage';
 import NotificationsPage from './components/NotificationsPage';
 import NotificationToast, { Notification as ToastNotification } from './components/NotificationToast';
 import PushNotificationModal from './components/PushNotificationModal';
+import IOSInstallPromptModal from './components/IOSInstallPromptModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
 import ApiConfigPage from './components/ApiConfigPage'; // Import the config page
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
@@ -33,7 +35,7 @@ const areApiKeysConfigured =
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
-
+    
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -49,8 +51,8 @@ const pagePermissions: Record<Page, string[]> = {
     'departments': ['admin'],
     'events': ['admin', 'leader'],
     'calendar': ['admin', 'leader'],
-    'admin': ['admin'],
     'frequency': ['admin'],
+    'admin': ['admin'],
 };
 
 const getInitialAuthView = (): AuthView => {
@@ -62,7 +64,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2); 
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'admin', 'my-profile', 'notifications', 'frequency'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -96,10 +98,15 @@ const App: React.FC = () => {
   const [activeEvent, setActiveEvent] = useState<AppEvent | null>(null);
   // FIX: Use `any` for `installPromptEvent` state to accommodate the non-standard `BeforeInstallPromptEvent` properties like `prompt()`.
   const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null);
+  const [isIOSInstallPromptOpen, setIsIOSInstallPromptOpen] = useState(false);
   const lastUserId = useRef<string | null>(null);
+  const hasLoginRedirected = useRef(false);
   
   // VAPID key is now hardcoded for production
   const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
+
+  const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
+  const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
 
   const hasPermission = useMemo(() => {
     if (!userProfile?.role) {
@@ -193,11 +200,17 @@ const App: React.FC = () => {
     }
   }, [session, fetchCoreData]);
   
+  const handleNavigate = useCallback((page: Page) => {
+    setActivePage(page);
+    window.location.hash = `#/${page}`;
+    setIsSidebarOpen(false);
+  }, []);
+
   const handleRegistrationComplete = useCallback(() => {
     // After registration, user status is 'Ativo'. We just need to refetch the profile data.
     refetchUserData();
-    window.location.hash = '#/dashboard';
-  }, [refetchUserData]);
+    handleNavigate('dashboard');
+  }, [refetchUserData, handleNavigate]);
 
   const refetchNotificationCount = useCallback(async () => {
     if (session) {
@@ -230,17 +243,19 @@ const App: React.FC = () => {
     }, []);
 
     const handleInstallPrompt = async () => {
-        if (!installPromptEvent) {
+        if (installPromptEvent) {
+            // @ts-ignore
+            installPromptEvent.prompt();
+            // @ts-ignore
+            const { outcome } = await installPromptEvent.userChoice;
+            console.log(`User response to the install prompt: ${outcome}`);
+            // We've used the prompt, and can't use it again, so clear it.
+            setInstallPromptEvent(null);
+        } else if (isIOS && !isStandalone) {
+            setIsIOSInstallPromptOpen(true);
+        } else {
             alert('O aplicativo já foi instalado ou seu navegador não suporta a instalação. Você pode tentar adicionar manualmente à tela inicial através do menu do navegador.');
-            return;
         }
-        // @ts-ignore
-        installPromptEvent.prompt();
-        // @ts-ignore
-        const { outcome } = await installPromptEvent.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        // We've used the prompt, and can't use it again, so clear it.
-        setInstallPromptEvent(null);
     };
 
     useEffect(() => {
@@ -280,7 +295,7 @@ const App: React.FC = () => {
             .single();
     
         if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows found", which is fine
-            console.error("Error checking for active event:", error);
+            console.error("Error checking for active event:", getErrorMessage(error));
         }
     
         // FIX: Use the `AppEvent` alias when casting the fetched data.
@@ -353,6 +368,27 @@ const App: React.FC = () => {
             lastUserId.current = null;
         }
     }, [session, fetchCoreData]);
+
+    useEffect(() => {
+        // Handles the initial redirect after a user logs in.
+        if (session && userProfile && !hasLoginRedirected.current) {
+            hasLoginRedirected.current = true; // Mark as handled immediately to prevent race conditions
+    
+            // Don't redirect if the user is loading a specific page from a URL
+            const currentPageFromHash = getPageFromHash();
+            if (currentPageFromHash !== 'dashboard') {
+                return;
+            }
+            
+            // All roles now redirect to 'dashboard', the renderPage function will show the correct component.
+            handleNavigate('dashboard');
+        }
+        
+        // Reset the redirect flag when the user logs out.
+        if (!session) {
+            hasLoginRedirected.current = false;
+        }
+    }, [session, userProfile, handleNavigate]);
 
     useEffect(() => {
         // Prompt for push notifications after login if permission is 'default'
@@ -435,12 +471,6 @@ const App: React.FC = () => {
         }
         setIsPushPromptOpen(false);
     };
-
-    const handleNavigate = (page: Page) => {
-        setActivePage(page);
-        window.location.hash = `#/${page}`;
-        setIsSidebarOpen(false);
-    };
     
     const handleNewVolunteer = () => {
         handleNavigate('volunteers');
@@ -482,16 +512,19 @@ const App: React.FC = () => {
             case 'calendar':
                 return <CalendarPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} setIsSidebarOpen={setIsSidebarOpen} />;
             case 'admin':
-                return userProfile.role === 'admin' ? <AdminPage onDataChange={refetchNotificationCount} /> : <Dashboard activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
+                return <AdminPage />;
             case 'frequency':
-                return userProfile.role === 'admin' ? <FrequencyPage /> : <Dashboard activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
+                return <FrequencyPage />;
             case 'notifications':
                 return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
             case 'my-profile':
                 return <UserProfilePage session={session} onUpdate={refetchUserData} />;
             case 'dashboard':
             default:
-                return <Dashboard activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
+                if (userProfile.role === 'admin') {
+                    return <AdminDashboard onDataChange={refetchNotificationCount} activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
+                }
+                return <LeaderDashboard activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
         }
     };
 
@@ -545,7 +578,7 @@ const App: React.FC = () => {
                     unreadCount={unreadCount}
                     pushPermissionStatus={pushPermissionStatus}
                     onSubscribeToPush={() => setIsPushPromptOpen(true)}
-                    canInstallPwa={!!installPromptEvent}
+                    canInstallPwa={!!installPromptEvent || (isIOS && !isStandalone)}
                     onInstallPrompt={handleInstallPrompt}
                 />
                 <div className="flex-1 flex flex-col min-w-0">
@@ -558,6 +591,10 @@ const App: React.FC = () => {
                     isOpen={isPushPromptOpen}
                     onClose={() => setIsPushPromptOpen(false)}
                     onConfirm={subscribeToPushNotifications}
+                />
+                <IOSInstallPromptModal
+                    isOpen={isIOSInstallPromptOpen}
+                    onClose={() => setIsIOSInstallPromptOpen(false)}
                 />
             </div>
             <div className="fixed top-4 right-4 z-[9999] space-y-2">

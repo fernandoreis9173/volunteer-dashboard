@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 // FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
 import type { User } from '@supabase/supabase-js';
-import { Page } from '../types';
 
 interface EditUserModalProps {
   isOpen: boolean;
@@ -12,7 +11,8 @@ interface EditUserModalProps {
   onSave: (userId: string, role: string, permissions: string[]) => void;
 }
 
-const allPages: { id: Page; label: string }[] = [
+// FIX: Changed `id` type from `Page` to `string` to accommodate the 'admin' page permission, which is not a navigable page but a permission flag. This resolves type errors throughout the component.
+const allPages: { id: string; label: string }[] = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'volunteers', label: 'Voluntários' },
     { id: 'departments', label: 'Departamentos' },

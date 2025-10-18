@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 import type { Stat } from '../types';
@@ -15,8 +16,9 @@ interface ActiveVolunteersListProps {
     activeVolunteers: Stat;
     departments: Stat;
     schedulesToday: Stat;
-    schedulesTomorrow: Stat;
+    upcomingSchedules?: Stat;
   } | undefined;
+  userRole: string | null | undefined;
 }
 
 const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) => (
@@ -27,17 +29,18 @@ const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) 
 );
 
 
-const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ stats }) => {
+const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ stats, userRole }) => {
+  const isLeader = userRole === 'leader' || userRole === 'lider';
   const loading = !stats;
   const activeCount = loading ? '...' : stats?.activeVolunteers?.value ?? '0';
   const departmentsCount = loading ? '...' : stats?.departments?.value ?? '0';
   const todayCount = loading ? '...' : stats?.schedulesToday?.value ?? '0';
-  const tomorrowCount = loading ? '...' : stats?.schedulesTomorrow?.value ?? '0';
+  const upcomingCount = loading ? '...' : stats?.upcomingSchedules?.value ?? '0';
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm flex flex-col h-full">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-slate-800">Voluntários Ativos</h2>
+        <h2 className="text-2xl font-bold text-slate-800">{isLeader ? 'Voluntários do Departamento' : 'Voluntários Ativos'}</h2>
       </div>
 
       {loading ? (
@@ -58,7 +61,7 @@ const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ stats }) =>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                 </span>
                 <p className="text-4xl font-bold text-slate-800">{activeCount}</p>
-                <p className="text-slate-500 pt-2">ativos no sistema</p>
+                <p className="text-slate-500 pt-2">{isLeader ? 'ativos no seu departamento' : 'ativos no sistema'}</p>
             </div>
             
             <div className="flex-grow h-24 -mx-6">
@@ -76,11 +79,15 @@ const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ stats }) =>
             </div>
 
             <div className="mt-4 pt-4 border-t border-slate-200 flex justify-around items-center">
-                <StatItem value={departmentsCount} label="Departamentos" />
-                <div className="h-10 w-px bg-slate-200"></div>
+                {userRole === 'admin' && (
+                  <>
+                    <StatItem value={departmentsCount} label="Departamentos" />
+                    <div className="h-10 w-px bg-slate-200"></div>
+                  </>
+                )}
                 <StatItem value={todayCount} label="Eventos Hoje" />
                 <div className="h-10 w-px bg-slate-200"></div>
-                <StatItem value={tomorrowCount} label="Eventos Amanhã" />
+                <StatItem value={upcomingCount} label="Próximos Eventos" />
             </div>
         </>
       )}
