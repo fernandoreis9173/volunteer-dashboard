@@ -1,50 +1,51 @@
-import React, { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import React, { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { type Session } from '@supabase/supabase-js';
 import { DetailedVolunteer } from '../types';
+import { getErrorMessage } from '../lib/utils';
 
 interface VolunteerProfileProps {
-    supabase: SupabaseClient | null;
-    volunteerData: DetailedVolunteer | undefined;
+    session: Session | null;
     onUpdate: () => void;
 }
 
-// Helper to render array data that might be a string
-const renderArrayData = (data: string[] | string | null | undefined, emptyText: string = 'Nenhuma'): string => {
+const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
+  const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";
+  const colorClasses = {
+    yellow: "bg-yellow-100 text-yellow-800",
+    blue: "bg-blue-100 text-blue-800",
+  };
+  return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
+};
+
+const parseArrayFromString = (data: string[] | string | null | undefined): string[] => {
     let items: string[] = [];
-    if (!data) return emptyText;
+    if (!data) return [];
 
     if (Array.isArray(data)) {
         items = data;
     } else if (typeof data === 'string') {
-        // Handle JSON array format "[\"item1\",\"item2\"]"
         if (data.startsWith('[') && data.endsWith(']')) {
             try {
                 const parsed = JSON.parse(data);
-                if (Array.isArray(parsed)) {
-                    items = parsed;
-                }
-            } catch (e) { /* ignore parse error */ }
+                if (Array.isArray(parsed)) items = parsed;
+            } catch (e) { /* ignore */ }
         }
-        // Handle Supabase array format "{item1,item2}"
         else if (data.startsWith('{') && data.endsWith('}')) {
              items = data.substring(1, data.length - 1).split(',').map(s => s.trim().replace(/^"|"$/g, ''));
         }
-        // If it's just a non-empty string, show it (could be a single value)
         else if (data.trim()) {
             items = data.split(',').map(s => s.trim());
         }
     }
-
-    if (items.length === 0 || (items.length === 1 && items[0] === '')) {
-        return emptyText;
-    }
-
-    // Capitalize each item for better display
-    return items.map(item => item ? item.charAt(0).toUpperCase() + item.slice(1) : '').join(', ');
+    return items.filter(item => item && item.trim() !== '');
 };
 
 
-const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteerData, onUpdate }) => {
+const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }) => {
+    const [volunteerData, setVolunteerData] = useState<DetailedVolunteer | null>(null);
+    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null }[]>([]);
+    const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -55,27 +56,55 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
         quarta: false, quinta: false, sexta: false, sabado: false,
     });
     
+    const fetchProfileData = useCallback(async () => {
+        if (!session) return;
+        setLoading(true);
+        setError(null);
+        try {
+            const { data, error: fetchError } = await supabase
+                .from('volunteers')
+                .select('*, departments:departaments')
+                .eq('user_id', session.user.id)
+                .single();
+            if (fetchError) throw fetchError;
+            setVolunteerData(data as DetailedVolunteer);
+
+            const departmentNames = parseArrayFromString(data?.departments);
+
+            if (departmentNames.length > 0) {
+                const { data: departmentsData, error: deptsError } = await supabase
+                    .from('departments')
+                    .select('name, leader')
+                    .in('name', departmentNames);
+                
+                if (deptsError) throw deptsError;
+                setDepartmentDetails(departmentsData || []);
+            } else {
+                setDepartmentDetails([]);
+            }
+
+        } catch (err) {
+            setError(getErrorMessage(err));
+        } finally {
+            setLoading(false);
+        }
+    }, [session]);
+
+    useEffect(() => {
+        fetchProfileData();
+    }, [fetchProfileData]);
+
     useEffect(() => {
         if (volunteerData) {
             setFormData({
                 name: volunteerData.name || '',
                 phone: volunteerData.phone || ''
             });
-            setSkills(volunteerData.skills || []);
-
+            setSkills(parseArrayFromString(volunteerData.skills));
+            
             const availabilityKeys = { domingo: false, segunda: false, terca: false, quarta: false, quinta: false, sexta: false, sabado: false };
-            let availabilityArray: string[] = [];
-            const rawAvailability = volunteerData.availability;
-            if (Array.isArray(rawAvailability)) {
-                availabilityArray = rawAvailability;
-            } else if (typeof rawAvailability === 'string' && rawAvailability.startsWith('[')) {
-                try {
-                    const parsed = JSON.parse(rawAvailability);
-                    if (Array.isArray(parsed)) {
-                        availabilityArray = parsed;
-                    }
-                 } catch (e) {}
-            }
+            const availabilityArray = parseArrayFromString(volunteerData.availability).map(d => d.toLowerCase());
+            
             availabilityArray.forEach(day => {
                 if (day in availabilityKeys) {
                     availabilityKeys[day as keyof typeof availabilityKeys] = true;
@@ -106,16 +135,16 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
                     name: formData.name,
                     phone: formData.phone,
                     skills: skills,
-                    availability: JSON.stringify(selectedAvailability) // Save as JSON string for consistency
+                    availability: JSON.stringify(selectedAvailability)
                 })
                 .eq('id', volunteerData.id);
             
             if (updateError) throw updateError;
             
-            // Also update the name in auth.users.user_metadata
             await supabase.auth.updateUser({ data: { name: formData.name } });
 
-            onUpdate(); // Refetch data in App.tsx
+            await fetchProfileData(); // Refetch local data
+            onUpdate(); // Propagate global changes if needed (like notification count)
             setIsEditing(false);
 
         } catch (e: any) {
@@ -125,9 +154,16 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
         }
     };
 
-    if (!volunteerData) {
+    if (loading) {
         return <p>Carregando perfil...</p>;
     }
+    if (error || !volunteerData) {
+        return <p className="text-red-500">Erro ao carregar perfil: {error}</p>;
+    }
+    
+    const skillsList = parseArrayFromString(volunteerData.skills);
+    const availabilityList = parseArrayFromString(volunteerData.availability);
+
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
@@ -145,7 +181,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
                     <div className="space-y-6">
                         <div><label className="block text-sm font-medium text-slate-700">Nome Completo</label><input type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md"/></div>
                         <div><label className="block text-sm font-medium text-slate-700">Telefone</label><input type="text" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md"/></div>
-                        <div><label className="block text-sm font-medium text-slate-700 mb-2">Habilidades</label>{/* Basic tag input for skills */}<input type="text" value={skills.join(', ')} onChange={e => setSkills(e.target.value.split(',').map(s => s.trim()))} className="w-full mt-1 p-2 border rounded-md" placeholder="Ex: Canto, Fotografia, etc"/></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-2">Habilidades</label><input type="text" value={skills.join(', ')} onChange={e => setSkills(e.target.value.split(',').map(s => s.trim()))} className="w-full mt-1 p-2 border rounded-md" placeholder="Ex: Canto, Fotografia, etc"/></div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -161,13 +197,43 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ supabase, volunteer
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4 text-slate-700">
-                        <p><strong>Nome:</strong> {volunteerData.name}</p>
-                        <p><strong>Email:</strong> {volunteerData.email}</p>
-                        <p><strong>Telefone:</strong> {volunteerData.phone || 'Não informado'}</p>
-                        <p><strong>Departamentos:</strong> {renderArrayData(volunteerData.departments, 'Nenhum')}</p>
-                        <p><strong>Habilidades:</strong> {renderArrayData(volunteerData.skills, 'Nenhuma')}</p>
-                        <p><strong>Disponibilidade:</strong> {renderArrayData(volunteerData.availability, 'Nenhuma')}</p>
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-slate-700">
+                            <p><strong>Nome:</strong> {volunteerData.name}</p>
+                            <p><strong>Email:</strong> {volunteerData.email}</p>
+                            <p><strong>Telefone:</strong> {volunteerData.phone || 'Não informado'}</p>
+                            <p><strong>Disponibilidade:</strong> {availabilityList.map(item => item ? item.charAt(0).toUpperCase() + item.slice(1) : '').join(', ') || 'Nenhuma'}</p>
+                        </div>
+
+                        <div className="pt-6 border-t border-slate-200">
+                            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Departamentos</h4>
+                            {departmentDetails.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {departmentDetails.map(dept => (
+                                        <div key={dept.name} className="p-4 rounded-xl bg-yellow-50 border border-yellow-200">
+                                            <p className="font-bold text-yellow-900">{dept.name}</p>
+                                            {dept.leader ? (
+                                                <p className="text-xs text-yellow-700 mt-1 flex items-center gap-1.5">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
+                                                    {dept.leader}
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs text-yellow-600 mt-1 italic">Líder não definido</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : <p className="text-sm text-slate-500">Nenhum departamento associado.</p>}
+                        </div>
+
+                        <div className="pt-6 border-t border-slate-200">
+                            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Habilidades</h4>
+                            {skillsList.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {skillsList.map(skill => <Tag key={skill} color="blue">{skill}</Tag>)}
+                                </div>
+                            ) : <p className="text-sm text-slate-500">Nenhuma habilidade registrada.</p>}
+                        </div>
                     </div>
                 )}
             </div>

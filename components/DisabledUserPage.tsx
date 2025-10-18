@@ -1,18 +1,13 @@
-
-
 import React from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 
 interface DisabledUserPageProps {
-    supabase: SupabaseClient | null;
     userRole: string | null;
 }
 
-const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ supabase, userRole }) => {
+const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ userRole }) => {
     const handleLogout = async () => {
-        if (supabase) {
-            await supabase.auth.signOut();
-        }
+        await supabase.auth.signOut();
     };
 
     const roleDisplay = userRole === 'admin' ? 'Administrador' : 'Líder';

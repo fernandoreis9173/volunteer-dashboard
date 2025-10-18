@@ -1,21 +1,27 @@
 {
-  "name": "volunteer-dashboard",
+  "name": "volunteers",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-   "start": "sirv dist --port 3000 --single --host 0.0.0.0"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "@fullcalendar/core": "6.1.14",
+    "@fullcalendar/daygrid": "6.1.14",
+    "@fullcalendar/interaction": "6.1.14",
+    "@fullcalendar/react": "6.1.14",
+    "@fullcalendar/timegrid": "6.1.14",
     "@supabase/supabase-js": "2.44.4",
+    "html5-qrcode": "^2.3.8",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",
-    "sirv-cli": "^2.0.2"
+    "qrcode": "^1.5.4",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "recharts": "2.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

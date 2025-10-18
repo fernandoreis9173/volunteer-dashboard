@@ -1,92 +1,106 @@
 // supabase/functions/invite-user/index.ts
+import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-control-allow-methods': 'POST, GET, OPTIONS'
+};
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
-import { corsHeaders } from '../_shared/cors.ts';
-
+// FIX: Declare Deno to resolve TypeScript errors for Deno-specific APIs.
 declare const Deno: any;
 
-Deno.serve(async (req) => {
-  // Handles CORS preflight requests
+Deno.serve(async (req)=>{
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', {
+      headers: corsHeaders
+    });
   }
-
   try {
-    const { email, role } = await req.json();
-    if (!email || !role) {
-      throw new Error("Email and role are required in the request body.");
+    // Step 1: Initialize Supabase Admin Client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Supabase configuration is missing.');
     }
-    
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '', 
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-    
-    // Step 1: Invite the user.
-    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email);
-
-    if (inviteError) {
-        if (inviteError.message && inviteError.message.includes('User already registered')) {
-            throw new Error(`Um usuário com o email ${email} já está registrado.`);
-        }
-        throw inviteError;
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    // Step 2: Get and validate request data
+    const { email, role, name } = await req.json();
+    if (!email || !role || !name) {
+      throw new Error("Email, name, and role are required.");
     }
-
-    if (!inviteData.user) throw new Error("User invitation failed, no user object was returned.");
-    const user = inviteData.user;
-
-    // Step 2: Define metadata, including page permissions based on role.
-    let page_permissions: string[];
-    switch (role) {
-        case 'admin':
-            page_permissions = ['dashboard', 'volunteers', 'departments', 'events', 'admin'];
-            break;
-        case 'leader':
-        case 'lider':
-            page_permissions = ['dashboard', 'volunteers', 'departments', 'events'];
-            break;
-        case 'volunteer':
-            page_permissions = ['dashboard']; // Volunteers only see their dashboard
-            break;
-        default:
-            page_permissions = ['dashboard']; // Safest default
+    // Step 3: Ensure this function is ONLY for 'admin' or 'leader' roles and normalize 'lider' to 'leader'.
+    const normalizedRole = role === 'lider' ? 'leader' : role;
+    if (normalizedRole !== 'admin' && normalizedRole !== 'leader') {
+      throw new Error("This function is exclusively for inviting Admins and Leaders. For volunteers, use 'invite-volunteer'.");
     }
-
-    const metadata = {
+    // Step 4: Invite the user via Supabase Auth.
+    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      data: {
+        name: name,
         status: 'Pendente',
-        role,
-        page_permissions
-    };
-
-    const { data: updateData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      user.id,
-      { user_metadata: metadata }
-    );
-    
+        role: normalizedRole
+      }
+    });
+    if (inviteError) {
+      if (inviteError.message.includes('User already registered')) {
+        throw new Error(`A user with the email ${email} is already registered.`);
+      }
+      throw inviteError;
+    }
+    if (!inviteData.user) throw new Error("Invitation failed to return a user object.");
+    // ---- DEFENSIVE STEP ----
+    // Explicitly update the user's metadata immediately after creation.
+    // This will override any potential database triggers that might be incorrectly setting the role to 'volunteer'.
+    const { data: updatedUserData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(inviteData.user.id, {
+      user_metadata: {
+        name: name,
+        status: 'Pendente',
+        role: normalizedRole
+      }
+    });
     if (updateError) {
-        await supabaseAdmin.auth.admin.deleteUser(user.id);
-        throw updateError;
+      // If this crucial update fails, we must roll back the invitation to prevent an inconsistent state.
+      await supabaseAdmin.auth.admin.deleteUser(inviteData.user.id);
+      throw new Error(`Failed to correctly set the user's role after invitation. The process has been rolled back. Error: ${updateError.message}`);
     }
-
-    // Step 3: Create the user's profile in the 'profiles' table.
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .insert({ id: user.id, role: role });
-
+    const finalUser = updatedUserData.user;
+    // Step 5: Create the user's profile in the `profiles` table.
+    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+      id: finalUser.id,
+      role: normalizedRole
+    });
+    // Step 6: If creating the profile fails, roll back by deleting the invited user
     if (profileError) {
-      // Rollback auth user if profile creation fails
-      await supabaseAdmin.auth.admin.deleteUser(user.id);
-      throw new Error(`User was invited, but profile creation failed: ${profileError.message}`);
+      console.error(`Failed to create profile for ${normalizedRole}. Rolling back user invitation.`, profileError);
+      await supabaseAdmin.auth.admin.deleteUser(finalUser.id);
+      throw new Error(`Failed to create the user's profile. The invitation has been cancelled. DB Error: ${profileError.message}`);
     }
-    
-    return new Response(JSON.stringify({ user: updateData.user }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Step 7: Cleanup step for any stray volunteer records.
+    const { error: deleteError } = await supabaseAdmin.from('volunteers').delete().eq('user_id', finalUser.id);
+    if (deleteError) {
+      console.warn(`Could not clean up potential volunteer record for user ${finalUser.id}. Error: ${deleteError.message}`);
+    }
+    // Step 8: Success response.
+    return new Response(JSON.stringify({
+      user: finalUser
+    }), {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      },
       status: 200
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400
+    console.error('Error in invite-user function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred in the function.';
+    return new Response(JSON.stringify({
+      error: errorMessage
+    }), {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      },
+      status: 500
     });
   }
 });

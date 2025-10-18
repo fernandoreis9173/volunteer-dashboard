@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 import { AuthView, Department } from '../types';
 import SmartSearch, { SearchItem } from './SmartSearch';
+import { getErrorMessage } from '../lib/utils';
 
 // --- Helper Components & Functions ---
 
@@ -67,14 +68,41 @@ const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onC
     </div>
 );
 
-const RemovableTag: React.FC<{ text: string; onRemove: () => void; }> = ({ text, onRemove }) => {
+const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove: () => void; }> = ({ text, color, onRemove }) => {
+    const getInitials = (name: string): string => {
+        if (!name) return '??';
+        const parts = name.trim().split(' ').filter(p => p);
+        if (parts.length === 0) return '??';
+        if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+        return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
+    };
+
+    const initials = getInitials(text);
+
+    const colorClasses = {
+        blue: {
+            container: 'bg-blue-100 text-blue-800 border-blue-200',
+            avatar: 'bg-blue-500 text-white',
+            buttonHover: 'hover:bg-blue-200'
+        },
+        yellow: {
+            container: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+            avatar: 'bg-yellow-500 text-white',
+            buttonHover: 'hover:bg-yellow-200'
+        },
+    };
+    const classes = colorClasses[color];
+
     return (
-        <div className="inline-flex items-center pl-3 pr-1.5 py-1 rounded-full text-sm font-semibold border bg-yellow-100 text-yellow-800 border-yellow-200">
-            <span>{text}</span>
+        <div className={`inline-flex items-center pl-1 pr-1.5 py-1 rounded-full text-sm font-semibold border ${classes.container}`}>
+            <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${classes.avatar}`}>
+                {initials}
+            </div>
+            <span className="ml-2">{text}</span>
             <button
                 type="button"
                 onClick={onRemove}
-                className="ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit hover:bg-yellow-200"
+                className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover}`}
                 aria-label={`Remove ${text}`}
             >
                 <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={3}>
@@ -85,19 +113,77 @@ const RemovableTag: React.FC<{ text: string; onRemove: () => void; }> = ({ text,
     );
 };
 
-// FIX: Define the props interface for the component to resolve the "Cannot find name" error.
+const TagInputField: React.FC<{ 
+    label: string; 
+    placeholder: string; 
+    tags: string[]; 
+    setTags: React.Dispatch<React.SetStateAction<string[]>>;
+    color: 'blue' | 'yellow';
+}> = ({ label, placeholder, tags, setTags, color }) => {
+    const [inputValue, setInputValue] = useState('');
+
+    const handleAddTag = () => {
+        const trimmedInput = inputValue.trim();
+        if (trimmedInput && !tags.includes(trimmedInput)) {
+            setTags([...tags, trimmedInput]);
+            setInputValue('');
+        }
+    };
+
+    const handleRemoveTag = (tagToRemove: string) => {
+        setTags(tags.filter(tag => tag !== tagToRemove));
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleAddTag();
+        }
+    };
+
+    return (
+    <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+        <div className="flex">
+            <input 
+                type="text" 
+                placeholder={placeholder}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
+            />
+            <button 
+                type="button"
+                onClick={handleAddTag}
+                className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300"
+            >
+                +
+            </button>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+                <RemovableTag key={tag} text={tag} color={color} onRemove={() => handleRemoveTag(tag)} />
+            ))}
+        </div>
+    </div>
+    );
+};
+
+
 interface AcceptInvitationPageProps {
-    supabase: SupabaseClient;
     setAuthView: (view: AuthView) => void;
+    onRegistrationComplete: () => void;
 }
 
-export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supabase, setAuthView }) => {
+export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setAuthView, onRegistrationComplete }) => {
     const [isValidating, setIsValidating] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
+    const [skills, setSkills] = useState<string[]>([]);
     const [availability, setAvailability] = useState({
         domingo: false, segunda: false, terca: false,
         quarta: false, quinta: false, sexta: false, sabado: false,
@@ -116,11 +202,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
           setIsValidating(true);
           setError(null);
     
-          // Supabase client automatically handles the token from the URL.
-          // We wait for the session to be established.
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-          // The user must be in an authenticated state from the invite link.
           if (sessionError || !session || session.user.aud !== 'authenticated') {
             setError("Token de convite inválido ou ausente. Por favor, use o link do seu e-mail.");
             setIsValidating(false);
@@ -139,7 +222,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
               .eq('status', 'Ativo')
               .order('name');
             if (deptError) {
-              console.error("Could not fetch departments for volunteer", deptError);
+              console.error("Could not fetch departments for volunteer", getErrorMessage(deptError));
             } else {
               setDepartments(deptData as Department[] || []);
             }
@@ -147,11 +230,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
           setIsValidating(false);
         };
     
-        // A short delay gives the Supabase client time to process the hash.
         const timer = setTimeout(validateTokenAndFetchData, 250);
         return () => clearTimeout(timer);
     
-      }, [supabase]);
+      }, []);
     
     const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setPhone(formatPhoneNumber(e.target.value));
@@ -179,6 +261,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
             setError("Por favor, insira seu nome completo.");
             return;
         }
+        if (isVolunteer && !phone.replace(/[^\d]/g, '')) {
+            setError("Por favor, insira seu número de telefone.");
+            return;
+        }
         if (password.length < 6) {
             setError("A senha deve ter pelo menos 6 caracteres.");
             return;
@@ -195,12 +281,16 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
         try {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !session) {
-                throw new Error("Sessão de convite inválida ou expirada. Por favor, use o link do seu e--mail novamente.");
+                throw new Error("Sessão de convite inválida ou expirada. Por favor, use o link do seu e-mail novamente.");
             }
 
             const { data: authData, error: updateError } = await supabase.auth.updateUser({
                 password: password,
-                data: { name: fullName, status: 'Ativo' }
+                data: { 
+                    name: fullName, 
+                    status: 'Ativo',
+                    phone: phone.replace(/[^\d]/g, '')
+                }
             });
 
             if (updateError) throw updateError;
@@ -220,7 +310,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
                 ).toUpperCase();
 
-                const volunteerUpdatePayload = {
+                const volunteerUpsertPayload = {
+                    user_id: user.id,
                     email: user.email!,
                     status: 'Ativo' as const,
                     name: fullName,
@@ -228,16 +319,15 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                     availability: JSON.stringify(selectedAvailabilityDays),
                     initials: calculatedInitials,
                     departaments: selectedDepartments.map(d => d.name),
-                    skills: [], // Skills are not collected on this form
+                    skills: skills,
                 };
 
-                const { error: volunteerUpdateError } = await supabase
+                const { error: volunteerUpsertError } = await supabase
                     .from('volunteers')
-                    .update(volunteerUpdatePayload)
-                    .eq('user_id', user.id);
+                    .upsert(volunteerUpsertPayload, { onConflict: 'user_id' });
 
-                if (volunteerUpdateError) {
-                    console.error("Volunteer update error:", volunteerUpdateError);
+                if (volunteerUpsertError) {
+                    console.error("Volunteer upsert error:", volunteerUpsertError);
                     throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil de voluntário. Por favor, contate um administrador.");
                 }
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
@@ -248,19 +338,34 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                 if (profileError) {
                     throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil. Por favor, contate um administrador.");
                 }
+                
+                // Cleanup step: If a volunteer record was somehow created (e.g., by a trigger), delete it.
+                const { error: deleteError } = await supabase
+                    .from('volunteers')
+                    .delete()
+                    .eq('user_id', user.id);
+
+                if (deleteError) {
+                    // Log the error but don't block the user, as the main process was successful.
+                    console.warn('Could not clean up stray volunteer record during admin/leader registration:', deleteError);
+                }
             }
             
-            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login...');
+            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login para você acessar sua conta.');
             
-            setTimeout(async () => {
-                await supabase.auth.signOut();
-                window.location.hash = '';
+            // Sign out the current temporary session to force a manual login
+            await supabase.auth.signOut();
+            
+            setTimeout(() => {
                 setAuthView('login');
+                // Clear the invite hash from the URL so it doesn't trigger the invite view again on reload
+                window.location.hash = ''; 
             }, 3000);
 
         } catch (error: any) {
+            const errorMessage = getErrorMessage(error);
             console.error("Error accepting invitation:", error);
-            setError(error.message || 'Falha ao ativar sua conta. O link pode ter expirado ou já ter sido usado.');
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -291,10 +396,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                       </div>
                     </div>
                     <h1 className="text-3xl font-bold text-slate-800">
-                        Ative Sua Conta
+                        Complete seu Cadastro
                     </h1>
                     <p className="mt-2 text-slate-500">
-                        Você foi convidado para o Sistema de Voluntários. Complete seu perfil e crie uma senha para começar.
+                        Você foi convidado para o Sistema de Voluntários. Preencha seus dados e crie uma senha para começar.
                     </p>
                 </div>
 
@@ -321,18 +426,18 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                             onChange={() => {}}
                             readOnly
                         />
+                         <InputField 
+                            label="Telefone" 
+                            type="tel" 
+                            name="phone" 
+                            value={phone} 
+                            onChange={handlePhoneChange} 
+                            placeholder="(11) 99876-5432"
+                            required={isVolunteer}
+                        />
 
                         {isVolunteer && (
                             <>
-                                <InputField 
-                                    label="Telefone" 
-                                    type="tel" 
-                                    name="phone" 
-                                    value={phone} 
-                                    onChange={handlePhoneChange} 
-                                    placeholder="(11) 99876-5432"
-                                />
-
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
                                     <SmartSearch
@@ -346,11 +451,20 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ supa
                                             <RemovableTag
                                                 key={department.id}
                                                 text={department.name}
+                                                color="yellow"
                                                 onRemove={() => handleRemoveDepartment(department.id!)}
                                             />
                                         ))}
                                     </div>
                                 </div>
+
+                                <TagInputField 
+                                    label="Habilidades e Talentos" 
+                                    placeholder="Ex: Música, Tecnologia, Liderança..." 
+                                    tags={skills}
+                                    setTags={setSkills}
+                                    color="blue"
+                                />
 
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>

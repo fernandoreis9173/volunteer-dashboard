@@ -1,7 +1,13 @@
 // supabase/functions/disable-user/index.ts
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4'
-import { corsHeaders } from '../_shared/cors.ts'
+import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
+
+// Inlined CORS headers to avoid relative path issues in deployment
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
 
 declare const Deno: any;
 
@@ -11,15 +17,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Supabase URL e Service Role Key são obrigatórios.');
+    }
+
     const { userId } = await req.json()
     if (!userId) {
       throw new Error('User ID é obrigatório.')
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
     
     // 1. Fetch the user to get existing metadata
     const { data: { user }, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId)
@@ -45,9 +54,11 @@ Deno.serve(async (req) => {
       status: 200,
     })
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('Error in disable-user function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro inesperado na função.';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 500,
     })
   }
 })

@@ -1,56 +1,34 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import VolunteerCard from './VolunteerCard';
 import NewVolunteerForm from './NewVolunteerForm';
 import ConfirmationModal from './ConfirmationModal';
 import { DetailedVolunteer, Department } from '../types';
-import { SupabaseClient } from '@supabase/supabase-js';
-
-// Debounce hook
-function useDebounce(value: string, delay: number) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-}
+import { supabase } from '../lib/supabaseClient';
+import { getErrorMessage } from '../lib/utils';
+import Pagination from './Pagination';
 
 interface VolunteersPageProps {
-  supabase: SupabaseClient | null;
   isFormOpen: boolean;
   setIsFormOpen: (isOpen: boolean) => void;
+  userRole: string | null;
+  leaderDepartmentId: number | null;
 }
 
-const getEdgeFunctionError = (error: any): string => {
-    // Case 1: The function returns a JSON object with an 'error' property (our standard)
-    // error.context.error = { error: "My error message" }
-    if (typeof error?.context?.error?.error === 'string') {
-        return error.context.error.error;
-    }
-    // Case 2: The function returns a simple string error
-    // error.context.error = "My error message"
-    if (typeof error?.context?.error === 'string') {
-        return error.context.error;
-    }
-    // Case 3: The function returns a JSON object with a 'message' property
-    // error.context.error = { message: "My error message" }
-    if (typeof error?.context?.error?.message === 'string') {
-        return error.context.error.message;
-    }
-    // Fallback to the generic invoke error message or a default
-    if (typeof error?.message === 'string') {
-        return error.message;
-    }
-    return 'Ocorreu um erro desconhecido. Tente novamente.';
+const ITEMS_PER_PAGE = 6;
+
+const useIsMobile = (breakpoint = 768) => { // md breakpoint
+    const [isMobile, setIsMobile] = useState(window.innerWidth < breakpoint);
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [breakpoint]);
+    return isMobile;
 };
 
-const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, setIsFormOpen }) => {
-  const [allVolunteers, setAllVolunteers] = useState<DetailedVolunteer[]>([]);
+
+const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOpen, userRole, leaderDepartmentId }) => {
+  const [masterVolunteers, setMasterVolunteers] = useState<DetailedVolunteer[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,63 +38,108 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
   const [searchQuery, setSearchQuery] = useState('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [volunteerToDeleteId, setVolunteerToDeleteId] = useState<number | null>(null);
-  
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pendingInvites, setPendingInvites] = useState<Set<number>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchVolunteers = useCallback(async (query: string) => {
-      if (!supabase) {
-        setLoading(false);
-        setError("Supabase client not initialized.");
-        return;
-      }
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [volunteerToInvite, setVolunteerToInvite] = useState<DetailedVolunteer | null>(null);
+  const [isInviting, setIsInviting] = useState(false);
 
+  const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
+  const [volunteerToRemove, setVolunteerToRemove] = useState<DetailedVolunteer | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const isMobile = useIsMobile();
+
+
+  const isLeader = userRole === 'leader' || userRole === 'lider';
+
+  const fetchVolunteers = useCallback(async () => {
       setLoading(true);
       setError(null);
       
       try {
-        let queryBuilder = supabase
+        const { data, error: fetchError } = await supabase
             .from('volunteers')
             .select('id, user_id, name, email, phone, initials, status, departments:departaments, skills, availability, created_at')
             .order('created_at', { ascending: false });
 
-        if (query) {
-            queryBuilder = queryBuilder.or(`name.ilike.%${query}%,email.ilike.%${query}%`);
-        }
-
-        const { data, error: fetchError } = await queryBuilder;
         if (fetchError) throw fetchError;
 
-        setAllVolunteers(data as DetailedVolunteer[] || []);
+        setMasterVolunteers(data as DetailedVolunteer[] || []);
       } catch (error: any) {
-        console.error('Error fetching volunteers:', error);
-        setError(`Falha ao carregar voluntários: ${error.message || 'Erro desconhecido'}`);
-        setAllVolunteers([]);
+        const errorMessage = getErrorMessage(error);
+        console.error('Error fetching volunteers:', errorMessage);
+        setError(`Falha ao carregar voluntários: ${errorMessage}`);
+        setMasterVolunteers([]);
       } finally {
         setLoading(false);
       }
-  }, [supabase]);
+  }, []);
   
   const fetchActiveDepartments = useCallback(async () => {
-    if (!supabase) return;
     const { data, error } = await supabase
         .from('departments')
         .select('id, name')
         .eq('status', 'Ativo')
         .order('name', { ascending: true });
     if (error) {
-        console.error('Error fetching active departments:', error);
+        console.error('Error fetching active departments:', getErrorMessage(error));
     } else {
         setDepartments(data as Department[] || []);
     }
-  }, [supabase]);
+  }, []);
+
+  const fetchPendingInvites = useCallback(async () => {
+    if (!isLeader) return;
+    const { data, error } = await supabase
+      .from('invitations')
+      .select('volunteer_id')
+      .eq('status', 'pendente');
+    if (error) {
+      console.error('Error fetching pending invites:', getErrorMessage(error));
+    } else {
+      setPendingInvites(new Set(data.map(i => i.volunteer_id)));
+    }
+  }, [isLeader]);
+
 
   useEffect(() => {
-    fetchVolunteers(debouncedSearchQuery);
-  }, [debouncedSearchQuery, fetchVolunteers]);
-
-  useEffect(() => {
+    fetchVolunteers();
     fetchActiveDepartments();
-  }, [fetchActiveDepartments]);
+    fetchPendingInvites();
+  }, [fetchVolunteers, fetchActiveDepartments, fetchPendingInvites]);
+
+  const leaderDepartmentName = useMemo(() => {
+    if (isLeader && leaderDepartmentId && departments.length > 0) {
+        return departments.find(d => d.id === leaderDepartmentId)?.name || null;
+    }
+    return null;
+  }, [isLeader, leaderDepartmentId, departments]);
+
+  const filteredVolunteers = useMemo(() => {
+    if (!searchQuery) {
+        return masterVolunteers;
+    }
+    const lowercasedQuery = searchQuery.toLowerCase();
+    return masterVolunteers.filter(v => 
+        v.name.toLowerCase().includes(lowercasedQuery) ||
+        v.email.toLowerCase().includes(lowercasedQuery)
+    );
+  }, [searchQuery, masterVolunteers]);
+
+  const paginatedVolunteers = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredVolunteers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [currentPage, filteredVolunteers]);
+
+  const totalPages = Math.ceil(filteredVolunteers.length / ITEMS_PER_PAGE);
+  
+  const volunteersToDisplay = isMobile ? filteredVolunteers : paginatedVolunteers;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, isMobile]);
 
   const showForm = () => {
     setSaveError(null);
@@ -143,44 +166,110 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
   };
 
   const handleConfirmDelete = async () => {
-    if (!volunteerToDeleteId || !supabase) {
+    if (!volunteerToDeleteId) {
         alert("Erro ao processar exclusão.");
         handleCancelDelete();
         return;
     }
-
+    setIsDeleting(true);
     const { error: deleteError } = await supabase.from('volunteers').delete().eq('id', volunteerToDeleteId);
 
     if (deleteError) {
-        alert(`Falha ao excluir voluntário: ${deleteError.message}`);
+        alert(`Falha ao excluir voluntário: ${getErrorMessage(deleteError)}`);
     } else {
-        setAllVolunteers(allVolunteers.filter(v => v.id !== volunteerToDeleteId));
+        await fetchVolunteers();
     }
-
+    setIsDeleting(false);
     handleCancelDelete();
   };
+  
+  const handleInviteRequest = (volunteer: DetailedVolunteer) => {
+    setVolunteerToInvite(volunteer);
+    setIsInviteModalOpen(true);
+  };
+
+  const handleCancelInvite = () => {
+    setIsInviteModalOpen(false);
+    setVolunteerToInvite(null);
+  };
+
+  const handleConfirmInvite = async () => {
+    if (!volunteerToInvite || !volunteerToInvite.id) return;
+    setIsInviting(true);
+    try {
+      const { error } = await supabase.functions.invoke('invite-to-department', {
+        body: { volunteerId: volunteerToInvite.id }
+      });
+      if (error) throw error;
+      await fetchPendingInvites();
+    } catch (err) {
+      alert(`Falha ao enviar convite: ${getErrorMessage(err)}`);
+    } finally {
+      setIsInviting(false);
+      handleCancelInvite();
+    }
+  };
+
+  const handleRemoveFromDepartmentRequest = (volunteer: DetailedVolunteer) => {
+    setVolunteerToRemove(volunteer);
+    setIsRemoveModalOpen(true);
+  };
+
+  const handleCancelRemove = () => {
+    setIsRemoveModalOpen(false);
+    setVolunteerToRemove(null);
+  };
+
+  const handleConfirmRemoveFromDepartment = async () => {
+    if (!volunteerToRemove) return;
+    setIsRemoving(true);
+    try {
+      const { error } = await supabase.functions.invoke('remove-from-department', {
+        body: { volunteerId: volunteerToRemove.id }
+      });
+      if (error) throw error;
+      await fetchVolunteers();
+    } catch (err) {
+      alert(`Falha ao remover voluntário: ${getErrorMessage(err)}`);
+    } finally {
+      setIsRemoving(false);
+      handleCancelRemove();
+    }
+  };
+
+  const handleStatusChange = async (volunteerId: number, newStatus: 'Ativo' | 'Inativo') => {
+    const { error } = await supabase
+      .from('volunteers')
+      .update({ status: newStatus })
+      .eq('id', volunteerId);
+
+    if (error) {
+      alert(`Falha ao atualizar status: ${getErrorMessage(error)}`);
+    } else {
+      await fetchVolunteers();
+    }
+  };
+
 
   const handleSaveVolunteer = async (volunteerData: Omit<DetailedVolunteer, 'created_at'> & { id?: number }) => {
-    if (!supabase) {
-      setSaveError("Conexão com o banco de dados não estabelecida.");
-      return;
-    }
-    
     setIsSaving(true);
     setSaveError(null);
     
     try {
         if (volunteerData.id) { // Update existing volunteer
-            const { id, user_id, ...updatePayload } = volunteerData;
+            const { id, user_id, departments, ...updatePayload } = volunteerData;
+            
             const dbPayload = {
                 ...updatePayload,
-                departaments: updatePayload.departments,
+                departaments: departments,
             };
 
-            const { data, error } = await supabase.from('volunteers').update(dbPayload).eq('id', volunteerData.id).select().single();
+            const { error } = await supabase
+                .from('volunteers')
+                .update(dbPayload)
+                .eq('id', volunteerData.id);
+                
             if (error) throw error;
-            const updatedVolunteer = { ...data, departments: data.departaments, user_id: user_id };
-            setAllVolunteers(allVolunteers.map(v => v.id === updatedVolunteer.id ? updatedVolunteer : v));
         } else { // Invite new volunteer
             const invitePayload = {
                 name: volunteerData.name,
@@ -194,13 +283,13 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
             if (invokeError) {
                 throw invokeError;
             }
-            
-            // On successful invite, we don't refetch because the user won't be in the 'volunteers' table yet.
-            // The form closing indicates success. A more advanced implementation could use a success toast.
         }
+        
+        await fetchVolunteers();
         hideForm();
+
     } catch(error: any) {
-        const errorMessage = getEdgeFunctionError(error);
+        const errorMessage = getErrorMessage(error);
         setSaveError(`Falha ao salvar: ${errorMessage}`);
         console.error("Error saving/inviting volunteer:", error);
     } finally {
@@ -218,10 +307,14 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
     }
     return (
         <div className="space-y-6">
+          <style>{`
+              .no-scrollbar::-webkit-scrollbar { display: none; }
+              .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+          `}</style>
           <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2">
             <div className="relative flex-grow w-full">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg xmlns="http://www.w.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                 </svg>
               </div>
@@ -235,17 +328,32 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
             </div>
           </div>
 
-          {allVolunteers.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {allVolunteers.map((volunteer) => (
-                <VolunteerCard 
-                    key={volunteer.id} 
-                    volunteer={volunteer} 
-                    onEdit={handleEditVolunteer}
-                    onDelete={handleDeleteRequest}
+          {volunteersToDisplay.length > 0 ? (
+            <>
+              <div className="flex overflow-x-auto space-x-4 pb-4 md:grid md:grid-cols-2 md:space-x-0 xl:grid-cols-3 md:gap-6 no-scrollbar">
+                  {volunteersToDisplay.map((volunteer) => (
+                  <VolunteerCard 
+                      key={volunteer.id} 
+                      volunteer={volunteer} 
+                      onEdit={handleEditVolunteer}
+                      onDelete={handleDeleteRequest}
+                      onInvite={handleInviteRequest}
+                      onRemoveFromDepartment={handleRemoveFromDepartmentRequest}
+                      onStatusChange={handleStatusChange}
+                      isInvitePending={pendingInvites.has(volunteer.id!)}
+                      userRole={userRole}
+                      leaderDepartmentName={leaderDepartmentName}
+                  />
+                  ))}
+              </div>
+              {!isMobile && totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
                 />
-                ))}
-            </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-12 text-slate-500">
                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
@@ -285,6 +393,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
           isSaving={isSaving}
           saveError={saveError}
           departments={departments}
+          userRole={userRole}
         />
       ) : (
         renderContent()
@@ -296,6 +405,27 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ supabase, isFormOpen, s
         onConfirm={handleConfirmDelete}
         title="Confirmar Exclusão"
         message="Tem certeza que deseja excluir este voluntário? Esta ação não pode ser desfeita."
+        isLoading={isDeleting}
+      />
+
+      <ConfirmationModal
+        isOpen={isInviteModalOpen}
+        onClose={handleCancelInvite}
+        onConfirm={handleConfirmInvite}
+        title="Confirmar Convite"
+        message={`Tem certeza que deseja convidar ${volunteerToInvite?.name} para o seu departamento?`}
+        isLoading={isInviting}
+        iconType="info"
+        confirmButtonClass="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+      />
+
+      <ConfirmationModal
+        isOpen={isRemoveModalOpen}
+        onClose={handleCancelRemove}
+        onConfirm={handleConfirmRemoveFromDepartment}
+        title="Confirmar Remoção"
+        message={`Tem certeza que deseja remover ${volunteerToRemove?.name} do seu departamento?`}
+        isLoading={isRemoving}
       />
     </div>
   );

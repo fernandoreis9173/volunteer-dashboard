@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { Department } from '../types';
 
@@ -12,22 +10,26 @@ interface DepartmentCardProps {
   onEdit: (department: Department) => void;
   onDelete: (departmentId: number) => void;
   userRole: string | null;
+  isLeaderDepartment?: boolean;
 }
 
-const DepartmentCard: React.FC<DepartmentCardProps> = ({ department, onEdit, onDelete, userRole }) => {
+const DepartmentCard: React.FC<DepartmentCardProps> = ({ department, onEdit, onDelete, userRole, isLeaderDepartment = false }) => {
   return (
-    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col space-y-4">
+    <div className={`bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col space-y-4 transition-all ${isLeaderDepartment ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 rounded-full bg-teal-100 flex-shrink-0 flex items-center justify-center text-teal-500">
+          <div className={`w-12 h-12 rounded-full ${isLeaderDepartment ? 'bg-blue-100 text-blue-500' : 'bg-blue-100 text-blue-500'} flex-shrink-0 flex items-center justify-center`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18h16.5M5.25 6H18.75m-13.5 0V21m13.5-15V21m-10.5-9.75h.008v.008H8.25v-.008ZM8.25 15h.008v.008H8.25V15Zm3.75-9.75h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm3.75-9.75h.008v.008H15.75v-.008ZM15.75 15h.008v.008H15.75V15Z" />
             </svg>
           </div>
           <div>
             <p className="font-bold text-slate-800 text-lg">{department.name}</p>
-            <div className="mt-1">
+            <div className="mt-1 flex items-center gap-2">
                 <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${department.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}`}>{department.status}</span>
+                {isLeaderDepartment && (
+                    <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-600 text-white">Seu Departamento</span>
+                )}
             </div>
           </div>
         </div>

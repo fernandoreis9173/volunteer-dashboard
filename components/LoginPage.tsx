@@ -1,15 +1,12 @@
-
-
 import React, { useState } from 'react';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 import { AuthView } from '../types';
 
 interface LoginPageProps {
-    supabase: SupabaseClient;
     setAuthView: (view: AuthView) => void;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ supabase, setAuthView }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);

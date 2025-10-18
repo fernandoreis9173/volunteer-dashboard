@@ -1,10 +1,9 @@
-
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Department } from '../types';
-import { SupabaseClient, User } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+// FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
+import { type User } from '@supabase/supabase-js';
+import { getErrorMessage } from '../lib/utils';
 
 interface InputFieldProps {
     label: string;
@@ -161,7 +160,6 @@ const TagInputField: React.FC<{
 
 
 interface NewDepartmentFormProps {
-    supabase: SupabaseClient | null;
     initialData?: Department | null;
     onCancel: () => void;
     onSave: (department: Omit<Department, 'created_at'>, new_leader_id?: string) => void;
@@ -177,7 +175,7 @@ const getInitials = (name?: string): string => {
     return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
 };
 
-const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
+const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
     const [formData, setFormData] = useState({ 
         name: '', 
         description: '', 
@@ -199,16 +197,15 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initial
 
     useEffect(() => {
         const fetchAllDepartments = async () => {
-            if (!supabase) return;
             const { data: departmentsData, error: departmentsError } = await supabase.from('departments').select('*');
             if (departmentsError) {
-                console.error('Error fetching departments for conflict check:', departmentsError);
+                console.error('Error fetching departments for conflict check:', getErrorMessage(departmentsError));
             } else {
                 setAllDepartments(departmentsData || []);
             }
         };
         fetchAllDepartments();
-    }, [supabase]);
+    }, []);
 
     useEffect(() => {
         const meetingDayKeys = {
@@ -350,7 +347,7 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ supabase, initial
                 }
             `}</style>
             <div className="flex items-center space-x-3 mb-8">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18h16.5M5.25 6H18.75m-13.5 0V21m13.5-15V21m-10.5-9.75h.008v.008H8.25v-.008ZM8.25 15h.008v.008H8.25V15Zm3.75-9.75h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm3.75-9.75h.008v.008H15.75v-.008ZM15.75 15h.008v.008H15.75V15Z" />
                 </svg>
                 <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Departamento' : 'Novo Departamento'}</h2>

@@ -1,11 +1,9 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Event } from '../types';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
+import ConfirmationModal from './ConfirmationModal';
 
 interface NewEventFormProps {
-    supabase: SupabaseClient | null;
     initialData?: Event | null;
     onCancel: () => void;
     onSave: (event: any) => void;
@@ -23,6 +21,13 @@ interface VolunteerItemProps {
     onAction: () => void;
     actionType: 'add' | 'remove';
 }
+
+const colorOptions = [
+    { name: 'Azul', value: '#3b82f6', bg: 'bg-blue-500' },
+    { name: 'Verde', value: '#22c55e', bg: 'bg-green-500' },
+    { name: 'Amarelo', value: '#f59e0b', bg: 'bg-amber-500' },
+    { name: 'Vermelho', value: '#ef4444', bg: 'bg-red-500' },
+];
 
 const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, actionType }) => {
     if (actionType === 'remove') {
@@ -80,13 +85,15 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
 };
 
 
-const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId }) => {
-    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '' });
+const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId }) => {
+    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
     const [selectedVolunteers, setSelectedVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [allVolunteers, setAllVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [volunteerSearch, setVolunteerSearch] = useState('');
     const [leaderDepartmentName, setLeaderDepartmentName] = useState('');
-    
+    const [isStatusChangeModalOpen, setIsStatusChangeModalOpen] = useState(false);
+    const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+
     const isEditing = !!initialData;
     const isSchedulingMode = isEditing && (userRole === 'leader' || userRole === 'lider' || userRole === 'líder');
     const isSchedulingAllowed = isSchedulingMode && formData.status === 'Confirmado';
@@ -94,7 +101,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
 
     useEffect(() => {
         const fetchData = async () => {
-            if (!supabase || !isSchedulingMode || !initialData || !leaderDepartmentId) return;
+            if (!isSchedulingMode || !initialData || !leaderDepartmentId) return;
 
             const { data: leaderDept, error: ldError } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
             if (ldError) {
@@ -125,11 +132,11 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
             setAllVolunteers(processedVols);
         };
         fetchData();
-    }, [supabase, isSchedulingMode, initialData, leaderDepartmentId]);
+    }, [isSchedulingMode, initialData, leaderDepartmentId]);
 
     useEffect(() => {
         if (initialData) {
-            setFormData({ name: initialData.name, date: initialData.date, start_time: initialData.start_time, end_time: initialData.end_time, local: initialData.local || '', status: initialData.status, observations: initialData.observations || '' });
+            setFormData({ name: initialData.name, date: initialData.date, start_time: initialData.start_time, end_time: initialData.end_time, local: initialData.local || '', status: initialData.status, observations: initialData.observations || '', color: initialData.color || '' });
             if (initialData.event_volunteers && isSchedulingMode) {
                 const scheduledElsewhereIds = new Set(
                     initialData.event_volunteers
@@ -150,15 +157,38 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
                 setSelectedVolunteers([]);
             }
         } else {
-            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '' });
+            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
             setSelectedVolunteers([]);
         }
     }, [initialData, isSchedulingMode, leaderDepartmentId]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+        if (name === 'status' && isEditing && value === 'Confirmado' && formData.status !== 'Confirmado') {
+            setPendingStatus(value);
+            setIsStatusChangeModalOpen(true);
+        } else {
+            setFormData(prev => ({ ...prev, [e.target.name]: value }));
+        }
+    };
+
+    const handleColorChange = (colorValue: string) => {
+        setFormData(prev => ({ ...prev, color: prev.color === colorValue ? '' : colorValue }));
     };
     
+    const handleConfirmStatusChange = () => {
+        if (pendingStatus) {
+            setFormData(prev => ({ ...prev, status: pendingStatus }));
+        }
+        setIsStatusChangeModalOpen(false);
+        setPendingStatus(null);
+    };
+
+    const handleCancelStatusChange = () => {
+        setIsStatusChangeModalOpen(false);
+        setPendingStatus(null);
+    };
+
     const addVolunteer = (volunteer: ProcessedVolunteerOption) => {
         if (!selectedVolunteers.some(v => v.id === volunteer.id)) {
             setSelectedVolunteers([...selectedVolunteers, volunteer]);
@@ -204,28 +234,55 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
     <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
         <h2 className="text-xl font-bold text-slate-800 mb-6">{title}</h2>
         <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Título do Evento *</label>
-                    <input type="text" name="name" value={formData.name} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" />
+            {isSchedulingMode ? (
+                 <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-sm text-slate-700">
+                    <p><strong>Data:</strong> {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                    <p><strong>Horário:</strong> {formData.start_time.substring(0,5)} - {formData.end_time.substring(0,5)}</p>
+                    {formData.local && <p><strong>Local:</strong> {formData.local}</p>}
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                    <select name="status" value={formData.status} onChange={handleInputChange} disabled={!isAdminMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:cursor-not-allowed">
-                        <option value="Pendente">Pendente</option>
-                        <option value="Confirmado">Confirmado</option>
-                        <option value="Cancelado">Cancelado</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div><label className="block text-sm font-medium text-slate-700 mb-1">Data *</label><input type="date" name="date" value={formData.date} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
-                <div><label className="block text-sm font-medium text-slate-700 mb-1">Início *</label><input type="time" name="start_time" value={formData.start_time} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
-                <div><label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label><input type="time" name="end_time" value={formData.end_time} onChange={handleInputChange} required readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
-            </div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} readOnly={isSchedulingMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg read-only:bg-slate-100 read-only:cursor-not-allowed"></textarea></div>
+            ) : (
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Título do Evento *</label>
+                            <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                            <select name="status" value={formData.status} onChange={handleInputChange} disabled={!isAdminMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:cursor-not-allowed">
+                                <option value="Pendente">Pendente</option>
+                                <option value="Confirmado">Confirmado</option>
+                                <option value="Cancelado">Cancelado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Data *</label><input type="date" name="date" value={formData.date} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Início *</label><input type="time" name="start_time" value={formData.start_time} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label><input type="time" name="end_time" value={formData.end_time} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                    </div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                    {isAdminMode && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Cor do Evento</label>
+                            <div className="flex items-center space-x-3">
+                                {colorOptions.map(option => (
+                                <button
+                                    type="button"
+                                    key={option.value}
+                                    onClick={() => handleColorChange(option.value)}
+                                    className={`w-8 h-8 rounded-full ${option.bg} transition-transform duration-150 transform hover:scale-110 focus:outline-none ${formData.color === option.value ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+                                    aria-label={option.name}
+                                >
+                                {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"></textarea></div>
+                </>
+            )}
 
             {isSchedulingMode && !isSchedulingAllowed && (
                  <div className="pt-5 border-t border-slate-200">
@@ -253,8 +310,8 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
                                 onChange={(e) => setVolunteerSearch(e.target.value)}
                                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
                             />
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{maxHeight: '400px', overflow: 'hidden'}}>
-                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col h-72">
                                    <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
                                         Disponíveis ({filteredAvailableVolunteers.length})
                                     </h4>
@@ -264,7 +321,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
                                         )) : <p className="text-sm text-slate-500 text-center pt-4">Nenhum voluntário encontrado.</p>}
                                     </div>
                                 </div>
-                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col">
+                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col h-72">
                                     <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
                                         Selecionados ({selectedVolunteers.length})
                                     </h4>
@@ -295,6 +352,14 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ supabase, initialData, onCa
                 </button>
             </div>
         </form>
+
+        <ConfirmationModal
+            isOpen={isStatusChangeModalOpen}
+            onClose={handleCancelStatusChange}
+            onConfirm={handleConfirmStatusChange}
+            title="Confirmar Alteração de Status"
+            message='Tem certeza que deseja alterar o status do evento para "Confirmado"? Esta ação pode afetar a escalação de voluntários.'
+        />
     </div>
     );
 };

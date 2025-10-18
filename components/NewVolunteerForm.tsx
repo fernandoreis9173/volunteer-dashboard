@@ -10,6 +10,7 @@ interface NewVolunteerFormProps {
     isSaving: boolean;
     saveError: string | null;
     departments: Department[];
+    userRole: string | null;
 }
 
 interface InputFieldProps {
@@ -38,7 +39,7 @@ const InputField: React.FC<InputFieldProps> =
             placeholder={placeholder}
             required={required}
             readOnly={readOnly}
-            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
+            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900 read-only:bg-slate-100 read-only:cursor-not-allowed"
         />
     </div>
 );
@@ -48,9 +49,10 @@ interface CheckboxFieldProps {
     name: string;
     checked: boolean;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    disabled?: boolean;
 }
 
-const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onChange }) => (
+const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onChange, disabled = false }) => (
     <div className="flex items-center">
         <input 
             type="checkbox" 
@@ -58,13 +60,14 @@ const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onC
             id={name}
             checked={checked}
             onChange={onChange}
-            className="appearance-none h-4 w-4 bg-white border border-slate-400 rounded checked:bg-blue-600 checked:border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            disabled={disabled}
+            className="appearance-none h-4 w-4 bg-white border border-slate-400 rounded checked:bg-blue-600 checked:border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-200 disabled:border-slate-300 disabled:cursor-not-allowed"
         />
-        <label htmlFor={name} className="ml-2 block text-sm text-slate-700">{label}</label>
+        <label htmlFor={name} className={`ml-2 block text-sm ${disabled ? 'text-slate-400' : 'text-slate-700'}`}>{label}</label>
     </div>
 );
 
-const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove: () => void; }> = ({ text, color, onRemove }) => {
+const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove: () => void; disabled?: boolean; }> = ({ text, color, onRemove, disabled = false }) => {
     const getInitials = (name: string): string => {
         if (!name) return '??';
         const parts = name.trim().split(' ').filter(p => p);
@@ -98,7 +101,8 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
             <button
                 type="button"
                 onClick={onRemove}
-                className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover}`}
+                disabled={disabled}
+                className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover} ${disabled ? 'hidden' : ''}`}
                 aria-label={`Remove ${text}`}
             >
                 <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={3}>
@@ -116,7 +120,8 @@ const TagInputField: React.FC<{
     tags: string[]; 
     setTags: React.Dispatch<React.SetStateAction<string[]>>;
     color: 'blue' | 'yellow';
-}> = ({ label, placeholder, tags, setTags, color }) => {
+    disabled?: boolean;
+}> = ({ label, placeholder, tags, setTags, color, disabled = false }) => {
     const [inputValue, setInputValue] = useState('');
 
     const handleAddTag = () => {
@@ -148,19 +153,21 @@ const TagInputField: React.FC<{
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
+                disabled={disabled}
+                className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900 disabled:bg-slate-100 disabled:cursor-not-allowed"
             />
             <button 
                 type="button"
                 onClick={handleAddTag}
-                className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300"
+                disabled={disabled}
+                className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
             >
                 +
             </button>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
             {tags.map((tag) => (
-                <RemovableTag key={tag} text={tag} color={color} onRemove={() => handleRemoveTag(tag)} />
+                <RemovableTag key={tag} text={tag} color={color} onRemove={() => handleRemoveTag(tag)} disabled={disabled} />
             ))}
         </div>
     </div>
@@ -168,7 +175,7 @@ const TagInputField: React.FC<{
 };
 
 
-const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, departments }) => {
+const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, departments, userRole }) => {
     const [skills, setSkills] = useState<string[]>([]);
     const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
     const [formData, setFormData] = useState({
@@ -183,6 +190,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
     });
     const [isActive, setIsActive] = useState(true);
     const isEditing = !!initialData;
+    const canOnlyEditDepartments = isEditing && (userRole === 'admin' || userRole === 'leader' || userRole === 'lider');
 
     const formatPhoneNumber = (value: string) => {
         if (!value) return '';
@@ -353,15 +361,15 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             
             <form className="space-y-6" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InputField label="Nome Completo" type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} required />
-                    <InputField label="Email" type="email" name="email" value={formData.email} onChange={handleInputChange} required readOnly={isEditing} className={isEditing ? 'cursor-not-allowed bg-slate-100' : ''} />
+                    <InputField label="Nome Completo" type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} required readOnly={canOnlyEditDepartments} />
+                    <InputField label="Email" type="email" name="email" value={formData.email} onChange={handleInputChange} required readOnly={isEditing} />
                 </div>
 
                 {isEditing && (
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InputField label="Iniciais" type="text" name="initials" value={formData.initials} onChange={handleInputChange} placeholder="Ex: BF" required />
-                        <InputField label="Telefone" type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="(11) 99876-5432" />
+                        <InputField label="Iniciais" type="text" name="initials" value={formData.initials} onChange={handleInputChange} placeholder="Ex: BF" required readOnly={canOnlyEditDepartments} />
+                        <InputField label="Telefone" type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="(11) 99876-5432" readOnly={canOnlyEditDepartments} />
                     </div>
 
                     <div>
@@ -390,22 +398,23 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                         tags={skills}
                         setTags={setSkills}
                         color="blue"
+                        disabled={canOnlyEditDepartments}
                     />
 
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} />
-                            <CheckboxField label="Segunda-feira" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} />
-                            <CheckboxField label="Terça-feira" name="terca" checked={availability.terca} onChange={handleCheckboxChange} />
-                            <CheckboxField label="Quarta-feira" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} />
-                            <CheckboxField label="Quinta-feira" name="quinta" checked={availability.quinta} onChange={handleCheckboxChange} />
-                            <CheckboxField label="Sexta-feira" name="sexta" checked={availability.sexta} onChange={handleCheckboxChange} />
-                            <CheckboxField label="Sábado" name="sabado" checked={availability.sabado} onChange={handleCheckboxChange} />
+                            <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                            <CheckboxField label="Segunda-feira" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                            <CheckboxField label="Terça-feira" name="terca" checked={availability.terca} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                            <CheckboxField label="Quarta-feira" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                            <CheckboxField label="Quinta-feira" name="quinta" checked={availability.quinta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                            <CheckboxField label="Sexta-feira" name="sexta" checked={availability.sexta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                            <CheckboxField label="Sábado" name="sabado" checked={availability.sabado} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
                         </div>
                     </div>
                     
-                    <CheckboxField label="Voluntário ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                    <CheckboxField label="Voluntário ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={canOnlyEditDepartments} />
                 </>
                 )}
                 
