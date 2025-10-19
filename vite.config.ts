@@ -1,21 +1,23 @@
-// vite.config.ts
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import path from 'path';
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
 
-export default defineConfig({
-    server: {
+export default defineConfig(({ mode }) => {
+    const env = loadEnv(mode, '.', '');
+    return {
+      server: {
         port: 3000,
         host: '0.0.0.0',
-        // ADICIONE ESTE BLOCO PARA CORRIGIR O WEBSOCKET 👇
-        hmr: {
-            host: 'localhost',
-        }
-    },
-    plugins: [react()],
-    resolve: {
+      },
+      plugins: [react()],
+      define: {
+        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+      },
+      resolve: {
         alias: {
-            '@': path.resolve(__dirname, './src'), // Seu alias está correto
+          '@': path.resolve(__dirname, '.'),
         }
-    },
+      }
+    };
 });

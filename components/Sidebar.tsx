@@ -3,6 +3,7 @@ import type { Page } from '../types';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Use 'type' import for Session to resolve potential module resolution issues with Supabase v2.
 import { type Session } from '@supabase/supabase-js';
+import Icon from './Icon';
 
 interface NavItemProps {
   icon: React.ReactElement<any>;
@@ -161,19 +162,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
             <div>
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ações Rápidas</h2>
               <div className="space-y-1">
-                 {(normalizedRole === 'admin' || normalizedRole === 'leader') && (
-                    <button onClick={onNewVolunteer} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-slate-600 hover:bg-slate-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-                        </svg>
-                        <span>Novo Voluntário</span>
-                    </button>
-                 )}
+                 <button onClick={onNewVolunteer} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-slate-600 hover:bg-slate-100">
+                    <Icon name="new-volunteer" className="h-10 w-10" />
+                    <span>Novo Voluntário</span>
+                </button>
                  {userRole === 'admin' && (
                   <button onClick={onNewEvent} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-slate-600 hover:bg-slate-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
+                    <Icon name="add-event" className="h-10 w-10" />
                     <span>Novo Evento</span>
                   </button>
                  )}
