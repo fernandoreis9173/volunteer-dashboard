@@ -29,8 +29,10 @@ import { supabase } from './lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
 
-// Since keys are hardcoded for production, this check is now always true.
-const areApiKeysConfigured = true;
+const areApiKeysConfigured = 
+    import.meta.env.VITE_SUPABASE_URL &&
+    import.meta.env.VITE_SUPABASE_ANON_KEY &&
+    import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 interface UserProfileState {
   role: string | null;
