@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
@@ -217,7 +218,7 @@ const AdminPage: React.FC = () => {
 
                 <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
                     <div className="flex items-center space-x-3 mb-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688 0-1.25-.562-1.25-1.25s.562-1.25 1.25-1.25 1.25.562 1.25 1.25-.562 1.25-1.25 1.25Zm0 0H9.11m4.23-4.58 2.12-2.12M13.4 10.34l-2.12 2.12m0 0-2.12 2.12m2.12-2.12 2.12 2.12M3 12a9 9 0 1 1 18 0 9 9 0 0 1-18 0Z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l9.75 7.5-9.75-7.5Z" /></svg>
                         <h2 className="text-2xl font-bold text-slate-800">Notificação em Massa</h2>
                     </div>
                      <p className="text-sm text-slate-600 mb-6">Envie uma notificação push para todos os usuários que ativaram as notificações. Use com moderação.</p>
@@ -240,31 +241,73 @@ const AdminPage: React.FC = () => {
 
             <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
                  <div className="flex items-center space-x-3 mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.226a3 3 0 0 0-4.682 2.72 9.094 9.094 0 0 0 3.741.479m7.5-2.226V18a2.25 2.25 0 0 1-2.25 2.25H12a2.25 2.25 0 0 1-2.25-2.25V18.226m3.75-10.5a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5ZM10.5 8.25a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5Z" /></svg>
-                    <h2 className="text-2xl font-bold text-slate-800">Usuários do Sistema</h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.226a3 3 0 0 0-4.682 2.72 9.094 9.094 0 0 0 3.741.479m7.5-2.226V18a2.25 2.25 0 0 1-2.25 2.25H12a2.25 2.25 0 0 1-2.25-2.25v-.226m3.75-10.5a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5ZM10.5 8.25a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5Z" /></svg>
+                    <h2 className="text-2xl font-bold text-slate-800">Usuários do Sistema (Admin/Líder)</h2>
                 </div>
-                <div className="mb-4"><input type="text" placeholder="Buscar por nome ou email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full max-w-sm px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-blue-500 focus:border-blue-500" /></div>
-                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                <div className="mb-4">
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nome ou e-mail..." className="w-full max-w-sm px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
+                </div>
+                {listError && <p className="text-sm text-red-600">{listError}</p>}
+                <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50 sticky top-0"><tr><th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Email</th><th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Data do Convite</th><th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase w-1/5">Permissão</th><th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase w-1/6">Status</th><th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Ações</th></tr></thead>
+                        <thead className="bg-slate-50">
+                            <tr>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nome</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Permissão</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Último Login</th>
+                                <th scope="col" className="relative px-6 py-3"><span className="sr-only">Ações</span></th>
+                            </tr>
+                        </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
-                            {listLoading ? (<tr><td colSpan={5} className="px-6 py-4 text-center">Carregando...</td></tr>) : listError ? (<tr><td colSpan={5} className="px-6 py-4 text-center text-red-500">{listError}</td></tr>) : filteredUsers.length === 0 ? (<tr><td colSpan={5} className="px-6 py-4 text-center text-slate-500">Nenhum usuário encontrado.</td></tr>) : filteredUsers.map(user => (
-                                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email ?? 'N/A'}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{formatDate(user.invited_at)}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-semibold">{getRoleForDisplay(user)}</td><td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(user)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
-                                        <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="text-slate-500 hover:text-slate-700 p-1 rounded-full hover:bg-slate-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" /></svg></button>
-                                        {activeMenu === user.id && (
-                                            <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10"><div className="py-1" role="menu" aria-orientation="vertical"><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button>{user.app_status === 'Inativo' ? (<button onClick={() => handleRequestAction(user, 'enable')} className="w-full text-left block px-4 py-2 text-sm text-green-700 hover:bg-green-50">Reativar Usuário</button>) : (<button onClick={() => handleRequestAction(user, 'disable')} className="w-full text-left block px-4 py-2 text-sm text-red-700 hover:bg-red-50">Desativar Usuário</button>)}</div></div>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
+                            {listLoading ? (
+                                <tr><td colSpan={5} className="text-center py-4">Carregando...</td></tr>
+                            ) : (
+                                filteredUsers.map(user => (
+                                    <tr key={user.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-slate-900">{user.user_metadata?.name || 'N/A'}</div>
+                                            <div className="text-sm text-slate-500">{user.email}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{getRoleForDisplay(user)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(user)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{formatDate(user.last_sign_in_at)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                                             <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="p-2 rounded-full hover:bg-slate-100 text-slate-500">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" /></svg>
+                                            </button>
+                                            {activeMenu === user.id && (
+                                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
+                                                    <div className="py-1">
+                                                        <button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button>
+                                                        {user.app_status === 'Ativo' ? (
+                                                            <button onClick={() => handleRequestAction(user, 'disable')} className="block w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50">Desativar Usuário</button>
+                                                        ) : (
+                                                            <button onClick={() => handleRequestAction(user, 'enable')} className="block w-full text-left px-4 py-2 text-sm text-green-700 hover:bg-green-50">Reativar Usuário</button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
             </div>
-            {isEditModalOpen && editingUser && (<EditUserModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} user={editingUser} onSave={handleUpdateUser} />)}
-            <ConfirmationModal isOpen={isActionModalOpen} onClose={() => setIsActionModalOpen(false)} onConfirm={handleConfirmAction} title={actionType === 'disable' ? 'Confirmar Desativação' : 'Confirmar Reativação'} message={actionType === 'disable' ? `Tem certeza que deseja desativar ${userToAction?.email ?? 'este usuário'}? Ele não poderá mais acessar o sistema.` : `Tem certeza que deseja reativar ${userToAction?.email ?? 'este usuário'}? Ele poderá acessar o sistema novamente.`} />
+
+            {isEditModalOpen && editingUser && (
+                <EditUserModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} user={editingUser} onSave={handleUpdateUser} />
+            )}
+            
+            <ConfirmationModal
+                isOpen={isActionModalOpen}
+                onClose={() => setIsActionModalOpen(false)}
+                onConfirm={handleConfirmAction}
+                title={actionType === 'disable' ? "Confirmar Desativação" : "Confirmar Reativação"}
+                message={`Tem certeza que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} este usuário?`}
+            />
         </div>
     );
 };

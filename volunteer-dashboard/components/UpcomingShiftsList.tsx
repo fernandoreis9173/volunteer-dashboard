@@ -44,7 +44,7 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
                 title="Marcar Presença"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /><path d="M3 8V6a2 2 0 0 1 2-2h2" /><path d="M3 16v2a2 2 0 0 0 2 2h2" /><path d="M21 8V6a2 2 0 0 0-2-2h-2" /><path d="M21 16v2a2 2 0 0 1-2 2h-2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
                 </svg>
             </button>
         )}
@@ -64,13 +64,13 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
         <h3 className="font-bold text-slate-800 mb-2 pr-24">{schedule.name}</h3>
         <div className="space-y-2 text-sm text-slate-500">
           <div className="flex items-center space-x-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
             </svg>
             <span>{formattedDate}</span>
           </div>
           <div className="flex items-center space-x-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
             <span>{schedule.start_time} - {schedule.end_time}</span>
@@ -147,7 +147,7 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
     <div className="bg-white p-6 rounded-2xl shadow-sm h-full flex flex-col">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="flex items-center space-x-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
             </svg>
             <h2 className="text-xl font-bold text-slate-800">Próximos Eventos</h2>

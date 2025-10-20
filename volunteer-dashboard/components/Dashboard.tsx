@@ -146,7 +146,10 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNaviga
             upcomingSchedulesCountQuery = upcomingSchedulesCountQuery.eq('event_departments.department_id', leaderDepartmentId);
         }
         
-        let annualAttendanceQuery = Promise.resolve({ count: null, error: null });
+        // FIX: The query builder is not a `Promise`, causing a type error on assignment.
+        // This is refactored to conditionally define `annualAttendanceQuery` so TypeScript
+        // correctly infers a union type that works with `Promise.all`.
+        let annualAttendanceQuery;
         if (isLeader && leaderDepartmentId) {
             annualAttendanceQuery = supabase
                 .from('event_volunteers')
@@ -155,6 +158,8 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNaviga
                 .eq('present', true)
                 .gte('events.date', startOfYear)
                 .lte('events.date', endOfYear);
+        } else {
+            annualAttendanceQuery = Promise.resolve({ count: null, error: null });
         }
 
         let todaySchedulesQuery;

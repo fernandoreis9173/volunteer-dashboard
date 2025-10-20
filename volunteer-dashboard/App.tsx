@@ -29,10 +29,8 @@ import { supabase } from './lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
 
-const areApiKeysConfigured = 
-    import.meta.env.VITE_SUPABASE_URL &&
-    import.meta.env.VITE_SUPABASE_ANON_KEY &&
-    import.meta.env.VITE_VAPID_PUBLIC_KEY;
+// Since keys are hardcoded for production, this check is now always true.
+const areApiKeysConfigured = true;
 
 interface UserProfileState {
   role: string | null;
@@ -290,9 +288,9 @@ const App: React.FC = () => {
             .gt('end_time', currentTime)
             .eq('status', 'Confirmado')
             .limit(1)
-            .single();
+            .maybeSingle(); // Use maybeSingle to prevent errors when no event is found.
     
-        if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows found", which is fine
+        if (error) { 
             console.error("Error checking for active event:", getErrorMessage(error));
         }
     
