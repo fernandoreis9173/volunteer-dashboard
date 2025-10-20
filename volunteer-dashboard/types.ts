@@ -1,0 +1,137 @@
+// FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
+import type { User } from '@supabase/supabase-js';
+
+export interface Volunteer {
+  name: string;
+  email: string;
+  initials: string;
+  roles: string[];
+  avatarColor: string;
+}
+
+export interface EventVolunteer {
+  volunteer_id: number;
+  department_id: number;
+  present: boolean | null;
+  volunteers?: { id: number; name: string; email: string; initials: string; departments: string[]; };
+}
+
+export interface EventDepartment {
+  department_id: number;
+  departments: { id: number; name:string; leader?: string; };
+}
+
+export interface Event {
+  id?: number;
+  name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  created_at?: string;
+  event_departments: EventDepartment[];
+  event_volunteers: EventVolunteer[];
+  local?: string;
+  observations?: string;
+  color?: string;
+}
+
+// Added for Dashboard performance and type safety
+export interface DashboardEvent {
+  id: number;
+  name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  event_departments: { departments: { id: number; name: string } }[] | null;
+  event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } }[] | null;
+}
+
+export interface DashboardData {
+    stats?: {
+        activeVolunteers: Stat;
+        departments: Stat;
+        schedulesToday: Stat;
+        upcomingSchedules?: Stat;
+        presencesToday?: Stat;
+        annualAttendance?: Stat;
+    };
+    todaySchedules?: DashboardEvent[];
+    upcomingSchedules?: DashboardEvent[];
+    chartData?: ChartDataPoint[];
+    activeLeaders?: EnrichedUser[];
+}
+
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin';
+
+export type AuthView = 'login' | 'accept-invite' | 'reset-password';
+
+export interface DetailedVolunteer {
+    id?: number;
+    user_id?: string;
+    name: string;
+    email: string;
+    phone: string;
+    initials: string;
+    status: 'Ativo' | 'Inativo' | 'Pendente';
+    departments: string[];
+    skills: string[];
+    availability: string[] | string;
+    created_at?: string;
+}
+
+export interface Department {
+  id?: number;
+  name: string;
+  description: string;
+  leader: string;
+  leader_contact?: string;
+  skills_required: string[];
+  meeting_days: string[];
+  status: 'Ativo' | 'Inativo';
+  created_at?: string;
+}
+
+export interface Stat {
+    value: string;
+    change: number;
+}
+
+// FIX: Added ChartDataPoint interface for use in Dashboard and TrafficChart components.
+export interface ChartDataPoint {
+    date: string;
+    scheduledVolunteers: number;
+    involvedDepartments: number;
+    eventNames: string[];
+}
+
+
+// Shared user type for Admin pages and dashboard feeds
+// FIX: The `EnrichedUser` interface was not correctly inheriting properties from the base Supabase `User` type.
+// This has been resolved by changing the interface to a type alias using an intersection (`&`),
+// which is a more robust way to extend complex types and ensures all properties from `User` are included.
+export type EnrichedUser = User & {
+    app_status?: 'Ativo' | 'Inativo' | 'Pendente';
+};
+
+export interface NotificationRecord {
+    id: number;
+    created_at: string;
+    user_id: string;
+    message: string;
+    type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader' | 'invitation_received';
+    is_read: boolean;
+    related_event_id: number | null;
+}
+
+export interface Invitation {
+  id: number;
+  leader_id: string;
+  volunteer_id: number;
+  department_id: number;
+  status: 'pendente' | 'aceito' | 'recusado';
+  created_at: string;
+  departments?: { name: string; leader: string };
+  volunteers?: { name: string };
+}

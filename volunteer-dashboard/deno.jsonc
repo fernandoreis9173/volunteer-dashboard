@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "deno.window", "dom", "es2020"]
+  },
+  "imports": {
+    
+    "web-push": "npm:web-push@3.6.7"
+  },
+"lint": {
+  "exclude": ["node_modules", "vendor", "dist"],
+  "rules": {
+    "tags": ["recommended"],
+    "disable": [
+      "no-explicit-any", // Para o warning de 'any'
+      "no-import-prefix" // Para o warning de 'https://'
+    ]
+  }
+}
+}
