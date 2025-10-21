@@ -63,7 +63,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
                 <div className="text-center">
                     <div className="flex justify-center mb-4">
                       {/* <div className="p-3 bg-blue-600 text-white rounded-xl"> */}
-                        {/* Substituí o ícone padrão pela logo nova */}
+                        {/* Substituí o ícone padrão pela logo nova aqui deu certo esse comentario */}
                         <img src={LogoNovaIcon} alt="Logo Volunteers" className="h-12 w-12 object-contain" style={{ filter: 'none' }} />
                       {/* </div> */}
                     </div>
