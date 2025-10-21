@@ -1,4 +1,51 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="512" height="512" rx="96" fill="#2563EB"/>
-<path d="M164 149L256 363L348 149" stroke="white" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Camada_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 512 512">
+  <!-- Generator: Adobe Illustrator 29.5.1, SVG Export Plug-In . SVG Version: 2.1.0 Build 141)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #001e54;
+      }
+
+      .st1 {
+        fill: url(#linear-gradient2);
+      }
+
+      .st2 {
+        fill: url(#linear-gradient1);
+      }
+
+      .st3 {
+        fill: url(#linear-gradient3);
+      }
+
+      .st4 {
+        fill: url(#linear-gradient);
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="-1462.71" y1="3582" x2="-1388.06" y2="3498.52" gradientTransform="translate(4095.83 368.76) rotate(70.46)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0024a6"/>
+      <stop offset=".03" stop-color="#002aa9"/>
+      <stop offset=".38" stop-color="#0072cd"/>
+      <stop offset=".67" stop-color="#00a7e8"/>
+      <stop offset=".88" stop-color="#00c7f8"/>
+      <stop offset="1" stop-color="#00d4ff"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient1" x1="-232.99" y1="3980.58" x2="-104.6" y2="3852.2" gradientTransform="translate(1665.03 3847.4) rotate(-19.54) scale(1 -1)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient2" x1="3117.75" y1="-6655.58" x2="3192.41" y2="-6739.06" gradientTransform="translate(7595.77 1036.43) rotate(-109.54)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#289600"/>
+      <stop offset=".28" stop-color="#59b900"/>
+      <stop offset=".61" stop-color="#8ede00"/>
+      <stop offset=".86" stop-color="#aef600"/>
+      <stop offset="1" stop-color="#bf0"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient3" x1="10004.59" y1="-599.88" x2="10132.97" y2="-728.27" gradientTransform="translate(10026.57 -2442.21) rotate(160.46) scale(1 -1)" xlink:href="#linear-gradient2"/>
+  </defs>
+  <rect class="st0" width="512" height="512" rx="96" ry="96"/>
+  <g>
+    <path class="st4" d="M262.79,153.02c-32.79-12.43-71.69,7.79-89.56,37.97,0,0,20.58,23.23,24.34,33.85l2.29-4.86c20.71-21.78,29.79-22.1,58.37-8.3,34.06,16.45,46.83,19.63,67.75-2.08,16.74-17.38-.25-26.3-13.11-35.93-26.56-16.32-50.08-20.65-50.08-20.65Z"/>
+    <path class="st2" d="M197.57,224.84c35.12,13.72,38.43-43.1,85.51-29.14,3.68,1.09,3.98,5.95,1.02,8.4-16.35,13.56-21.53,36.9-44,53.79-24.18,18.17-77.69,42.24-165.41-2.72,20.95-3.72,55.87-16.56,83.73-63.57,31.31-52.83,87.7-71.03,154.44-17.93-66.1-35.59-106.07,20.87-115.29,51.17Z"/>
+    <path class="st1" d="M249.21,358.98c32.79,12.44,71.69-7.79,89.56-37.97,0,0-20.58-23.23-24.34-33.85l-2.29,4.86c-20.71,21.78-29.79,22.1-58.37,8.3-34.06-16.45-46.83-19.63-67.75,2.09-16.74,17.38.25,26.3,13.11,35.92,26.56,16.32,50.08,20.65,50.08,20.65Z"/>
+    <path class="st3" d="M314.43,287.16c-35.12-13.72-38.43,43.1-85.51,29.15-3.68-1.09-3.98-5.95-1.02-8.4,16.35-13.57,21.53-36.9,44-53.79,24.18-18.17,77.69-42.24,165.41,2.72-20.95,3.72-55.87,16.56-83.73,63.57-31.31,52.83-87.7,71.03-154.44,17.93,66.1,35.59,106.07-20.87,115.29-51.17Z"/>
+  </g>
 </svg>

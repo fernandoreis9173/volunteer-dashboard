@@ -126,12 +126,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
       <aside className={`fixed lg:sticky lg:top-0 lg:h-screen inset-y-0 left-0 w-64 bg-white flex flex-col p-6 border-r border-slate-200 z-30 transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
         <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-600 text-white rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              {/* <div className="p-2 bg-blue-600 text-white rounded-lg"> */}
+                {/* <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-                </svg>
-                {/* <img src={LogoNovaIcon} alt="Logo Volunteers" className="h-8 w-8 object-contain filter invert brightness-0" /> */}
-              </div>
+                </svg> */}
+                {/* Removido o filtro que deixava o SVG todo branco */}
+                <img src={LogoNovaIcon} alt="Logo Volunteers" className="h-8 w-8 object-contain" style={{ filter: 'none' }} />
+              {/* </div> */}
               <div>
                 <h1 className="text-xl font-bold text-slate-800">Volunteers</h1>
                 <p className="text-sm text-slate-500">Sistema da Igreja</p>
