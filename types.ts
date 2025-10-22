@@ -44,7 +44,7 @@ export interface DashboardEvent {
   start_time: string;
   end_time: string;
   status: string;
-  event_departments: { departments: { id: number; name: string } }[] | null;
+  event_departments: { departments: { id: number; name: string; leader?: string; } }[] | null;
   event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } }[] | null;
 }
 
@@ -86,6 +86,8 @@ export interface Department {
   name: string;
   description: string;
   leader: string;
+  // FIX: Added optional `leader_id` to align the type with application logic and database schema, resolving downstream type errors.
+  leader_id?: string | null;
   leader_contact?: string;
   skills_required: string[];
   meeting_days: string[];
