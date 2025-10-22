@@ -29,13 +29,9 @@ import { supabase } from './lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
 
-// CORREÇÃO 1: Usar import.meta.env para variáveis de ambiente no Vite.
-// Check for required environment variables for the frontend
-const areApiKeysConfigured = 
-    import.meta.env.VITE_SUPABASE_URL &&
-    import.meta.env.VITE_SUPABASE_ANON_KEY &&
-    import.meta.env.VITE_VAPID_PUBLIC_KEY;
-    
+// Since keys are hardcoded for production, this check is now always true.
+const areApiKeysConfigured = true;
+
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -292,9 +288,9 @@ const App: React.FC = () => {
             .gt('end_time', currentTime)
             .eq('status', 'Confirmado')
             .limit(1)
-            .single();
+            .maybeSingle(); // Use maybeSingle to prevent errors when no event is found.
     
-        if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows found", which is fine
+        if (error) { 
             console.error("Error checking for active event:", getErrorMessage(error));
         }
     
@@ -534,7 +530,17 @@ const App: React.FC = () => {
     }
     
     if (isLoading) {
-        return <div className="flex items-center justify-center h-screen bg-slate-50"><p>Carregando...</p></div>;
+        return (
+            <div className="flex flex-col items-center justify-center h-screen bg-slate-50" aria-live="polite" aria-busy="true">
+                <div 
+                    className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
+                    role="status"
+                >
+                   <span className="sr-only">Carregando...</span>
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-700">Carregando...</p>
+            </div>
+        );
     }
 
     if (!session) {
