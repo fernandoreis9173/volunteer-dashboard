@@ -92,8 +92,8 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
                 className={`ml-1 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover}`}
                 aria-label={`Remove ${text}`}
             >
-                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 8 8">
-                    <path strokeLinecap="round" strokeWidth="1.5" d="M1 1l6 6m0-6L1 7" />
+                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
         </div>
@@ -214,109 +214,103 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
         };
 
         if (initialData) {
-            setFormData({ 
-                name: initialData.name, 
-                description: initialData.description, 
+            setFormData({
+                name: initialData.name,
+                description: initialData.description,
                 leader: initialData.leader,
-                leader_contact: initialData.leader_contact || '',
+                leader_contact: initialData.leader_contact || ''
             });
-            setLeaderSearch(initialData.leader);
-            const initialLeader = leaders.find(l => l.email === initialData.leader_contact);
-            setSelectedLeader(initialLeader || null);
             setSkills(initialData.skills_required || []);
             setIsActive(initialData.status === 'Ativo');
 
             const newMeetingDaysState = { ...meetingDayKeys };
-            if (Array.isArray(initialData.meeting_days)) {
-                initialData.meeting_days.forEach(day => {
-                    if (day === 'domingo_manha' || day === 'domingo_noite') {
-                        newMeetingDaysState.domingo = true;
-                    } else if (day in newMeetingDaysState) {
-                        newMeetingDaysState[day as keyof typeof newMeetingDaysState] = true;
-                    }
-                });
-            }
+            const days = Array.isArray(initialData.meeting_days) ? initialData.meeting_days : [];
+            days.forEach(day => {
+                if (day in newMeetingDaysState) {
+                    newMeetingDaysState[day as keyof typeof newMeetingDaysState] = true;
+                }
+            });
             setMeetingDays(newMeetingDaysState);
+            
+            if (initialData.leader) {
+                const leaderUser = leaders.find(l => l.user_metadata?.name === initialData.leader);
+                setSelectedLeader(leaderUser || null);
+            } else {
+                setSelectedLeader(null);
+            }
         } else {
+            // Reset for new
             setFormData({ name: '', description: '', leader: '', leader_contact: '' });
-            setLeaderSearch('');
-            setSelectedLeader(null);
             setSkills([]);
             setMeetingDays(meetingDayKeys);
             setIsActive(true);
+            setSelectedLeader(null);
         }
     }, [initialData, leaders]);
+    
+    useEffect(() => {
+        if (selectedLeader) {
+            // @ts-ignore
+            const leaderDeptId = selectedLeader.user_metadata?.department_id;
+            const leaderDept = allDepartments.find(d => d.id === leaderDeptId);
 
+            if (leaderDept && (!isEditing || leaderDept.id !== initialData?.id)) {
+                setLeaderConflictError(`${selectedLeader.user_metadata?.name} já é líder do departamento ${leaderDept.name}.`);
+            } else {
+                setLeaderConflictError(null);
+            }
+        } else {
+            setLeaderConflictError(null);
+        }
+    }, [selectedLeader, allDepartments, isEditing, initialData]);
+    
+    const filteredLeaders = useMemo(() => {
+        const assignedLeaders = new Map<string, string>();
+        allDepartments.forEach(d => {
+            if (d.leader_id) {
+                assignedLeaders.set(d.leader_id, d.name);
+            }
+        });
+
+        let availableLeaders = leaders.filter(l => {
+            // FIX: Removed `as any` cast. With `leader_id` now part of the Department type, this access is type-safe.
+            if (isEditing && l.id === initialData?.leader_id) {
+                return true;
+            }
+            return !assignedLeaders.has(l.id);
+        });
+
+        if (!leaderSearch) return availableLeaders;
+
+        const lowercasedQuery = leaderSearch.toLowerCase();
+        return availableLeaders.filter(l => l.user_metadata?.name?.toLowerCase().includes(lowercasedQuery));
+    }, [leaderSearch, leaders, allDepartments, isEditing, initialData]);
+    
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
-
-    const handleLeaderSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const query = e.target.value;
-        setLeaderSearch(query);
-        setIsLeaderDropdownOpen(true);
-        setSelectedLeader(null);
-        setFormData(prev => ({...prev, leader: '', leader_contact: ''}));
-    };
-    
-    const handleClearLeader = () => {
-        setFormData(prev => ({ ...prev, leader: '', leader_contact: '' }));
-        setLeaderSearch('');
-        setSelectedLeader(null);
-        setLeaderConflictError(null);
-    };
-
-    const handleLeaderSelect = (leader: User) => {
-        const leaderName = leader.user_metadata?.name || '';
-        const leaderEmail = leader.email || '';
-
-        const conflictingDepartment = allDepartments.find(
-            dept => dept.leader_contact === leaderEmail && dept.id !== initialData?.id
-        );
-        
-        if (conflictingDepartment) {
-            setLeaderConflictError(`Este líder já está atribuído ao departamento "${conflictingDepartment.name}".`);
-        } else {
-            setLeaderConflictError(null);
-        }
-
-        setSelectedLeader(leader);
-        setFormData(prev => ({ ...prev, leader: leaderName, leader_contact: leaderEmail }));
-        setIsLeaderDropdownOpen(false);
-    };
-
-    const filteredLeaders = useMemo(() => {
-        if (!leaderSearch || selectedLeader) {
-            return [];
-        }
-        const query = leaderSearch.toLowerCase();
-        return leaders.filter(leader =>
-            (leader.user_metadata?.name?.toLowerCase().includes(query)) ||
-            (leader.email?.toLowerCase().includes(query))
-        );
-    }, [leaderSearch, leaders, selectedLeader]);
     
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, checked } = e.target;
-        setMeetingDays(prev => ({...prev, [name]: checked}));
+        setMeetingDays(prev => ({ ...prev, [name]: checked }));
+    };
+
+    const handleLeaderSelect = (leader: User) => {
+        setSelectedLeader(leader);
+        setIsLeaderDropdownOpen(false);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (leaderConflictError) {
-            alert(leaderConflictError);
-            return;
-        }
-        
-        if (formData.leader && !selectedLeader) {
-            alert('Você digitou o nome de um líder, mas não o selecionou da lista. Por favor, busque e selecione um usuário válido para poder salvar.');
+        if (!formData.name) {
+            alert('Por favor, preencha o Nome do Departamento.');
             return;
         }
 
-        if (!formData.name) {
-            alert('Por favor, preencha o Nome do Departamento.');
+        if (leaderConflictError) {
+            alert(leaderConflictError);
             return;
         }
 
@@ -324,18 +318,19 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
             .filter(([, isSelected]) => isSelected)
             .map(([day]) => day);
 
-        const departmentData: Omit<Department, 'created_at'> = {
+        // FIX: With `leader_id` added to the Department interface, this object now correctly
+        // matches the type expected by the onSave function, removing the need for @ts-ignore.
+        const departmentData: Omit<Department, 'created_at'> & {id?: number} = {
             id: initialData?.id,
             name: formData.name,
             description: formData.description,
-            leader: formData.leader,
-            leader_contact: formData.leader_contact,
+            leader: selectedLeader?.user_metadata?.name || 'Não atribuído',
+            leader_id: selectedLeader?.id || null, 
+            leader_contact: selectedLeader?.email || '',
+            status: isActive ? 'Ativo' : 'Inativo',
             skills_required: skills,
             meeting_days: selectedMeetingDays,
-            status: isActive ? 'Ativo' : 'Inativo',
         };
-        
-        // Pass the leader's ID along with the department data to be handled by the parent.
         onSave(departmentData, selectedLeader?.id);
     };
 
@@ -346,135 +341,82 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
                     background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
                 }
             `}</style>
-            <div className="flex items-center space-x-3 mb-8">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18h16.5M5.25 6H18.75m-13.5 0V21m13.5-15V21m-10.5-9.75h.008v.008H8.25v-.008ZM8.25 15h.008v.008H8.25V15Zm3.75-9.75h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm3.75-9.75h.008v.008H15.75v-.008ZM15.75 15h.008v.008H15.75V15Z" />
-                </svg>
-                <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Departamento' : 'Novo Departamento'}</h2>
-            </div>
-            <form className="space-y-6" onSubmit={handleSubmit}>
-                <InputField label="Nome do Departamento" type="text" name="name" value={formData.name} onChange={handleInputChange} required />
+            <h2 className="text-2xl font-bold text-slate-800 mb-6">{isEditing ? 'Editar Departamento' : 'Novo Departamento'}</h2>
+            <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <InputField label="Nome do Departamento" type="text" name="name" value={formData.name} onChange={handleInputChange} required />
+                    
+                    <div className="relative">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Líder do Departamento</label>
+                        <div 
+                            onClick={() => setIsLeaderDropdownOpen(prev => !prev)}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer"
+                        >
+                            {selectedLeader ? (
+                                <span className="text-slate-900">{selectedLeader.user_metadata?.name}</span>
+                            ) : (
+                                <span className="text-slate-400">Selecione um líder</span>
+                            )}
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+                        </div>
+                        {isLeaderDropdownOpen && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                                <div className="p-2">
+                                    <input 
+                                        type="text"
+                                        placeholder="Buscar líder..."
+                                        value={leaderSearch}
+                                        onChange={(e) => setLeaderSearch(e.target.value)}
+                                        className="w-full px-2 py-1.5 border border-slate-300 rounded-md"
+                                    />
+                                </div>
+                                <ul className="py-1">
+                                    {filteredLeaders.map(leader => (
+                                        <li key={leader.id} onClick={() => handleLeaderSelect(leader)} className="px-4 py-2 hover:bg-slate-100 cursor-pointer text-slate-700">
+                                            {leader.user_metadata?.name}
+                                        </li>
+                                    ))}
+                                    {filteredLeaders.length === 0 && <li className="px-4 py-2 text-sm text-slate-500">Nenhum líder disponível.</li>}
+                                </ul>
+                            </div>
+                        )}
+                        {leaderConflictError && <p className="text-xs text-red-500 mt-1">{leaderConflictError}</p>}
+                    </div>
+                </div>
+                
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
-                    <textarea 
-                        name="description"
-                        value={formData.description}
-                        onChange={handleInputChange}
-                        rows={3}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                </div>
-                 <div>
-                    <label htmlFor="leader_search" className="block text-sm font-medium text-slate-700 mb-1">
-                        Líder do Departamento <span className="text-red-500">*</span>
-                    </label>
-                    
-                    {selectedLeader ? (
-                        <div className="flex items-center justify-between p-2 bg-white border border-slate-300 rounded-lg shadow-sm">
-                            <div className="flex items-center space-x-2 overflow-hidden">
-                                <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs">
-                                    {getInitials(formData.leader)}
-                                </div>
-                                <div className="overflow-hidden">
-                                    <p className="font-semibold text-slate-800 text-sm truncate" title={formData.leader}>{formData.leader}</p>
-                                    <p className="text-xs text-slate-500 truncate" title={formData.leader_contact}>{formData.leader_contact}</p>
-                                </div>
-                            </div>
-                            <button 
-                                type="button" 
-                                onClick={handleClearLeader} 
-                                className="ml-2 p-1 text-slate-400 hover:text-red-600 flex-shrink-0"
-                                aria-label="Remover líder"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="relative">
-                            <input
-                                type="text"
-                                id="leader_search"
-                                value={leaderSearch}
-                                onChange={handleLeaderSearchChange}
-                                onFocus={() => setIsLeaderDropdownOpen(true)}
-                                onBlur={() => setTimeout(() => setIsLeaderDropdownOpen(false), 200)}
-                                placeholder="Buscar por nome ou e-mail do líder..."
-                                required={!formData.leader}
-                                autoComplete="off"
-                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-slate-900"
-                            />
-                            {isLeaderDropdownOpen && filteredLeaders.length > 0 && (
-                                <ul className="absolute z-10 w-full bg-white border border-slate-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-auto">
-                                    {filteredLeaders.map(leader => {
-                                        const name = leader.user_metadata?.name || 'Nome desconhecido';
-                                        const email = leader.email || 'Email desconhecido';
-                                        const initials = getInitials(name);
-
-                                        return (
-                                            <li key={leader.id} onMouseDown={() => handleLeaderSelect(leader)} className="px-3 py-2 hover:bg-slate-100 cursor-pointer flex items-center space-x-3">
-                                                <div className="w-8 h-8 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs">
-                                                    {initials}
-                                                </div>
-                                                <div>
-                                                    <p className="font-semibold text-slate-800 text-sm">{name}</p>
-                                                    <p className="text-xs text-slate-500">{email}</p>
-                                                </div>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            )}
-                        </div>
-                    )}
-                    {leaderConflictError && (
-                        <p className="text-sm text-red-500 mt-1">{leaderConflictError}</p>
-                    )}
+                    <textarea name="description" value={formData.description} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"></textarea>
                 </div>
                 
                 <TagInputField 
-                    label="Habilidades Necessárias" 
-                    placeholder="Ex: Comunicação, Organização..." 
+                    label="Habilidades Recomendadas" 
+                    placeholder="Ex: Comunicação, Liderança..." 
                     tags={skills}
                     setTags={setSkills}
                     color="blue"
                 />
-                
+
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Dias de Reunião</label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <CheckboxField label="Domingo" name="domingo" checked={meetingDays.domingo} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Segunda" name="segunda" checked={meetingDays.segunda} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Terça" name="terca" checked={meetingDays.terca} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Quarta" name="quarta" checked={meetingDays.quarta} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Quinta" name="quinta" checked={meetingDays.quinta} onChange={handleCheckboxChange} />
-                        <CheckboxField label="Sexta" name="sexta" checked={meetingDays.sexta} onChange={handleCheckboxChange} />
+                        <CheckboxField label="Segunda-feira" name="segunda" checked={meetingDays.segunda} onChange={handleCheckboxChange} />
+                        <CheckboxField label="Terça-feira" name="terca" checked={meetingDays.terca} onChange={handleCheckboxChange} />
+                        <CheckboxField label="Quarta-feira" name="quarta" checked={meetingDays.quarta} onChange={handleCheckboxChange} />
+                        <CheckboxField label="Quinta-feira" name="quinta" checked={meetingDays.quinta} onChange={handleCheckboxChange} />
+                        <CheckboxField label="Sexta-feira" name="sexta" checked={meetingDays.sexta} onChange={handleCheckboxChange} />
                         <CheckboxField label="Sábado" name="sabado" checked={meetingDays.sabado} onChange={handleCheckboxChange} />
                     </div>
                 </div>
-
+                
                 <CheckboxField label="Departamento ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
                 
-                <div className="pt-6 border-t border-slate-200 flex flex-wrap justify-end items-center gap-3">
+                <div className="pt-6 border-t border-slate-200 flex justify-end items-center gap-3">
                     {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
-                    <button 
-                        type="button" 
-                        onClick={onCancel}
-                        disabled={isSaving}
-                        className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Cancelar
-                    </button>
-                    <button 
-                        type="submit"
-                        disabled={isSaving}
-                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm disabled:bg-blue-400 disabled:cursor-not-allowed"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span>{isSaving ? 'Salvando...' : (isEditing ? 'Atualizar Departamento' : 'Salvar Departamento')}</span>
+                    <button type="button" onClick={onCancel} className="px-4 py-2 bg-white border border-slate-300 font-semibold rounded-lg">Cancelar</button>
+                    <button type="submit" disabled={isSaving || !!leaderConflictError} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-blue-400">
+                        {isSaving ? 'Salvando...' : 'Salvar Departamento'}
                     </button>
                 </div>
             </form>

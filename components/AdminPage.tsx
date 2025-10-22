@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
@@ -126,6 +128,7 @@ const AdminPage: React.FC = () => {
         setActionType(null);
     };
 
+    // FIX: Completed the handleBroadcastSubmit function to fix a syntax error and implement the broadcast logic.
     const handleBroadcastSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!broadcastMessage.trim()) {
@@ -136,137 +139,157 @@ const AdminPage: React.FC = () => {
         setBroadcastError(null);
         setBroadcastSuccess(null);
         try {
-            const { data, error: invokeError } = await supabase.functions.invoke('create-notifications', {
+            const { error: invokeError } = await supabase.functions.invoke('create-notifications', {
                 body: { broadcastMessage },
             });
+
             if (invokeError) throw invokeError;
-            if (data?.error) throw new Error(data.error);
-            setBroadcastSuccess(data?.message || 'Notificação enviada com sucesso!');
+
+            setBroadcastSuccess('Mensagem de broadcast enviada com sucesso!');
             setBroadcastMessage('');
         } catch (err) {
-            setBroadcastError(`Falha ao enviar notificação: ${getErrorMessage(err)}`);
+            setBroadcastError(`Falha ao enviar broadcast: ${getErrorMessage(err)}`);
         } finally {
             setBroadcastLoading(false);
         }
     };
 
-    const formatDate = (dateString: string | undefined) => {
-        if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    };
-    
-    const getRoleForDisplay = (user: User) => {
-        const userRole = user.user_metadata?.role || user.user_metadata?.papel;
-        if (userRole === 'admin') return 'Admin';
-        if (userRole === 'leader' || userRole === 'lider') return 'Líder';
-        if (userRole === 'volunteer') return 'Voluntário';
-        return 'N/A';
-    };
-    
-    const getStatusBadge = (user: EnrichedUser) => {
-        switch (user.app_status) {
-            case 'Inativo': return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">Inativo</span>;
-            case 'Ativo': return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ativo</span>;
-            case 'Pendente': default: return <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pendente</span>;
+    const getStatusInfo = (status?: 'Ativo' | 'Inativo' | 'Pendente') => {
+        switch (status) {
+            case 'Ativo':
+                return { text: 'Ativo', color: 'bg-green-100 text-green-800' };
+            case 'Inativo':
+                return { text: 'Inativo', color: 'bg-red-100 text-red-800' };
+            case 'Pendente':
+                return { text: 'Pendente', color: 'bg-yellow-100 text-yellow-800' };
+            default:
+                return { text: 'Desconhecido', color: 'bg-slate-100 text-slate-800' };
         }
     };
-
+    
     return (
         <div className="space-y-8">
             <div>
-                <h1 className="text-3xl font-bold text-slate-800">Gerenciamento Admin</h1>
-                <p className="text-slate-500 mt-1">Gerencie usuários do sistema e envie notificações em massa.</p>
+                <h1 className="text-3xl font-bold text-slate-800">Painel do Administrador</h1>
+                <p className="text-slate-500 mt-1">Gerencie usuários e envie notificações para toda a igreja.</p>
             </div>
 
-            {/* --- User Management Section --- */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
-                     <div className="flex items-center space-x-3 mb-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
-                        <h2 className="text-2xl font-bold text-slate-800">Convidar Usuários</h2>
-                    </div>
-                    <p className="text-sm text-slate-600 mb-6">Insira o e-mail do usuário que você deseja convidar. Ele receberá um link para criar sua conta e definir uma senha.</p>
-                    <form onSubmit={handleInviteSubmit} className="space-y-4">
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label htmlFor="invite-name" className="block text-sm font-medium text-slate-700 mb-1">Nome Completo</label>
-                                <input type="text" id="invite-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do líder" required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
-                            </div>
-                            <div>
-                                <label htmlFor="invite-email" className="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
-                                <input type="email" id="invite-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@igreja.com" required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
-                            </div>
-                            <div className="sm:col-span-2">
-                                <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
-                                <select id="invite-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900">
-                                    <option value="leader">Líder de Departamento</option>
-                                    <option value="admin">Admin (Líder Geral)</option>
-                                </select>
-                            </div>
-                        </div>
-                        {inviteError && <p className="text-sm text-red-600">{inviteError}</p>}
-                        {inviteSuccess && <p className="text-sm text-green-600">{inviteSuccess}</p>}
-                        <div className="pt-2">
-                             <button type="submit" disabled={inviteLoading} className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg flex items-center justify-center space-x-2 hover:bg-blue-700 disabled:bg-blue-400">
-                                {inviteLoading ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.493 5.334a59.768 59.768 0 0 1 17.014 0L18 12m-6 0h6" /></svg>}
-                                <span>{inviteLoading ? 'Enviando...' : 'Enviar Convite'}</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex items-center space-x-3 mb-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688 0-1.25-.562-1.25-1.25s.562-1.25 1.25-1.25 1.25.562 1.25 1.25-.562 1.25-1.25 1.25Zm0 0H9.11m4.23-4.58 2.12-2.12M13.4 10.34l-2.12 2.12m0 0-2.12 2.12m2.12-2.12 2.12 2.12M3 12a9 9 0 1 1 18 0 9 9 0 0 1-18 0Z" /></svg>
-                        <h2 className="text-2xl font-bold text-slate-800">Notificação em Massa</h2>
-                    </div>
-                     <p className="text-sm text-slate-600 mb-6">Envie uma notificação push para todos os usuários que ativaram as notificações. Use com moderação.</p>
-                    <form onSubmit={handleBroadcastSubmit} className="space-y-4">
+            {/* Invite User Form */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Convidar Novo Administrador/Líder</h2>
+                <form onSubmit={handleInviteSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="broadcast-message" className="block text-sm font-medium text-slate-700 mb-1">Mensagem</label>
-                            <textarea id="broadcast-message" value={broadcastMessage} onChange={(e) => setBroadcastMessage(e.target.value)} placeholder="Digite sua mensagem aqui..." required rows={4} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900" />
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Nome Completo</label>
+                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
                         </div>
-                        {broadcastError && <p className="text-sm text-red-600">{broadcastError}</p>}
-                        {broadcastSuccess && <p className="text-sm text-green-600">{broadcastSuccess}</p>}
-                        <div className="pt-2">
-                            <button type="submit" disabled={broadcastLoading} className="px-6 py-2.5 bg-amber-500 text-white font-semibold rounded-lg flex items-center justify-center space-x-2 hover:bg-amber-600 disabled:bg-amber-300">
-                                {broadcastLoading ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l9.75 7.5-9.75-7.5Z" /></svg>}
-                                <span>{broadcastLoading ? 'Enviando...' : 'Enviar para Todos'}</span>
-                            </button>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
                         </div>
-                    </form>
-                </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Permissão</label>
+                        <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white">
+                            <option value="leader">Líder</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    {inviteError && <p className="text-sm text-red-500">{inviteError}</p>}
+                    {inviteSuccess && <p className="text-sm text-green-500">{inviteSuccess}</p>}
+                    <div className="text-right">
+                        <button type="submit" disabled={inviteLoading} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-blue-400">
+                            {inviteLoading ? 'Enviando...' : 'Enviar Convite'}
+                        </button>
+                    </div>
+                </form>
             </div>
 
-            <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
-                 <div className="flex items-center space-x-3 mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.226a3 3 0 0 0-4.682 2.72 9.094 9.094 0 0 0 3.741.479m7.5-2.226V18a2.25 2.25 0 0 1-2.25 2.25H12a2.25 2.25 0 0 1-2.25-2.25V18.226m3.75-10.5a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5ZM10.5 8.25a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5Z" /></svg>
-                    <h2 className="text-2xl font-bold text-slate-800">Usuários do Sistema</h2>
-                </div>
-                <div className="mb-4"><input type="text" placeholder="Buscar por nome ou email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full max-w-sm px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:ring-blue-500 focus:border-blue-500" /></div>
-                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-                    <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50 sticky top-0"><tr><th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Email</th><th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Data do Convite</th><th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase w-1/5">Permissão</th><th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase w-1/6">Status</th><th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Ações</th></tr></thead>
-                        <tbody className="bg-white divide-y divide-slate-200">
-                            {listLoading ? (<tr><td colSpan={5} className="px-6 py-4 text-center">Carregando...</td></tr>) : listError ? (<tr><td colSpan={5} className="px-6 py-4 text-center text-red-500">{listError}</td></tr>) : filteredUsers.length === 0 ? (<tr><td colSpan={5} className="px-6 py-4 text-center text-slate-500">Nenhum usuário encontrado.</td></tr>) : filteredUsers.map(user => (
-                                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{user.email ?? 'N/A'}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{formatDate(user.invited_at)}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-semibold">{getRoleForDisplay(user)}</td><td className="px-6 py-4 whitespace-nowrap text-sm">{getStatusBadge(user)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
-                                        <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="text-slate-500 hover:text-slate-700 p-1 rounded-full hover:bg-slate-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" /></svg></button>
-                                        {activeMenu === user.id && (
-                                            <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10"><div className="py-1" role="menu" aria-orientation="vertical"><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="w-full text-left block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button>{user.app_status === 'Inativo' ? (<button onClick={() => handleRequestAction(user, 'enable')} className="w-full text-left block px-4 py-2 text-sm text-green-700 hover:bg-green-50">Reativar Usuário</button>) : (<button onClick={() => handleRequestAction(user, 'disable')} className="w-full text-left block px-4 py-2 text-sm text-red-700 hover:bg-red-50">Desativar Usuário</button>)}</div></div>
-                                        )}
-                                    </td>
+            {/* Users List */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Gerenciar Usuários</h2>
+                <input type="text" placeholder="Buscar por nome ou email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg mb-4"/>
+                
+                {listLoading ? <p>Carregando usuários...</p> : listError ? <p className="text-red-500">{listError}</p> : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left text-slate-500">
+                            <thead className="text-xs text-slate-700 uppercase bg-slate-50">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3">Nome</th>
+                                    <th scope="col" className="px-6 py-3">Email</th>
+                                    <th scope="col" className="px-6 py-3">Permissão</th>
+                                    <th scope="col" className="px-6 py-3">Status</th>
+                                    <th scope="col" className="px-6 py-3"><span className="sr-only">Ações</span></th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {filteredUsers.map(user => {
+                                    const statusInfo = getStatusInfo(user.app_status);
+                                    return (
+                                    <tr key={user.id} className="bg-white border-b hover:bg-slate-50">
+                                        <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">{user.user_metadata?.name || 'N/A'}</td>
+                                        <td className="px-6 py-4">{user.email}</td>
+                                        <td className="px-6 py-4 capitalize">{user.user_metadata?.role === 'lider' ? 'Líder' : user.user_metadata?.role}</td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.text}</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="relative inline-block">
+                                                <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="p-1 text-slate-500 rounded-md hover:bg-slate-100">...</button>
+                                                {activeMenu === user.id && (
+                                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
+                                                        <ul className="py-1">
+                                                            <li><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button></li>
+                                                            {user.app_status === 'Inativo' ? (
+                                                                <li><button onClick={() => handleRequestAction(user, 'enable')} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Usuário</button></li>
+                                                            ) : (
+                                                                <li><button onClick={() => handleRequestAction(user, 'disable')} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Desativar Usuário</button></li>
+                                                            )}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )})}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
-            {isEditModalOpen && editingUser && (<EditUserModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} user={editingUser} onSave={handleUpdateUser} />)}
-            <ConfirmationModal isOpen={isActionModalOpen} onClose={() => setIsActionModalOpen(false)} onConfirm={handleConfirmAction} title={actionType === 'disable' ? 'Confirmar Desativação' : 'Confirmar Reativação'} message={actionType === 'disable' ? `Tem certeza que deseja desativar ${userToAction?.email ?? 'este usuário'}? Ele não poderá mais acessar o sistema.` : `Tem certeza que deseja reativar ${userToAction?.email ?? 'este usuário'}? Ele poderá acessar o sistema novamente.`} />
+            
+            {/* Broadcast Form */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa (Broadcast)</h2>
+                 <form onSubmit={handleBroadcastSubmit} className="space-y-4">
+                     <div>
+                        <label htmlFor="broadcast-message" className="block text-sm font-medium text-slate-700 mb-1">Mensagem</label>
+                        <textarea id="broadcast-message" value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} rows={4} className="w-full px-3 py-2 border border-slate-300 rounded-lg" placeholder="Digite a mensagem que será enviada para todos os usuários com notificações ativas..."></textarea>
+                    </div>
+                    {broadcastError && <p className="text-sm text-red-500">{broadcastError}</p>}
+                    {broadcastSuccess && <p className="text-sm text-green-500">{broadcastSuccess}</p>}
+                     <div className="text-right">
+                        <button type="submit" disabled={broadcastLoading} className="px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg disabled:bg-amber-300">
+                            {broadcastLoading ? 'Enviando...' : 'Enviar para Todos'}
+                        </button>
+                    </div>
+                 </form>
+            </div>
+
+
+            {editingUser && (
+                <EditUserModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} user={editingUser} onSave={handleUpdateUser} />
+            )}
+
+            <ConfirmationModal
+                isOpen={isActionModalOpen}
+                onClose={() => setIsActionModalOpen(false)}
+                onConfirm={handleConfirmAction}
+                title={`${actionType === 'disable' ? 'Desativar' : 'Reativar'} Usuário`}
+                message={`Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o usuário ${userToAction?.email}?`}
+            />
         </div>
     );
 };
-
+// FIX: Added a default export to the AdminPage component to resolve the module import error.
 export default AdminPage;

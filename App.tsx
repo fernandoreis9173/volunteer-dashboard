@@ -35,7 +35,7 @@ const areApiKeysConfigured =
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
-    
+
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -292,9 +292,9 @@ const App: React.FC = () => {
             .gt('end_time', currentTime)
             .eq('status', 'Confirmado')
             .limit(1)
-            .single();
+            .maybeSingle(); // Use maybeSingle to prevent errors when no event is found.
     
-        if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows found", which is fine
+        if (error) { 
             console.error("Error checking for active event:", getErrorMessage(error));
         }
     
@@ -370,39 +370,28 @@ const App: React.FC = () => {
     }, [session, fetchCoreData]);
 
     useEffect(() => {
-        // Handles the initial redirect after a user logs in.
+        // Handles initial redirect and post-login actions like notification prompts.
         if (session && userProfile && !hasLoginRedirected.current) {
-            hasLoginRedirected.current = true; // Mark as handled immediately to prevent race conditions
-    
-            // Don't redirect if the user is loading a specific page from a URL
-            const currentPageFromHash = getPageFromHash();
-            if (currentPageFromHash !== 'dashboard') {
-                return;
+            hasLoginRedirected.current = true; // Mark as handled to run once per login.
+
+            // Prompt leaders and volunteers to enable push notifications upon login if not yet configured.
+            const isLeaderOrVolunteer = userProfile.role === 'leader' || userProfile.role === 'lider' || userProfile.role === 'volunteer';
+            if (isLeaderOrVolunteer && pushPermissionStatus === 'default') {
+                setTimeout(() => setIsPushPromptOpen(true), 1000); // Delay for UI stability.
             }
-            
-            // All roles now redirect to 'dashboard', the renderPage function will show the correct component.
-            handleNavigate('dashboard');
+
+            // Redirect to dashboard only if the user didn't land on a specific page via URL hash.
+            const currentPageFromHash = getPageFromHash();
+            if (currentPageFromHash === 'dashboard') {
+                handleNavigate('dashboard');
+            }
         }
         
         // Reset the redirect flag when the user logs out.
         if (!session) {
             hasLoginRedirected.current = false;
         }
-    }, [session, userProfile, handleNavigate]);
-
-    useEffect(() => {
-        // Prompt for push notifications after login if permission is 'default'
-        if (!isLoading && userProfile) {
-            const isTargetRole = userProfile.role === 'leader' || userProfile.role === 'lider' || userProfile.role === 'volunteer';
-            if (isTargetRole && pushPermissionStatus === 'default' && !sessionStorage.getItem('pushPromptedThisSession')) {
-                // Delay slightly to ensure UI is stable before showing modal
-                setTimeout(() => {
-                    setIsPushPromptOpen(true);
-                    sessionStorage.setItem('pushPromptedThisSession', 'true');
-                }, 1000);
-            }
-        }
-    }, [isLoading, userProfile, pushPermissionStatus]);
+    }, [session, userProfile, handleNavigate, pushPermissionStatus]);
 
     // Real-time notifications subscription
     useEffect(() => {
@@ -534,7 +523,17 @@ const App: React.FC = () => {
     }
     
     if (isLoading) {
-        return <div className="flex items-center justify-center h-screen bg-slate-50"><p>Carregando...</p></div>;
+        return (
+            <div className="flex flex-col items-center justify-center h-screen bg-slate-50" aria-live="polite" aria-busy="true">
+                <div 
+                    className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
+                    role="status"
+                >
+                   <span className="sr-only">Carregando...</span>
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-700">Carregando...</p>
+            </div>
+        );
     }
 
     if (!session) {

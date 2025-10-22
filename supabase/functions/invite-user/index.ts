@@ -3,7 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-control-allow-methods': 'POST, GET, OPTIONS'
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
 // FIX: Declare Deno to resolve TypeScript errors for Deno-specific APIs.

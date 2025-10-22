@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import ConfirmationModal from './ConfirmationModal';
+import CustomDatePicker from './CustomDatePicker';
 
 interface NewEventFormProps {
     initialData?: Event | null;
@@ -45,7 +46,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                     className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-red-600 bg-red-100 hover:bg-red-200"
                     aria-label={`Remover ${volunteer.name}`}
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
         );
@@ -78,7 +79,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                 className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-green-600 bg-green-100 hover:bg-green-200 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
                 aria-label={`Adicionar ${volunteer.name}`}
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
             </button>
         </div>
     );
@@ -172,6 +173,10 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
         }
     };
 
+    const handleDateChange = (dateString: string) => {
+        setFormData(prev => ({ ...prev, date: dateString }));
+    };
+
     const handleColorChange = (colorValue: string) => {
         setFormData(prev => ({ ...prev, color: prev.color === colorValue ? '' : colorValue }));
     };
@@ -257,7 +262,10 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Data *</label><input type="date" name="date" value={formData.date} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Data *</label>
+                            <CustomDatePicker name="date" value={formData.date} onChange={handleDateChange} />
+                        </div>
                         <div><label className="block text-sm font-medium text-slate-700 mb-1">Início *</label><input type="time" name="start_time" value={formData.start_time} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
                         <div><label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label><input type="time" name="end_time" value={formData.end_time} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
                     </div>
@@ -274,7 +282,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                                     className={`w-8 h-8 rounded-full ${option.bg} transition-transform duration-150 transform hover:scale-110 focus:outline-none ${formData.color === option.value ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
                                     aria-label={option.name}
                                 >
-                                {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24" stroke="currentColor" ><path strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                                 </button>
                                 ))}
                             </div>

@@ -31,13 +31,13 @@ const VolunteerStatCard: React.FC<VolunteerStatCardProps> = ({ title, value, ico
   const classes = colorClasses[color];
 
   return (
-    <div className="w-64 sm:w-auto flex-shrink-0 bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4">
+    <div className="px-4 py-5 sm:p-6 flex items-center space-x-4">
       <div className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-lg ${classes.bg} ${classes.icon}`}>
         {React.cloneElement(icon, { className: 'h-6 w-6' })}
       </div>
       <div>
-        <p className="text-2xl font-bold text-slate-800">{value}</p>
-        <p className="text-sm text-slate-500">{title}</p>
+        <p className="text-sm font-medium text-slate-600">{title}</p>
+        <p className="text-4xl font-bold text-slate-900">{value}</p>
       </div>
     </div>
   );
