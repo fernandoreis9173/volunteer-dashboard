@@ -43,6 +43,8 @@ const NotificationIcon: React.FC<{ type: NotificationRecord['type'] }> = ({ type
             return <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>;
         case 'invitation_received':
             return <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></div>;
+        case 'shift_swap_request':
+            return <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg></div>;
         case 'event_update':
         case 'new_event_for_department':
         case 'new_event_for_leader':
@@ -182,7 +184,10 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
         if (!notification.is_read) {
             markAsRead(notification.id);
         }
-        if (notification.related_event_id) {
+        if (notification.related_event_id && (notification.type === 'new_schedule' || notification.type === 'event_update' || notification.type === 'new_event_for_department' || notification.type === 'new_event_for_leader' || notification.type === 'shift_swap_request')) {
+            sessionStorage.setItem('highlightEventId', String(notification.related_event_id));
+            onNavigate('events');
+        } else if (notification.related_event_id) {
             sessionStorage.setItem('showEventDetailsForId', String(notification.related_event_id));
             onNavigate('dashboard');
         }
@@ -246,7 +251,7 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
                                         aria-label="Apagar notificação"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.067-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                         </svg>
                                     </button>
                                 </div>

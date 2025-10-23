@@ -15,6 +15,7 @@ import { AcceptInvitationPage } from './components/AcceptInvitationPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
 import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
+import AttendanceHistoryPage from './components/AttendanceHistoryPage';
 import VolunteerProfile from './components/VolunteerProfile';
 import UserProfilePage from './components/UserProfilePage';
 import NotificationsPage from './components/NotificationsPage';
@@ -35,7 +36,7 @@ const areApiKeysConfigured =
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
-
+    
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -45,6 +46,7 @@ interface UserProfileState {
 
 const pagePermissions: Record<Page, string[]> = {
     'dashboard': ['admin', 'leader', 'volunteer'],
+    'history': ['volunteer'],
     'notifications': ['leader', 'volunteer'],
     'my-profile': ['admin', 'leader', 'volunteer'],
     'volunteers': ['admin', 'leader'],
@@ -64,7 +66,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2); 
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -480,6 +482,8 @@ const App: React.FC = () => {
 
         if (userProfile.role === 'volunteer') {
              switch (activePage) {
+                case 'history':
+                    return <AttendanceHistoryPage session={session} />;
                 case 'my-profile':
                     return <VolunteerProfile session={session} onUpdate={refetchNotificationCount} />;
                 case 'notifications':

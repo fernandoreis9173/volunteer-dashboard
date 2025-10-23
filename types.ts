@@ -63,7 +63,7 @@ export interface DashboardData {
     activeLeaders?: EnrichedUser[];
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin';
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin' | 'history';
 
 export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 
@@ -122,7 +122,7 @@ export interface NotificationRecord {
     created_at: string;
     user_id: string;
     message: string;
-    type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader' | 'invitation_received';
+    type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader' | 'invitation_received' | 'shift_swap_request';
     is_read: boolean;
     related_event_id: number | null;
 }
@@ -136,4 +136,14 @@ export interface Invitation {
   created_at: string;
   departments?: { name: string; leader: string };
   volunteers?: { name: string };
+}
+
+export interface ShiftSwapRequest {
+  id: number;
+  created_at: string;
+  requesting_volunteer_id: number;
+  event_id: number;
+  department_id: number;
+  status: 'pendente' | 'aprovado' | 'recusado';
+  reason_for_swap?: string;
 }
