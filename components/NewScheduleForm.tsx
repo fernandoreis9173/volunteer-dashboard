@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import ConfirmationModal from './ConfirmationModal';
@@ -46,7 +46,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                     className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-red-600 bg-red-100 hover:bg-red-200"
                     aria-label={`Remover ${volunteer.name}`}
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} ><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
         );
@@ -79,7 +79,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                 className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-green-600 bg-green-100 hover:bg-green-200 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
                 aria-label={`Adicionar ${volunteer.name}`}
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} ><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
             </button>
         </div>
     );
@@ -94,11 +94,23 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const [leaderDepartmentName, setLeaderDepartmentName] = useState('');
     const [isStatusChangeModalOpen, setIsStatusChangeModalOpen] = useState(false);
     const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+    const [isCustomStatusDropdownOpen, setIsCustomStatusDropdownOpen] = useState(false);
+    const statusDropdownRef = useRef<HTMLDivElement>(null);
 
     const isEditing = !!initialData;
     const isSchedulingMode = isEditing && (userRole === 'leader' || userRole === 'lider' || userRole === 'líder');
     const isSchedulingAllowed = isSchedulingMode && formData.status === 'Confirmado';
     const isAdminMode = userRole === 'admin';
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+                setIsCustomStatusDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -164,13 +176,17 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     }, [initialData, isSchedulingMode, leaderDepartmentId]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        if (name === 'status' && isEditing && value === 'Confirmado' && formData.status !== 'Confirmado') {
+        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleStatusSelect = (value: string) => {
+        if (isEditing && value === 'Confirmado' && formData.status !== 'Confirmado') {
             setPendingStatus(value);
             setIsStatusChangeModalOpen(true);
         } else {
-            setFormData(prev => ({ ...prev, [e.target.name]: value }));
+            setFormData(prev => ({ ...prev, status: value }));
         }
+        setIsCustomStatusDropdownOpen(false);
     };
 
     const handleDateChange = (dateString: string) => {
@@ -234,6 +250,13 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
     let title = isEditing ? "Editar Evento" : "Novo Evento";
     if (isSchedulingMode) title = `Escalar Voluntários - ${initialData?.name}`;
+    
+    const statusOptionsForForm = [
+        { value: 'Pendente', label: 'Pendente' },
+        { value: 'Confirmado', label: 'Confirmado' },
+        { value: 'Cancelado', label: 'Cancelado' },
+    ];
+    const selectedStatusLabel = statusOptionsForForm.find(o => o.value === formData.status)?.label;
 
     return (
     <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
@@ -247,18 +270,43 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div className="sm:col-span-2">
                             <label className="block text-sm font-medium text-slate-700 mb-1">Título do Evento *</label>
                             <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                            <select name="status" value={formData.status} onChange={handleInputChange} disabled={!isAdminMode} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:cursor-not-allowed">
-                                <option value="Pendente">Pendente</option>
-                                <option value="Confirmado">Confirmado</option>
-                                <option value="Cancelado">Cancelado</option>
-                            </select>
+                            <div className="relative" ref={statusDropdownRef}>
+                                <button
+                                    type="button"
+                                    onClick={() => isAdminMode && setIsCustomStatusDropdownOpen(prev => !prev)}
+                                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer text-left disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                    aria-haspopup="listbox"
+                                    aria-expanded={isCustomStatusDropdownOpen}
+                                    disabled={!isAdminMode}
+                                >
+                                    <span className="text-slate-900">{selectedStatusLabel}</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isCustomStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+                                {isCustomStatusDropdownOpen && isAdminMode && (
+                                    <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
+                                        <ul className="py-1" role="listbox">
+                                            {statusOptionsForForm.map(option => (
+                                                <li
+                                                    key={option.value}
+                                                    onClick={() => handleStatusSelect(option.value)}
+                                                    className={`px-4 py-2 hover:bg-slate-100 cursor-pointer text-sm ${formData.status === option.value ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                                                    role="option"
+                                                    aria-selected={formData.status === option.value}
+                                                >
+                                                    {option.label}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -282,7 +330,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                                     className={`w-8 h-8 rounded-full ${option.bg} transition-transform duration-150 transform hover:scale-110 focus:outline-none ${formData.color === option.value ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
                                     aria-label={option.name}
                                 >
-                                {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24" stroke="currentColor" ><path strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} ><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                                 </button>
                                 ))}
                             </div>

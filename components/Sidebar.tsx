@@ -61,6 +61,7 @@ interface NavItemData {
 
 const allNavItems: NavItemData[] = [
     { page: 'dashboard', label: 'Dashboard', icon: <img src={DashboardIcon} alt="Dashboard" />, roles: ['admin', 'leader', 'volunteer'] },
+    { page: 'history', label: 'Histórico', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm0 5.25h.007v.008H3.75V12zm0 5.25h.007v.008H3.75v-.008z" /></svg>, roles: ['volunteer'] },
     { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIcon} alt="Notificações" />, roles: ['leader', 'volunteer'] },
     { page: 'volunteers', label: 'Voluntários', icon: <img src={VolunteerIcon} alt="Voluntários" />, roles: ['admin', 'leader'] },
     { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIcon} alt="Departamentos" />, roles: ['admin'] },

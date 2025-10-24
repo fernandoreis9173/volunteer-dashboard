@@ -25,7 +25,7 @@ import IOSInstallPromptModal from './components/IOSInstallPromptModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
 import ApiConfigPage from './components/ApiConfigPage'; // Import the config page
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
-import { Page, AuthView, type NotificationRecord, type Event as AppEvent } from './types';
+import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer } from './types';
 import { supabase } from './lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
@@ -37,6 +37,7 @@ const areApiKeysConfigured =
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
     
+
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -435,6 +436,46 @@ const App: React.FC = () => {
         };
 
     }, [session, refetchNotificationCount]);
+
+    // Real-time volunteer status subscription
+    useEffect(() => {
+        // Only run for authenticated volunteers
+        if (!session?.user?.id || userProfile?.role !== 'volunteer') {
+            return;
+        }
+
+        const channel = supabase
+            .channel(`realtime-volunteer-status:${session.user.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'volunteers',
+                    filter: `user_id=eq.${session.user.id}`,
+                },
+                (payload) => {
+                    const updatedVolunteer = payload.new as DetailedVolunteer;
+                    
+                    // If status changes to Inativo and user is not already marked as disabled
+                    if (updatedVolunteer.status === 'Inativo' && !isUserDisabled) {
+                        setIsUserDisabled(true);
+                        // Update the local profile state to reflect the change
+                        setUserProfile(prev => prev ? { ...prev, status: 'Inativo' } : null);
+                    } 
+                    // If status changes back to Ativo and user was marked as disabled
+                    else if (updatedVolunteer.status === 'Ativo' && isUserDisabled) {
+                        // Refetch all user data to ensure state is fully consistent
+                        refetchUserData();
+                    }
+                }
+            )
+            .subscribe();
+        
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [session, userProfile, isUserDisabled, refetchUserData]);
 
     const subscribeToPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {

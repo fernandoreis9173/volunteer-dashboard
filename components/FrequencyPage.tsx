@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
@@ -30,7 +30,19 @@ const FrequencyPage: React.FC = () => {
     
     const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
+    const [isAttendanceDropdownOpen, setIsAttendanceDropdownOpen] = useState(false);
+    const attendanceDropdownRef = useRef<HTMLDivElement>(null);
     
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (attendanceDropdownRef.current && !attendanceDropdownRef.current.contains(event.target as Node)) {
+                setIsAttendanceDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const fetchEvents = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -392,6 +404,13 @@ const FrequencyPage: React.FC = () => {
             </div>
         )
     };
+    
+    const attendanceFilterOptions = [
+        { value: 'all', label: 'Toda a Frequência' },
+        { value: 'present', label: 'Confirmados (Presente)' },
+        { value: 'absent', label: 'Não Confirmados (Faltou)' },
+    ];
+    const selectedAttendanceLabel = attendanceFilterOptions.find(o => o.value === attendanceFilter)?.label;
 
     return (
         <div className="space-y-6">
@@ -413,11 +432,40 @@ const FrequencyPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     <CustomDatePicker name="start" value={dateFilters.start} onChange={(val) => setDateFilters(p => ({...p, start: val}))} />
                     <CustomDatePicker name="end" value={dateFilters.end} onChange={(val) => setDateFilters(p => ({...p, end: val}))} />
-                    <select value={attendanceFilter} onChange={(e) => setAttendanceFilter(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
-                        <option value="all">Toda a Frequência</option>
-                        <option value="present">Confirmados (Presente)</option>
-                        <option value="absent">Não Confirmados (Faltou)</option>
-                    </select>
+                    <div className="relative" ref={attendanceDropdownRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsAttendanceDropdownOpen(prev => !prev)}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer text-left h-full"
+                            aria-haspopup="listbox"
+                            aria-expanded={isAttendanceDropdownOpen}
+                        >
+                            <span className="text-slate-900">{selectedAttendanceLabel}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isAttendanceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        {isAttendanceDropdownOpen && (
+                            <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
+                                <ul className="py-1" role="listbox">
+                                    {attendanceFilterOptions.map(option => (
+                                        <li
+                                            key={option.value}
+                                            onClick={() => {
+                                                setAttendanceFilter(option.value);
+                                                setIsAttendanceDropdownOpen(false);
+                                            }}
+                                            className={`px-4 py-2 hover:bg-slate-100 cursor-pointer text-sm ${attendanceFilter === option.value ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                                            role="option"
+                                            aria-selected={attendanceFilter === option.value}
+                                        >
+                                            {option.label}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
                     <button onClick={handleSetToday} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
                         Hoje
                     </button>

@@ -23,7 +23,7 @@ const StatsRow: React.FC<StatsRowProps> = ({ stats, userRole }) => {
         title: 'Voluntários Ativos', 
         data: stats?.activeVolunteers,
         icon: (
-            <img src={VolunteerIcon} alt="Voluntários Ativos" style={{ filter: 'brightness(0)' }} />
+            <img src={VolunteerIcon} alt="Voluntários Ativos" style={{ filter: 'none' }} />
         ),
         color: 'blue' as const,
     },
@@ -31,7 +31,7 @@ const StatsRow: React.FC<StatsRowProps> = ({ stats, userRole }) => {
         title: 'Departamentos', 
         data: stats?.departments,
         icon: (
-            <img src={DepartamentsIcon} alt="Departamentos" style={{ filter: 'brightness(0)' }} />
+            <img src={DepartamentsIcon} alt="Departamentos" style={{ filter: 'none' }} />
         ),
         color: 'teal' as const,
     },
@@ -39,7 +39,7 @@ const StatsRow: React.FC<StatsRowProps> = ({ stats, userRole }) => {
         title: 'Eventos Hoje', 
         data: stats?.schedulesToday,
         icon: (
-            <img src={CalendarIcon} alt="Eventos Hoje" style={{ filter: 'brightness(0)' }} />
+            <img src={CalendarIcon} alt="Eventos Hoje" style={{ filter: 'none' }} />
         ),
         color: 'purple' as const,
     },
@@ -47,7 +47,7 @@ const StatsRow: React.FC<StatsRowProps> = ({ stats, userRole }) => {
         title: 'Próximos Eventos', 
         data: stats?.upcomingSchedules,
         icon: (
-             <img src={NextEventIcon} alt="Próximos Eventos" style={{ filter: 'brightness(0)' }} />
+             <img src={NextEventIcon} alt="Próximos Eventos" style={{ filter: 'none' }} />
         ),
         color: 'orange' as const,
     },
@@ -55,7 +55,7 @@ const StatsRow: React.FC<StatsRowProps> = ({ stats, userRole }) => {
         title: 'Total de Frequência Anual', 
         data: stats?.annualAttendance,
         icon: (
-             <img src={FrequenciaIcon} alt="Total de Frequência Anual" style={{ filter: 'brightness(0)' }} />
+             <img src={FrequenciaIcon} alt="Total de Frequência Anual" style={{ filter: 'none' }} />
         ),
         color: 'green' as const,
     },
