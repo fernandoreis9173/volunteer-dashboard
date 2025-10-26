@@ -60,9 +60,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4">
             <div className="w-full max-w-md">
-                <div className="flex justify-center mb-6">
-                    <img src={logoNovaUrl} alt="Logo" className="h-16 w-auto" />
-                </div>
+                <div className="flex items-center justify-center space-x-4 mb-6">
+    <img src={logoNovaUrl} alt="Logo" className="h-16 w-auto" />
+    <h1 className="text-3xl font-bold text-slate-800">Volunteers</h1>
+</div>
 
                 <div className="p-6 sm:p-8 space-y-8 bg-white rounded-2xl shadow-lg">
                     <div className="text-left">
