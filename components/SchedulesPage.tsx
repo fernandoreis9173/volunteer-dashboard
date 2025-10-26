@@ -259,7 +259,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         
         docInstance.setFontSize(10);
         docInstance.setTextColor(150);
-        docInstance.text('Volunteers - Sistema da Igreja', 14, 10);
+        docInstance.text('Volunteers - Amar e servir', 14, 10);
         docInstance.text(`Gerado em: ${today}`, docInstance.internal.pageSize.width - 14, 10, { align: 'right' });
         docInstance.setDrawColor(226, 232, 240); // slate-200
         docInstance.line(14, 13, docInstance.internal.pageSize.width - 14, 13);

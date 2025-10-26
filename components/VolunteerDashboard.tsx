@@ -345,7 +345,20 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                     {isUpcoming && event.status === 'Confirmado' && (
                         isSwapPending ? (
                             <div className="px-3 py-1.5 bg-yellow-100 text-yellow-700 font-semibold rounded-lg text-sm flex items-center gap-2 w-full sm:w-auto justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    className="h-5 w-5" 
+    fill="none" 
+    viewBox="0 0 24 24" 
+    stroke="currentColor" 
+    strokeWidth="1.5"
+>
+    <path 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" 
+    />
+</svg>
                                 Troca Pendente
                             </div>
                         ) : (

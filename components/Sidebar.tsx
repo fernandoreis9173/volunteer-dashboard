@@ -136,7 +136,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
               {/* </div> */}
               <div>
                 <h1 className="text-xl font-bold text-slate-800">Volunteers</h1>
-                <p className="text-sm text-slate-500">Sistema da Igreja</p>
+                <p className="text-sm text-slate-500">Amar e servir</p>
               </div>
             </div>
             <button onClick={() => setIsOpen(false)} className="lg:hidden p-1 text-slate-500 hover:text-slate-800">
