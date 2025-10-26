@@ -61,14 +61,14 @@ interface NavItemData {
 
 const allNavItems: NavItemData[] = [
     { page: 'dashboard', label: 'Dashboard', icon: <img src={DashboardIcon} alt="Dashboard" />, roles: ['admin', 'leader', 'volunteer'] },
-    { page: 'history', label: 'Histórico', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm0 5.25h.007v.008H3.75V12zm0 5.25h.007v.008H3.75v-.008z" /></svg>, roles: ['volunteer'] },
-    { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIcon} alt="Notificações" />, roles: ['leader', 'volunteer'] },
+    { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIcon} alt="Notificações" />, roles: ['leader', 'volunteer'] },  
+    { page: 'history', label: 'Histórico', icon: <img src="/assets/icons/history.svg" alt="Histórico" />, roles: ['volunteer'] },
     { page: 'volunteers', label: 'Voluntários', icon: <img src={VolunteerIcon} alt="Voluntários" />, roles: ['admin', 'leader'] },
     { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIcon} alt="Departamentos" />, roles: ['admin'] },
-    { page: 'events', label: 'Eventos (Lista)', icon: <img src={EventosIcon} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },
-    { page: 'admin', label: 'Admin', icon: <img src={AdminIcon} alt="Admin" />, roles: ['admin'] },
-    { page: 'frequency', label: 'Frequência', icon: <img src={FrequenciaIcon} alt="Frequência" />, roles: ['admin'] },
+    { page: 'events', label: 'Eventos', icon: <img src={EventosIcon} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },
     { page: 'calendar', label: 'Calendário', icon: <img src={CalendarIcon} alt="Calendário" />, roles: ['admin', 'leader'] },
+    { page: 'frequency', label: 'Frequência', icon: <img src={FrequenciaIcon} alt="Frequência" />, roles: ['admin'] },
+    { page: 'admin', label: 'Admin', icon: <img src={AdminIcon} alt="Admin" />, roles: ['admin'] },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewEvent, isOpen, setIsOpen, userRole, session, unreadCount, pushPermissionStatus, onSubscribeToPush, canInstallPwa, onInstallPrompt }) => {
@@ -178,9 +178,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                   </button>
                  )}
                  {pushPermissionStatus === 'default' && (
-                    <button onClick={onSubscribeToPush} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-amber-800 bg-amber-100 hover:bg-amber-200 font-semibold">
+                    <button onClick={onSubscribeToPush} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-amber-800 bg-amber-100 hover:bg-amber-200 font-semibold text-sm">
                         <img src={NotificationIcon} alt="Ativar Notificações" className="h-5 w-5 brightness-0" />
-                        <span style={{ color: '#000000' }}>Ativar Notificações</span>
+                        <span style={{ color: 'rgba(0, 0, 0, 1)' }}>Ativar Notificações</span>
                     </button>
                  )}
               </div>
@@ -190,14 +190,19 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
         <div ref={userMenuRef} className="mt-auto pt-6 border-t border-slate-200 relative">
             {canInstallPwa && (
                 <div className="mb-4">
-                    <button
-                        onClick={onInstallPrompt}
-                        className="flex items-center space-x-3 px-4 py-2.5 rounded-lg w-full text-left text-blue-800 bg-blue-100 hover:bg-blue-200 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
-                        aria-label="Adicionar aplicativo à tela inicial"
-                    >
-                        <img src={InstallAppIcon} alt="Instalar App" className="h-5 w-5" style={{ filter: 'brightness(0) saturate(100%) invert(16%) sepia(69%) saturate(5312%) hue-rotate(226deg) brightness(95%) contrast(100%)' }} />
-                        <span style={{ color: '#000000' }}>Instalar App</span>
-                    </button>
+                   <button
+    onClick={onInstallPrompt}
+    className="flex items-center space-x-3 px-4 py-2.5 rounded-lg w-full text-left text-blue-800 bg-blue-100 hover:bg-blue-200 font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+    aria-label="Adicionar aplicativo à tela inicial"
+>
+    <img 
+        src={InstallAppIcon} 
+        alt="Instalar App" 
+        className="h-5 w-5" 
+        style={{ filter: 'brightness(0) saturate(100%) invert(16%) sepia(69%) saturate(5312%) hue-rotate(226deg) brightness(95%) contrast(100%)' }} 
+    />
+    <span>Instalar App</span>
+</button>
                 </div>
             )}
             <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="flex items-center space-x-3 w-full p-2 rounded-lg hover:bg-slate-100">

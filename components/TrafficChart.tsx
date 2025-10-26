@@ -169,7 +169,7 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({ data }) => {
     for (let i = 0; i < 12; i++) {
         const monthDate = new Date(currentYear, i, 2);
         const monthKey = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-        const monthNameRaw = monthDate.toLocaleDateString('pt-BR', { month: 'long' });
+        const monthNameRaw = monthDate.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
         const monthName = monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1);
         
         yearChartData.push({

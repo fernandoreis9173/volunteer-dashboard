@@ -36,7 +36,6 @@ const areApiKeysConfigured =
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
-    
 
 interface UserProfileState {
   role: string | null;
@@ -91,7 +90,6 @@ const App: React.FC = () => {
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
-  const [isUserDisabled, setIsUserDisabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -110,6 +108,7 @@ const App: React.FC = () => {
 
   const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
   const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
+  const isUserDisabled = useMemo(() => userProfile?.status === 'Inativo', [userProfile]);
 
   const hasPermission = useMemo(() => {
     if (!userProfile?.role) {
@@ -126,12 +125,10 @@ const App: React.FC = () => {
         const userRole = currentSession.user.user_metadata?.role;
 
         if (userStatus === 'Inativo') {
-            setIsUserDisabled(true);
             setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
             setIsLoading(false); // Stop loading, render disabled page.
             return;
         }
-        setIsUserDisabled(false);
 
         if (!userRole) {
             console.error("User role not found in metadata.");
@@ -457,16 +454,16 @@ const App: React.FC = () => {
                 (payload) => {
                     const updatedVolunteer = payload.new as DetailedVolunteer;
                     
-                    // If status changes to Inativo and user is not already marked as disabled
-                    if (updatedVolunteer.status === 'Inativo' && !isUserDisabled) {
-                        setIsUserDisabled(true);
-                        // Update the local profile state to reflect the change
-                        setUserProfile(prev => prev ? { ...prev, status: 'Inativo' } : null);
-                    } 
-                    // If status changes back to Ativo and user was marked as disabled
-                    else if (updatedVolunteer.status === 'Ativo' && isUserDisabled) {
-                        // Refetch all user data to ensure state is fully consistent
-                        refetchUserData();
+                    // Only react to a change if the new status is different from the one we have in state.
+                    // This prevents race conditions on initial subscription.
+                    if (userProfile && updatedVolunteer.status !== userProfile.status) {
+                        if (updatedVolunteer.status === 'Inativo') {
+                            // Directly update the profile to 'Inativo'. The derived `isUserDisabled` state will trigger the UI change.
+                            setUserProfile(prev => prev ? { ...prev, status: 'Inativo' } : null);
+                        } else if (updatedVolunteer.status === 'Ativo') {
+                            // If status changes back to active, refetch all data to ensure consistency.
+                            refetchUserData();
+                        }
                     }
                 }
             )
@@ -475,7 +472,7 @@ const App: React.FC = () => {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [session, userProfile, isUserDisabled, refetchUserData]);
+    }, [session, userProfile, refetchUserData]);
 
     const subscribeToPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {

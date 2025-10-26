@@ -19,9 +19,12 @@ const DepartmentCard: React.FC<DepartmentCardProps> = ({ department, onEdit, onD
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-4">
           <div className={`w-12 h-12 rounded-full ${isLeaderDepartment ? 'bg-blue-100 text-blue-500' : 'bg-blue-100 text-blue-500'} flex-shrink-0 flex items-center justify-center`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18h16.5M5.25 6H18.75m-13.5 0V21m13.5-15V21m-10.5-9.75h.008v.008H8.25v-.008ZM8.25 15h.008v.008H8.25V15Zm3.75-9.75h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm3.75-9.75h.008v.008H15.75v-.008ZM15.75 15h.008v.008H15.75V15Z" />
-            </svg>
+            <img 
+    src="/assets/icons/departaments.svg" 
+    alt="Departamentos" 
+    className="h-6 w-6"
+    style={{ filter: 'brightness(0) saturate(100%) invert(21%) sepia(96%) saturate(3571%) hue-rotate(216deg) brightness(91%) contrast(101%)' }}
+/>
           </div>
           <div>
             <p className="font-bold text-slate-800 text-lg">{department.name}</p>

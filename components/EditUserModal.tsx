@@ -1,6 +1,7 @@
 
 
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 // FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
 import type { User } from '@supabase/supabase-js';
 
@@ -53,7 +54,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
 
     if (!isOpen) return null;
 
-    return (
+    const modalContent = (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-40 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 m-4">
                 <div className="flex justify-between items-center mb-4">
@@ -98,6 +99,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ isOpen, onClose, user, on
             </div>
         </div>
     );
+
+    return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default EditUserModal;

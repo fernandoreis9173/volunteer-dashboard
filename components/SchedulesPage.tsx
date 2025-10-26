@@ -818,25 +818,51 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
             )}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                <h1 className="text-3xl font-bold text-slate-800">Eventos (Lista)</h1>
-                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas da igreja</p>
+                <h1 className="text-3xl font-bold text-slate-800">Eventos</h1>
+                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button 
-                        onClick={handleExportPDF}
-                        className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span>Exportar PDF</span>
-                    </button>
+                   <button 
+    onClick={handleExportPDF}
+    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
+>
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        className="h-5 w-5" 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor"
+    >
+        <path 
+            strokeWidth={1.5} 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+        />
+    </svg>
+    <span>Exportar PDF</span>
+</button>
                     {isAdmin && (
-                        <button 
-                        onClick={() => { setEditingEvent(null); showForm(); }}
-                        className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span>Novo Evento</span>
-                        </button>
+                      <button 
+    onClick={() => { setEditingEvent(null); showForm(); }}
+    className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
+>
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        className="h-5 w-5" 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor"
+    >
+        <path 
+            strokeWidth={1.5} 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" 
+        />
+    </svg>
+    <span>Novo Evento</span>
+</button>
                     )}
                 </div>
             </div>

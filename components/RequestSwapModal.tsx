@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import { DashboardEvent } from '../types';
 
 interface RequestSwapModalProps {
@@ -19,9 +20,9 @@ const RequestSwapModal: React.FC<RequestSwapModalProps> = ({ isOpen, onClose, on
     onSubmit(reason);
   };
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 w-screen h-screen bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 transition-opacity duration-300"
+      className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 transition-opacity duration-300"
       aria-labelledby="modal-title"
       role="dialog"
       aria-modal="true"
@@ -83,6 +84,8 @@ const RequestSwapModal: React.FC<RequestSwapModalProps> = ({ isOpen, onClose, on
       `}</style>
     </div>
   );
+
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default RequestSwapModal;

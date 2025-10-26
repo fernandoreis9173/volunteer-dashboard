@@ -164,9 +164,9 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNaviga
 
         let todaySchedulesQuery;
         if (leaderDepartmentId) {
-            todaySchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments!inner(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').eq('date', todayStr).eq('event_departments.department_id', leaderDepartmentId).order('start_time');
+            todaySchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments!inner(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').eq('date', todayStr).eq('event_departments.department_id', leaderDepartmentId).order('start_time');
         } else {
-            todaySchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').eq('date', todayStr).order('start_time');
+            todaySchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').eq('date', todayStr).order('start_time');
         }
 
         const [
@@ -222,9 +222,9 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNaviga
 
         let upcomingSchedulesQuery;
         if (leaderDepartmentId) {
-            upcomingSchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments!inner(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').gt('date', todayStr).lte('date', next7DaysStr).eq('event_departments.department_id', leaderDepartmentId).order('date').order('start_time').limit(10);
+            upcomingSchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments!inner(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').gt('date', todayStr).lte('date', next7DaysStr).eq('event_departments.department_id', leaderDepartmentId).order('date').order('start_time').limit(10);
         } else {
-            upcomingSchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, event_departments(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').gt('date', todayStr).lte('date', next7DaysStr).order('date').order('start_time').limit(10);
+            upcomingSchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').gt('date', todayStr).lte('date', next7DaysStr).order('date').order('start_time').limit(10);
         }
 
         let activeLeadersQuery = Promise.resolve({ data: { users: [] }, error: null });
@@ -421,7 +421,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNaviga
         </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
         <div className="lg:col-span-2">
           <UpcomingShiftsList
             todaySchedules={dashboardData.todaySchedules}

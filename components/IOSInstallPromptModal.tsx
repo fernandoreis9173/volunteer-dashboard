@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 
 interface IOSInstallPromptModalProps {
   isOpen: boolean;
@@ -8,7 +9,7 @@ interface IOSInstallPromptModalProps {
 const IOSInstallPromptModal: React.FC<IOSInstallPromptModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
       className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-end justify-center p-4 sm:items-center"
       onClick={onClose}
@@ -72,6 +73,8 @@ const IOSInstallPromptModal: React.FC<IOSInstallPromptModalProps> = ({ isOpen, o
       `}</style>
     </div>
   );
+  
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default IOSInstallPromptModal;

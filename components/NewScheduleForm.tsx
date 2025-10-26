@@ -40,14 +40,27 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                     </div>
                     <p className="font-semibold text-slate-800 text-sm truncate">{volunteer.name}</p>
                 </div>
-                <button
-                    type="button"
-                    onClick={onAction}
-                    className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-red-600 bg-red-100 hover:bg-red-200"
-                    aria-label={`Remover ${volunteer.name}`}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} ><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+              <button
+    type="button"
+    onClick={onAction}
+    className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-red-600 bg-red-100 hover:bg-red-200"
+    aria-label={`Remover ${volunteer.name}`}
+>
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        className="h-5 w-5" 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor" 
+        strokeWidth={1.5}
+    >
+        <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M6 18L18 6M6 6l12 12" 
+        />
+    </svg>
+</button>
             </div>
         );
     }
@@ -72,15 +85,28 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                     </div>
                 </div>
             </div>
-            <button
-                type="button"
-                onClick={onAction}
-                disabled={isAlreadyScheduled}
-                className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-green-600 bg-green-100 hover:bg-green-200 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
-                aria-label={`Adicionar ${volunteer.name}`}
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} ><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-            </button>
+         <button
+    type="button"
+    onClick={onAction}
+    disabled={isAlreadyScheduled}
+    className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-green-600 bg-green-100 hover:bg-green-200 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+    aria-label={`Adicionar ${volunteer.name}`}
+>
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        className="h-5 w-5" 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor" 
+        strokeWidth={1.5}
+    >
+        <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M12 4.5v15m7.5-7.5h-15" 
+        />
+    </svg>
+</button>
         </div>
     );
 };
