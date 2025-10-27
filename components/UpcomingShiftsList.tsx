@@ -43,9 +43,14 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
                 aria-label="Marcar presença"
                 title="Marcar Presença"
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
-                </svg>
+               <img 
+    src="/assets/icons/scanner.svg" 
+    alt="Scanner" 
+    className="h-5 w-5 cursor-pointer transition-all"
+    style={{ filter: 'brightness(0) saturate(100%) invert(29%) sepia(8%) saturate(1038%) hue-rotate(183deg) brightness(95%) contrast(87%)' }}
+    onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0) saturate(100%) invert(64%) sepia(98%) saturate(561%) hue-rotate(81deg) brightness(95%) contrast(87%)'}
+    onMouseLeave={(e) => e.currentTarget.style.filter = 'brightness(0) saturate(100%) invert(29%) sepia(8%) saturate(1038%) hue-rotate(183deg) brightness(95%) contrast(87%)'}
+/>
             </button>
         )}
         <button 
@@ -54,9 +59,20 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
             aria-label="Ver detalhes do evento"
             title="Ver detalhes"
         >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+           <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    className="h-5 w-5 text-slate-600 hover:text-blue-500 transition-colors cursor-pointer" 
+    fill="none" 
+    viewBox="0 0 24 24" 
+    stroke="currentColor" 
+    strokeWidth="1.5"
+>
+    <path 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
+    />
+</svg>
         </button>
       </div>
 
@@ -75,8 +91,24 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
             </svg>
             <span>{schedule.start_time} - {schedule.end_time}</span>
           </div>
+           {schedule.local && (
+            <div className="flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                </svg>
+                <span>{schedule.local}</span>
+            </div>
+          )}
         </div>
       </div>
+      
+      {schedule.observations && (
+        <div className="mt-3 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <p className="font-semibold text-slate-500 mb-1 uppercase tracking-wider">Observações</p>
+            <p className="whitespace-pre-wrap">{schedule.observations}</p>
+        </div>
+      )}
 
       <div className="flex-grow"></div>
 
@@ -157,7 +189,7 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
             <FilterButton label="Próximos" value="upcoming" activeValue={activeFilter} onClick={setActiveFilter} />
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow">
         {loading && activeFilter === 'upcoming' ? null : loading ? (
             Array.from({ length: 2 }).map((_, index) => (
                 <div key={index} className="bg-slate-50 p-5 rounded-xl border border-slate-200 animate-pulse w-full">

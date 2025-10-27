@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import EventCard from './EventCard';
 import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
@@ -41,9 +41,27 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
   const [dateFilters, setDateFilters] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showOnlyMyDepartmentEvents, setShowOnlyMyDepartmentEvents] = useState(false);
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
   const isAdmin = userRole === 'admin';
+
+  const showForm = useCallback(() => {
+    setSaveError(null);
+    setIsFormOpen(true);
+  }, [setIsFormOpen]);
+
+  const hideForm = useCallback(() => {
+    setIsFormOpen(false);
+    setEditingEvent(null);
+  }, [setIsFormOpen]);
+  
+  const handleEditEvent = useCallback((event: Event) => {
+    setEditingEvent(event);
+    showForm();
+  }, [showForm]);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -133,6 +151,17 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
   }, [scanningEvent, leaderDepartmentId, showNotification]);
 
   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+            setIsStatusDropdownOpen(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+
+  useEffect(() => {
     fetchEvents();
     const highlightId = sessionStorage.getItem('highlightEventId');
     if (highlightId) {
@@ -140,6 +169,17 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         sessionStorage.removeItem('highlightEventId');
     }
   }, [fetchEvents]);
+
+  useEffect(() => {
+    const editId = sessionStorage.getItem('editEventId');
+    if (editId && masterEvents.length > 0) {
+        sessionStorage.removeItem('editEventId');
+        const eventToEdit = masterEvents.find(e => e.id === parseInt(editId, 10));
+        if (eventToEdit) {
+            handleEditEvent(eventToEdit);
+        }
+    }
+  }, [masterEvents, handleEditEvent]);
 
   const filteredEvents = useMemo(() => {
     let events = [...masterEvents];
@@ -185,15 +225,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, dateFilters, statusFilter, showOnlyMyDepartmentEvents]);
-
-  const showForm = () => {
-    setSaveError(null);
-    setIsFormOpen(true);
-  };
-  const hideForm = () => {
-    setIsFormOpen(false);
-    setEditingEvent(null);
-  };
   
   const handleStartDateChange = (value: string) => {
     setDateFilters(prev => ({ ...prev, start: value }));
@@ -228,7 +259,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         
         docInstance.setFontSize(10);
         docInstance.setTextColor(150);
-        docInstance.text('Volunteers - Sistema da Igreja', 14, 10);
+        docInstance.text('Volunteers - Amar e servir', 14, 10);
         docInstance.text(`Gerado em: ${today}`, docInstance.internal.pageSize.width - 14, 10, { align: 'right' });
         docInstance.setDrawColor(226, 232, 240); // slate-200
         docInstance.line(14, 13, docInstance.internal.pageSize.width - 14, 13);
@@ -460,10 +491,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
     doc.save('relatorio-eventos.pdf');
   };
 
-  const handleEditEvent = (event: Event) => {
-    setEditingEvent(event);
-    showForm();
-  };
   
    const handleMarkAttendance = (event: Event) => {
     setScanningEvent(event);
@@ -686,6 +713,15 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         if (loading) return <p className="text-center text-slate-500 mt-10">Carregando eventos...</p>;
         if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
 
+        const statusFilterOptions = [
+            { value: 'all', label: 'Todos os Status' },
+            { value: 'Confirmado', label: 'Confirmado' },
+            { value: 'Pendente', label: 'Pendente' },
+            { value: 'Cancelado', label: 'Cancelado' },
+        ];
+        const selectedStatusLabel = statusFilterOptions.find(o => o.value === statusFilter)?.label;
+
+
         return (
             <div className="space-y-6">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
@@ -693,12 +729,40 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                         <input type="text" placeholder="Buscar por nome do evento..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
                         <CustomDatePicker name="start" value={dateFilters.start} onChange={(value: string) => setDateFilters(prev => ({ ...prev, start: value }))} />
                         <CustomDatePicker name="end" value={dateFilters.end} onChange={(value: string) => setDateFilters(prev => ({ ...prev, end: value }))} />
-                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
-                            <option value="all">Todos os Status</option>
-                            <option value="Confirmado">Confirmado</option>
-                            <option value="Pendente">Pendente</option>
-                            <option value="Cancelado">Cancelado</option>
-                        </select>
+                        <div className="relative" ref={statusDropdownRef}>
+                            <button
+                                type="button"
+                                onClick={() => setIsStatusDropdownOpen(prev => !prev)}
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer text-left h-full"
+                                aria-haspopup="listbox"
+                                aria-expanded={isStatusDropdownOpen}
+                            >
+                                <span className="text-slate-900">{selectedStatusLabel}</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+</svg>
+                            </button>
+                            {isStatusDropdownOpen && (
+                                <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
+                                    <ul className="py-1" role="listbox">
+                                        {statusFilterOptions.map(option => (
+                                            <li
+                                                key={option.value}
+                                                onClick={() => {
+                                                    setStatusFilter(option.value);
+                                                    setIsStatusDropdownOpen(false);
+                                                }}
+                                                className={`px-4 py-2 hover:bg-slate-100 cursor-pointer text-sm ${statusFilter === option.value ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                                                role="option"
+                                                aria-selected={statusFilter === option.value}
+                                            >
+                                                {option.label}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4">
                         {isLeader && (
@@ -754,25 +818,51 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
             )}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                <h1 className="text-3xl font-bold text-slate-800">Eventos (Lista)</h1>
-                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas da igreja</p>
+                <h1 className="text-3xl font-bold text-slate-800">Eventos</h1>
+                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button 
-                        onClick={handleExportPDF}
-                        className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span>Exportar PDF</span>
-                    </button>
+                   <button 
+    onClick={handleExportPDF}
+    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
+>
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        className="h-5 w-5" 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor"
+    >
+        <path 
+            strokeWidth={1.5} 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+        />
+    </svg>
+    <span>Exportar PDF</span>
+</button>
                     {isAdmin && (
-                        <button 
-                        onClick={() => { setEditingEvent(null); showForm(); }}
-                        className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span>Novo Evento</span>
-                        </button>
+                      <button 
+    onClick={() => { setEditingEvent(null); showForm(); }}
+    className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
+>
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        className="h-5 w-5" 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor"
+    >
+        <path 
+            strokeWidth={1.5} 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" 
+        />
+    </svg>
+    <span>Novo Evento</span>
+</button>
                     )}
                 </div>
             </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import QRCode from 'qrcode';
 
 interface QRCodeDisplayModalProps {
@@ -24,7 +25,7 @@ const QRCodeDisplayModal: React.FC<QRCodeDisplayModalProps> = ({ isOpen, onClose
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
       className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4 transition-opacity duration-300"
       aria-labelledby="modal-title"
@@ -75,6 +76,8 @@ const QRCodeDisplayModal: React.FC<QRCodeDisplayModalProps> = ({ isOpen, onClose
       `}</style>
     </div>
   );
+
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default QRCodeDisplayModal;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
@@ -30,7 +30,19 @@ const FrequencyPage: React.FC = () => {
     
     const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
+    const [isAttendanceDropdownOpen, setIsAttendanceDropdownOpen] = useState(false);
+    const attendanceDropdownRef = useRef<HTMLDivElement>(null);
     
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (attendanceDropdownRef.current && !attendanceDropdownRef.current.contains(event.target as Node)) {
+                setIsAttendanceDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const fetchEvents = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -392,6 +404,13 @@ const FrequencyPage: React.FC = () => {
             </div>
         )
     };
+    
+    const attendanceFilterOptions = [
+        { value: 'all', label: 'Toda a Frequência' },
+        { value: 'present', label: 'Confirmados (Presente)' },
+        { value: 'absent', label: 'Não Confirmados (Faltou)' },
+    ];
+    const selectedAttendanceLabel = attendanceFilterOptions.find(o => o.value === attendanceFilter)?.label;
 
     return (
         <div className="space-y-6">
@@ -401,23 +420,65 @@ const FrequencyPage: React.FC = () => {
                     <p className="text-slate-500 mt-1">Monitore a presença dos voluntários nos eventos confirmados.</p>
                 </div>
                 <button 
-                    onClick={handleExportPDF}
-                    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm w-full md:w-auto justify-center"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-                    <span>Exportar PDF</span>
-                </button>
+    onClick={handleExportPDF}
+    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm w-full md:w-auto justify-center"
+>
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        className="h-5 w-5" 
+        fill="none" 
+        viewBox="0 0 24 24" 
+        stroke="currentColor" 
+        strokeWidth={1.5}
+    >
+        <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" 
+        />
+    </svg>
+    <span>Exportar PDF</span>
+</button>
             </div>
 
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     <CustomDatePicker name="start" value={dateFilters.start} onChange={(val) => setDateFilters(p => ({...p, start: val}))} />
                     <CustomDatePicker name="end" value={dateFilters.end} onChange={(val) => setDateFilters(p => ({...p, end: val}))} />
-                    <select value={attendanceFilter} onChange={(e) => setAttendanceFilter(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg">
-                        <option value="all">Toda a Frequência</option>
-                        <option value="present">Confirmados (Presente)</option>
-                        <option value="absent">Não Confirmados (Faltou)</option>
-                    </select>
+                    <div className="relative" ref={attendanceDropdownRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsAttendanceDropdownOpen(prev => !prev)}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer text-left h-full"
+                            aria-haspopup="listbox"
+                            aria-expanded={isAttendanceDropdownOpen}
+                        >
+                            <span className="text-slate-900">{selectedAttendanceLabel}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isAttendanceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        {isAttendanceDropdownOpen && (
+                            <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
+                                <ul className="py-1" role="listbox">
+                                    {attendanceFilterOptions.map(option => (
+                                        <li
+                                            key={option.value}
+                                            onClick={() => {
+                                                setAttendanceFilter(option.value);
+                                                setIsAttendanceDropdownOpen(false);
+                                            }}
+                                            className={`px-4 py-2 hover:bg-slate-100 cursor-pointer text-sm ${attendanceFilter === option.value ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                                            role="option"
+                                            aria-selected={attendanceFilter === option.value}
+                                        >
+                                            {option.label}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
                     <button onClick={handleSetToday} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
                         Hoje
                     </button>

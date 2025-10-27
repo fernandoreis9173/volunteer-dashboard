@@ -34,3 +34,27 @@ export const getErrorMessage = (error: any): string => {
     }
     return 'Ocorreu um erro desconhecido. Tente novamente.';
 };
+
+
+export const parseArrayFromString = (data: string[] | string | null | undefined): string[] => {
+    let items: string[] = [];
+    if (!data) return [];
+
+    if (Array.isArray(data)) {
+        items = data;
+    } else if (typeof data === 'string') {
+        if (data.startsWith('[') && data.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(data);
+                if (Array.isArray(parsed)) items = parsed;
+            } catch (e) { /* ignore */ }
+        }
+        else if (data.startsWith('{') && data.endsWith('}')) {
+             items = data.substring(1, data.length - 1).split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+        }
+        else if (data.trim()) {
+            items = data.split(',').map(s => s.trim());
+        }
+    }
+    return items.filter(item => item && item.trim() !== '');
+};

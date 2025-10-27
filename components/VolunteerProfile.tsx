@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { DetailedVolunteer } from '../types';
-import { getErrorMessage } from '../lib/utils';
+import { getErrorMessage, parseArrayFromString } from '../lib/utils';
 
 interface VolunteerProfileProps {
     session: Session | null;
@@ -17,30 +17,6 @@ const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = (
   };
   return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
 };
-
-const parseArrayFromString = (data: string[] | string | null | undefined): string[] => {
-    let items: string[] = [];
-    if (!data) return [];
-
-    if (Array.isArray(data)) {
-        items = data;
-    } else if (typeof data === 'string') {
-        if (data.startsWith('[') && data.endsWith(']')) {
-            try {
-                const parsed = JSON.parse(data);
-                if (Array.isArray(parsed)) items = parsed;
-            } catch (e) { /* ignore */ }
-        }
-        else if (data.startsWith('{') && data.endsWith('}')) {
-             items = data.substring(1, data.length - 1).split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-        }
-        else if (data.trim()) {
-            items = data.split(',').map(s => s.trim());
-        }
-    }
-    return items.filter(item => item && item.trim() !== '');
-};
-
 
 const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }) => {
     const [volunteerData, setVolunteerData] = useState<DetailedVolunteer | null>(null);

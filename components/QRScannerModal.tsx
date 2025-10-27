@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-// FIX: Corrected type names for Html5QrcodeScanner callbacks from 'QrCodeSuccessCallback' and 'QrCodeErrorCallback' to 'QrcodeSuccessCallback' and 'QrcodeErrorCallback' to match the library's exported types.
-import { Html5QrcodeScanner, Html5QrcodeScanType, QrcodeSuccessCallback, QrcodeErrorCallback } from 'html5-qrcode';
+import React, { useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface QRScannerModalProps {
   isOpen: boolean;
@@ -10,83 +10,74 @@ interface QRScannerModalProps {
 }
 
 const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScanSuccess, scanningEventName }) => {
+  const qrcodeRegionId = "qr-reader-region";
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+
   useEffect(() => {
     if (!isOpen) {
       return;
     }
-
-    const qrCodeRegionId = "qr-reader";
-    let html5QrcodeScanner: Html5QrcodeScanner | null = null;
-
-    // Creates a new scanner
-    html5QrcodeScanner = new Html5QrcodeScanner(
-      qrCodeRegionId,
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-        videoConstraints: {
-            facingMode: "environment"
-        }
-      },
-      /* verbose= */ false
-    );
-
-    const successCallback: QrcodeSuccessCallback = (decodedText, decodedResult) => {
-      onScanSuccess(decodedText);
-      if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear().catch(error => {
-          console.error("Failed to clear html5-qrcode-scanner.", error);
+    
+    const cleanup = () => {
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        html5QrCodeRef.current.stop().catch(err => {
+          console.error("Failed to stop QR scanner.", err);
         });
+        html5QrCodeRef.current = null;
       }
     };
 
-    const errorCallback: QrcodeErrorCallback = (errorMessage) => {
-      // handle scan error, usually not needed to show to user.
+    const startScanner = async () => {
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length) {
+          let cameraId = devices[0].id;
+          const rearCamera = devices.find(device => 
+            device.label.toLowerCase().includes('back') || 
+            device.label.toLowerCase().includes('trás') ||
+            device.label.toLowerCase().includes('environment')
+          );
+          if (rearCamera) {
+            cameraId = rearCamera.id;
+          }
+
+          html5QrCodeRef.current = new Html5Qrcode(qrcodeRegionId, false);
+          await html5QrCodeRef.current.start(
+            cameraId,
+            {
+              fps: 10,
+              qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                const qrboxSize = Math.floor(minEdge * 0.8);
+                return { width: qrboxSize, height: qrboxSize };
+              },
+            },
+            (decodedText, decodedResult) => {
+              onScanSuccess(decodedText);
+              cleanup();
+            },
+            (errorMessage) => {
+              // parse error, not a valid QR code
+            }
+          );
+        } else {
+          console.error("No cameras found.");
+        }
+      } catch (err) {
+        console.error("Error starting QR scanner:", err);
+      }
     };
 
-    html5QrcodeScanner.render(successCallback, errorCallback);
-    
-    // --- Localization Workaround ---
-    // The html5-qrcode library doesn't have built-in localization.
-    // We'll use an interval to check for the elements and translate them once they appear.
-    const localizationInterval = setInterval(() => {
-        const permissionButton = document.getElementById('qr-reader__dashboard_section_csr_button');
-        let buttonFoundAndTranslated = false;
-
-        if (permissionButton && permissionButton.innerText.toLowerCase().includes('request camera permissions')) {
-            permissionButton.innerText = 'Solicitar Permissão da Câmera';
-            buttonFoundAndTranslated = true;
-        }
-
-        const fileScanLink = document.getElementById('qr-reader__dashboard_section_swaplink');
-        if (fileScanLink && fileScanLink.innerText.toLowerCase().includes('scan an image file')) {
-            fileScanLink.innerText = 'Escanear de um Arquivo de Imagem';
-        }
-
-        // Once the button is translated or disappears (after permission is granted), stop the interval.
-        if (buttonFoundAndTranslated || !permissionButton) {
-            clearInterval(localizationInterval);
-        }
-    }, 100);
-    // --- End of Localization Workaround ---
+    startScanner();
 
     return () => {
-      clearInterval(localizationInterval); // Ensure cleanup on component unmount.
-      if (html5QrcodeScanner) {
-        const scannerState = html5QrcodeScanner.getState();
-        if (scannerState && scannerState !== 1 /* NOT_STARTED */) {
-            html5QrcodeScanner.clear().catch(error => {
-              console.error("Failed to clear html5-qrcode-scanner on cleanup.", error);
-            });
-        }
-      }
+      cleanup();
     };
   }, [isOpen, onScanSuccess]);
 
   if (!isOpen) return null;
 
-  return (
+  const modalContent = (
     <div
       className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4 transition-opacity duration-300"
       aria-labelledby="modal-title"
@@ -103,7 +94,16 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             Alinhe o QR Code do voluntário para o evento <br/> <span className="font-semibold">{scanningEventName}</span>.
         </p>
         
-        <div className="my-6 w-full max-w-xs mx-auto aspect-square overflow-hidden rounded-lg" id="qr-reader"></div>
+        <div className="my-6 w-full max-w-xs mx-auto aspect-square overflow-hidden rounded-lg relative bg-slate-900">
+            <div id={qrcodeRegionId} className="w-full h-full"></div>
+            <div className="absolute inset-0 scanner-overlay">
+                <div className="scanner-line"></div>
+                <div className="corner top-left"></div>
+                <div className="corner top-right"></div>
+                <div className="corner bottom-left"></div>
+                <div className="corner bottom-right"></div>
+            </div>
+        </div>
 
         <button
             type="button"
@@ -114,28 +114,51 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
         </button>
       </div>
        <style>{`
-        #qr-reader {
+        #${qrcodeRegionId} {
+            width: 100%;
+            height: 100%;
             border: none !important;
         }
-        #qr-reader video {
+        #${qrcodeRegionId} video {
             width: 100% !important;
             height: 100% !important;
             object-fit: cover !important;
         }
-        #qr-reader__dashboard_section_csr button {
-            background-color: #3b82f6 !important; /* blue-600 */
-            color: white !important;
-            border: none !important;
-            padding: 8px 16px !important;
-            border-radius: 8px !important;
-            margin-top: 1rem !important;
-            font-size: 0.875rem !important;
-            font-weight: 600 !important;
+
+        .scanner-overlay {
+            position: absolute;
+            inset: 0;
+            box-shadow: inset 0 0 0 50vmax rgba(0,0,0,0.5); /* Creates the "window" effect */
         }
-        #qr-reader__dashboard_section_swaplink {
-            color: #3b82f6 !important; /* blue-600 */
-            font-size: 0.875rem !important;
+        
+        .scanner-line {
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            height: 2px;
+            background: #ef4444; /* red-500 */
+            box-shadow: 0 0 10px #ef4444;
+            animation: scan 2.5s infinite linear;
         }
+
+        .corner {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 5px solid #ef4444;
+        }
+        .corner.top-left { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+        .corner.top-right { top: 10px; right: 10px; border-left: none; border-bottom: none; }
+        .corner.bottom-left { bottom: 10px; left: 10px; border-right: none; border-top: none; }
+        .corner.bottom-right { bottom: 10px; right: 10px; border-left: none; border-top: none; }
+
+
+        @keyframes scan {
+            0% { top: 5%; }
+            50% { top: 95%; }
+            100% { top: 5%; }
+        }
+
         @keyframes fade-in-scale {
           from { opacity: 0; transform: scale(0.95); }
           to { opacity: 1; transform: scale(1); }
@@ -146,6 +169,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
       `}</style>
     </div>
   );
+
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default QRScannerModal;

@@ -15,6 +15,7 @@ import { AcceptInvitationPage } from './components/AcceptInvitationPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
 import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
+import AttendanceHistoryPage from './components/AttendanceHistoryPage';
 import VolunteerProfile from './components/VolunteerProfile';
 import UserProfilePage from './components/UserProfilePage';
 import NotificationsPage from './components/NotificationsPage';
@@ -24,7 +25,7 @@ import IOSInstallPromptModal from './components/IOSInstallPromptModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
 import ApiConfigPage from './components/ApiConfigPage'; // Import the config page
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
-import { Page, AuthView, type NotificationRecord, type Event as AppEvent } from './types';
+import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer } from './types';
 import { supabase } from './lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage } from './lib/utils';
@@ -45,6 +46,7 @@ interface UserProfileState {
 
 const pagePermissions: Record<Page, string[]> = {
     'dashboard': ['admin', 'leader', 'volunteer'],
+    'history': ['volunteer'],
     'notifications': ['leader', 'volunteer'],
     'my-profile': ['admin', 'leader', 'volunteer'],
     'volunteers': ['admin', 'leader'],
@@ -64,7 +66,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2); 
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -88,7 +90,6 @@ const App: React.FC = () => {
   const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
-  const [isUserDisabled, setIsUserDisabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -107,6 +108,7 @@ const App: React.FC = () => {
 
   const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
   const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
+  const isUserDisabled = useMemo(() => userProfile?.status === 'Inativo', [userProfile]);
 
   const hasPermission = useMemo(() => {
     if (!userProfile?.role) {
@@ -123,12 +125,10 @@ const App: React.FC = () => {
         const userRole = currentSession.user.user_metadata?.role;
 
         if (userStatus === 'Inativo') {
-            setIsUserDisabled(true);
             setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
             setIsLoading(false); // Stop loading, render disabled page.
             return;
         }
-        setIsUserDisabled(false);
 
         if (!userRole) {
             console.error("User role not found in metadata.");
@@ -434,6 +434,46 @@ const App: React.FC = () => {
 
     }, [session, refetchNotificationCount]);
 
+    // Real-time volunteer status subscription
+    useEffect(() => {
+        // Only run for authenticated volunteers
+        if (!session?.user?.id || userProfile?.role !== 'volunteer') {
+            return;
+        }
+
+        const channel = supabase
+            .channel(`realtime-volunteer-status:${session.user.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'volunteers',
+                    filter: `user_id=eq.${session.user.id}`,
+                },
+                (payload) => {
+                    const updatedVolunteer = payload.new as DetailedVolunteer;
+                    
+                    // Only react to a change if the new status is different from the one we have in state.
+                    // This prevents race conditions on initial subscription.
+                    if (userProfile && updatedVolunteer.status !== userProfile.status) {
+                        if (updatedVolunteer.status === 'Inativo') {
+                            // Directly update the profile to 'Inativo'. The derived `isUserDisabled` state will trigger the UI change.
+                            setUserProfile(prev => prev ? { ...prev, status: 'Inativo' } : null);
+                        } else if (updatedVolunteer.status === 'Ativo') {
+                            // If status changes back to active, refetch all data to ensure consistency.
+                            refetchUserData();
+                        }
+                    }
+                }
+            )
+            .subscribe();
+        
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [session, userProfile, refetchUserData]);
+
     const subscribeToPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {
             try {
@@ -480,6 +520,8 @@ const App: React.FC = () => {
 
         if (userProfile.role === 'volunteer') {
              switch (activePage) {
+                case 'history':
+                    return <AttendanceHistoryPage session={session} />;
                 case 'my-profile':
                     return <VolunteerProfile session={session} onUpdate={refetchNotificationCount} />;
                 case 'notifications':

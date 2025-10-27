@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Camada_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 512 512">
+  <!-- Generator: Adobe Illustrator 29.5.1, SVG Export Plug-In . SVG Version: 2.1.0 Build 141)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: url(#Gradiente_sem_nome);
+      }
+
+      .st1 {
+        fill: url(#Gradiente_sem_nome_4);
+      }
+
+      .st2 {
+        fill: url(#Gradiente_sem_nome_2);
+      }
+
+      .st3 {
+        fill: url(#Gradiente_sem_nome_3);
+      }
+    </style>
+    <linearGradient id="Gradiente_sem_nome" data-name="Gradiente sem nome" x1="-1334.69" y1="-2921.49" x2="-1260.04" y2="-2838.01" gradientTransform="translate(3430.64 468.79) rotate(70.46) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0024a6"/>
+      <stop offset=".03" stop-color="#002aa9"/>
+      <stop offset=".38" stop-color="#0072cd"/>
+      <stop offset=".67" stop-color="#00a7e8"/>
+      <stop offset=".88" stop-color="#00c7f8"/>
+      <stop offset="1" stop-color="#00d4ff"/>
+    </linearGradient>
+    <linearGradient id="Gradiente_sem_nome_2" data-name="Gradiente sem nome 2" x1="-290.47" y1="-3134.55" x2="-162.08" y2="-3006.17" gradientTransform="translate(1436.27 3030.78) rotate(-19.54)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0024a6"/>
+      <stop offset=".03" stop-color="#002aa9"/>
+      <stop offset=".38" stop-color="#0072cd"/>
+      <stop offset=".67" stop-color="#00a7e8"/>
+      <stop offset=".88" stop-color="#00c7f8"/>
+      <stop offset="1" stop-color="#00d4ff"/>
+    </linearGradient>
+    <linearGradient id="Gradiente_sem_nome_3" data-name="Gradiente sem nome 3" x1="2907.9" y1="7348.7" x2="2982.56" y2="7432.18" gradientTransform="translate(8178.96 606.4) rotate(-109.54) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#289600"/>
+      <stop offset=".28" stop-color="#59b900"/>
+      <stop offset=".61" stop-color="#8ede00"/>
+      <stop offset=".86" stop-color="#aef600"/>
+      <stop offset="1" stop-color="#bf0"/>
+    </linearGradient>
+    <linearGradient id="Gradiente_sem_nome_4" data-name="Gradiente sem nome 4" x1="9979.69" y1="1108.01" x2="10108.07" y2="1236.4" gradientTransform="translate(10173.33 -1955.59) rotate(160.46)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#289600"/>
+      <stop offset=".28" stop-color="#59b900"/>
+      <stop offset=".61" stop-color="#8ede00"/>
+      <stop offset=".86" stop-color="#aef600"/>
+      <stop offset="1" stop-color="#bf0"/>
+    </linearGradient>
+  </defs>
+  <path class="st0" d="M262.79,153.02c-32.79-12.43-71.69,7.79-89.56,37.97,0,0,20.58,23.23,24.34,33.85l2.29-4.86c20.71-21.78,29.79-22.1,58.37-8.3,34.06,16.45,46.83,19.63,67.75-2.08,16.74-17.38-.25-26.3-13.11-35.93-26.56-16.32-50.08-20.65-50.08-20.65h0Z"/>
+  <path class="st2" d="M197.57,224.84c35.12,13.72,38.43-43.1,85.51-29.14,3.68,1.09,3.98,5.95,1.02,8.4-16.35,13.56-21.53,36.9-44,53.79-24.18,18.17-77.69,42.24-165.41-2.72,20.95-3.72,55.87-16.56,83.73-63.57,31.31-52.83,87.7-71.03,154.44-17.93-66.1-35.59-106.07,20.87-115.29,51.17h0Z"/>
+  <path class="st3" d="M249.21,358.98c32.79,12.44,71.69-7.79,89.56-37.97,0,0-20.58-23.23-24.34-33.85l-2.29,4.86c-20.71,21.78-29.79,22.1-58.37,8.3-34.06-16.45-46.83-19.63-67.75,2.09-16.74,17.38.25,26.3,13.11,35.92,26.56,16.32,50.08,20.65,50.08,20.65h0Z"/>
+  <path class="st1" d="M314.43,287.16c-35.12-13.72-38.43,43.1-85.51,29.15-3.68-1.09-3.98-5.95-1.02-8.4,16.35-13.57,21.53-36.9,44-53.79,24.18-18.17,77.69-42.24,165.41,2.72-20.95,3.72-55.87,16.56-83.73,63.57-31.31,52.83-87.7,71.03-154.44,17.93,66.1,35.59,106.07-20.87,115.29-51.17h0Z"/>
+</svg>

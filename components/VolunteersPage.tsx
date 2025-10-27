@@ -238,25 +238,45 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   };
 
   const handleStatusChange = async (volunteerId: number, newStatus: 'Ativo' | 'Inativo') => {
-    const { error } = await supabase
-      .from('volunteers')
-      .update({ status: newStatus })
-      .eq('id', volunteerId);
+    const originalVolunteers = [...masterVolunteers];
+    const volunteer = masterVolunteers.find(v => v.id === volunteerId);
 
-    if (error) {
-      alert(`Falha ao atualizar status: ${getErrorMessage(error)}`);
-    } else {
-      await fetchVolunteers();
+    if (!volunteer || !volunteer.user_id) {
+        alert('Erro: Dados do voluntário incompletos. Não é possível alterar o status.');
+        return;
+    }
+
+    // Optimistic UI Update
+    setMasterVolunteers(prev =>
+        prev.map(v => (v.id === volunteerId ? { ...v, status: newStatus } : v))
+    );
+
+    try {
+        const functionName = newStatus === 'Ativo' ? 'enable-user' : 'disable-user';
+        
+        const { error } = await supabase.functions.invoke(functionName, { 
+            body: { 
+                userId: volunteer.user_id,
+                volunteerId: volunteer.id
+            }
+        });
+
+        if (error) {
+           throw error;
+        }
+
+    } catch (error) {
+        alert(`Falha ao atualizar o status: ${getErrorMessage(error)}`);
+        setMasterVolunteers(originalVolunteers);
     }
   };
-
 
   const handleSaveVolunteer = async (volunteerData: Omit<DetailedVolunteer, 'created_at'> & { id?: number }) => {
     setIsSaving(true);
     setSaveError(null);
     
     try {
-        if (volunteerData.id) { // Update existing volunteer
+        if (volunteerData.id) {
             const { id, user_id, departments, ...updatePayload } = volunteerData;
             
             const dbPayload = {
@@ -270,7 +290,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                 .eq('id', volunteerData.id);
                 
             if (error) throw error;
-        } else { // Invite new volunteer
+        } else {
             const invitePayload = {
                 name: volunteerData.name,
                 email: volunteerData.email,
@@ -311,23 +331,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
               .no-scrollbar::-webkit-scrollbar { display: none; }
               .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
           `}</style>
-          <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2">
-            <div className="relative flex-grow w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                </svg>
-              </div>
-              <input 
-                type="text"
-                placeholder="Buscar voluntários por nome ou email..."
-                className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-
+          
           {volunteersToDisplay.length > 0 ? (
             <>
               <div className="flex overflow-x-auto space-x-4 pb-4 md:grid md:grid-cols-2 md:space-x-0 xl:grid-cols-3 md:gap-6 no-scrollbar">
@@ -356,7 +360,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
             </>
           ) : (
             <div className="text-center py-12 text-slate-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.226a3 3 0 0 0-4.682 2.72 9.094 9.094 0 0 0 3.741.479m7.5-2.226V18a2.25 2.25 0 0 1-2.25 2.25H12a2.25 2.25 0 0 1-2.25-2.25V18.226m3.75-10.5a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5ZM10.5 8.25a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5Z" />
                 </svg>
                 <h3 className="mt-2 text-lg font-medium text-slate-800">Nenhum voluntário encontrado</h3>
@@ -369,64 +373,82 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Voluntários</h1>
-          <p className="text-slate-500 mt-1">Gerencie os voluntários da igreja</p>
-        </div>
-        <button 
-          onClick={() => { setEditingVolunteer(null); showForm(); }}
-          className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto justify-center"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-          </svg>
-          <span>Convidar Voluntário</span>
-        </button>
-      </div>
+        {isFormOpen ? (
+            <NewVolunteerForm 
+              initialData={editingVolunteer}
+              onCancel={hideForm} 
+              onSave={handleSaveVolunteer}
+              isSaving={isSaving}
+              saveError={saveError}
+              departments={departments}
+              userRole={userRole}
+            />
+        ) : (
+            <>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-800">Voluntários</h1>
+                        <p className="text-slate-500 mt-1">Gerencie os voluntários da igreja</p>
+                    </div>
+                    <button 
+                      onClick={() => { setEditingVolunteer(null); showForm(); }}
+                      className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto justify-center flex-shrink-0"
+                    >
+                      <img 
+    src="/assets/icons/newVolunteers.svg" 
+    alt="Novos Voluntários" 
+    className="h-5 w-5"
+    style={{ filter: 'brightness(0) invert(1)' }}
+/>
+                      <span>Convidar Voluntário</span>
+                    </button>
+                </div>
+                <div className="space-y-6">
+                    <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>      
+                     </div>
+              <input 
+                type="text"
+                placeholder="Buscar voluntários por nome ou email..."
+                className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+                    </div>
+                    {renderContent()}
+                </div>
+            </>
+        )}
 
-      {isFormOpen ? (
-        <NewVolunteerForm 
-          initialData={editingVolunteer}
-          onCancel={hideForm} 
-          onSave={handleSaveVolunteer}
-          isSaving={isSaving}
-          saveError={saveError}
-          departments={departments}
-          userRole={userRole}
+        <ConfirmationModal
+            isOpen={isDeleteModalOpen}
+            onClose={handleCancelDelete}
+            onConfirm={handleConfirmDelete}
+            title="Confirmar Exclusão"
+            message="Tem certeza que deseja excluir este voluntário? Esta ação não pode ser desfeita."
+            isLoading={isDeleting}
         />
-      ) : (
-        renderContent()
-      )}
-
-      <ConfirmationModal
-        isOpen={isDeleteModalOpen}
-        onClose={handleCancelDelete}
-        onConfirm={handleConfirmDelete}
-        title="Confirmar Exclusão"
-        message="Tem certeza que deseja excluir este voluntário? Esta ação não pode ser desfeita."
-        isLoading={isDeleting}
-      />
-
-      <ConfirmationModal
-        isOpen={isInviteModalOpen}
-        onClose={handleCancelInvite}
-        onConfirm={handleConfirmInvite}
-        title="Confirmar Convite"
-        message={`Tem certeza que deseja convidar ${volunteerToInvite?.name} para o seu departamento?`}
-        isLoading={isInviting}
-        iconType="info"
-        confirmButtonClass="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
-      />
-
-      <ConfirmationModal
-        isOpen={isRemoveModalOpen}
-        onClose={handleCancelRemove}
-        onConfirm={handleConfirmRemoveFromDepartment}
-        title="Confirmar Remoção"
-        message={`Tem certeza que deseja remover ${volunteerToRemove?.name} do seu departamento?`}
-        isLoading={isRemoving}
-      />
+        <ConfirmationModal
+            isOpen={isInviteModalOpen}
+            onClose={handleCancelInvite}
+            onConfirm={handleConfirmInvite}
+            title="Confirmar Convite"
+            message={`Tem certeza que deseja convidar ${volunteerToInvite?.name} para o seu departamento?`}
+            isLoading={isInviting}
+            iconType="info"
+            confirmButtonClass="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+        />
+        <ConfirmationModal
+            isOpen={isRemoveModalOpen}
+            onClose={handleCancelRemove}
+            onConfirm={handleConfirmRemoveFromDepartment}
+            title="Confirmar Remoção"
+            message={`Tem certeza que deseja remover ${volunteerToRemove?.name} do seu departamento?`}
+            isLoading={isRemoving}
+        />
     </div>
   );
 };
