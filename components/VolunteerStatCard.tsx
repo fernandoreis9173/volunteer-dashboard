@@ -44,8 +44,8 @@ const VolunteerStatCard: React.FC<VolunteerStatCardProps> = ({ title, value, ico
 
   return (
     <div className="px-4 py-5 sm:p-6 flex items-center space-x-4">
-      <div className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-lg leading-none ${classes.bg} ${classes.icon}`}>
-        {React.cloneElement(icon, { className: 'h-6 w-6 block flex-shrink-0', style: { overflow: 'visible' } })}
+      <div className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-lg ${classes.bg} ${classes.icon}`}>
+        {React.cloneElement(icon, { className: 'h-6 w-6' })}
       </div>
       <div>
         <p className="text-sm font-medium text-slate-600">{title}</p>

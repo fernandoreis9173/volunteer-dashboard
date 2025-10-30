@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
         });
     }
 
-    // 4. Default path for AdminPage
+    // 4. Default path for AdminPage and other general uses
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
         page: 1,
         perPage: 1000,
@@ -65,23 +65,23 @@ Deno.serve(async (req) => {
 
     if (authError) throw authError;
 
-    const users = (authData?.users || []).filter(user => user.user_metadata?.role !== 'volunteer');
-
+    const users = (authData?.users || []);
+    
     const enrichedUsers = users.map(user => {
-        if (user.invited_at && !user.last_sign_in_at) {
-            return { ...user, app_status: 'Pendente' };
-        }
-        
-        const metadataStatus = user.user_metadata?.status;
-        let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Ativo';
+        // FIX: Cast user_metadata to 'any' to handle potential 'unknown' type from Supabase client in Deno environment, allowing safe property access and spreading.
+        const userMetadata = (user.user_metadata as any) || {};
 
-        if (metadataStatus === 'Ativo' || metadataStatus === 'Inativo') {
-            status = metadataStatus;
-        } else if (metadataStatus === 'Pendente') {
+        let status: 'Ativo' | 'Inativo' | 'Pendente' = 'Ativo';
+        if (userMetadata.status === 'Ativo' || userMetadata.status === 'Inativo' || userMetadata.status === 'Pendente') {
+            status = userMetadata.status;
+        } else if (user.invited_at && !user.last_sign_in_at) {
             status = 'Pendente';
         }
-
-        return { ...user, app_status: status };
+        
+        return { 
+            ...user,
+            app_status: status 
+        };
       });
 
     return new Response(JSON.stringify({ users: enrichedUsers }), {

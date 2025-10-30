@@ -64,11 +64,11 @@ Deno.serve(async (req)=>{
       throw new Error(`Failed to correctly set the user's role after invitation. The process has been rolled back. Error: ${updateError.message}`);
     }
     const finalUser = updatedUserData.user;
-    // Step 5: Create the user's profile in the `profiles` table.
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+    // Step 5: Create or update the user's profile in the `profiles` table.
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
       id: finalUser.id,
       role: normalizedRole
-    });
+    }, { onConflict: 'id' });
     // Step 6: If creating the profile fails, roll back by deleting the invited user
     if (profileError) {
       console.error(`Failed to create profile for ${normalizedRole}. Rolling back user invitation.`, profileError);

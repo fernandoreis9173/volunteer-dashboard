@@ -1,30 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { type Session } from '@supabase/supabase-js';
-import { getErrorMessage } from '../lib/utils';
+// FIX: Restored Supabase v2 types for type safety.
+import { type Session, type User } from '@supabase/supabase-js';
+import { DetailedVolunteer } from '../types';
+// FIX: Import 'formatPhoneNumber' from utils to resolve reference errors.
+import { getErrorMessage, parseArrayFromString, formatPhoneNumber } from '../lib/utils';
 
 interface UserProfilePageProps {
     session: Session | null;
     onUpdate: () => void;
+    leaders: User[];
 }
 
-const formatPhoneNumber = (value: string) => {
-    if (!value) return '';
-    const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
-    const { length } = phoneNumber;
-    if (length <= 2) return `(${phoneNumber}`;
-    if (length <= 6) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
-    if (length <= 10) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
-    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
+const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
+  const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";
+  const colorClasses = {
+    yellow: "bg-yellow-100 text-yellow-800",
+    blue: "bg-blue-100 text-blue-800",
+  };
+  return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
 };
 
-const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate }) => {
+const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, leaders }) => {
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-    const [departmentName, setDepartmentName] = useState<string | null>(null);
+    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null }[]>([]);
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [currentPassword, setCurrentPassword] = useState('');
@@ -47,24 +50,33 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate }) 
         
         try {
             if (userRole === 'leader' || userRole === 'lider') {
-                const { data: profileData, error: profileError } = await supabase
-                    .from('profiles')
+                const { data: leaderDeptRel, error: leaderDeptRelError } = await supabase
+                    .from('department_leaders')
                     .select('department_id')
-                    .eq('id', user.id)
+                    .eq('leader_id', user.id)
                     .single();
+    
+                if (leaderDeptRelError) throw leaderDeptRelError;
                 
-                if (profileError) throw profileError;
-
-                if (profileData && profileData.department_id) {
-                    const { data: deptData, error: deptError } = await supabase
+                const departmentId = leaderDeptRel.department_id;
+    
+                if (departmentId) {
+                    const { data: departmentData, error: departmentError } = await supabase
                         .from('departments')
-                        .select('name')
-                        .eq('id', profileData.department_id)
+                        .select('id, name')
+                        .eq('id', departmentId)
                         .single();
-                    if (deptError) throw deptError;
-                    setDepartmentName(deptData?.name || 'Não atribuído');
+                    
+                    if (departmentError) throw departmentError;
+    
+                    const leaderForDept = leaders.find(l => l.id === user.id);
+                    
+                    setDepartmentDetails([{
+                        name: departmentData.name,
+                        leader: leaderForDept?.user_metadata?.name || 'Não atribuído'
+                    }]);
                 } else {
-                    setDepartmentName('Nenhum departamento atribuído');
+                    setDepartmentDetails([]);
                 }
             }
         } catch (err) {
@@ -72,7 +84,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate }) 
         } finally {
             setLoading(false);
         }
-    }, [user, userRole]);
+    }, [user, userRole, leaders]);
 
     useEffect(() => {
         fetchProfileData();
@@ -88,6 +100,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate }) 
         setIsSaving(true);
         setError(null);
         try {
+            // Step 1: Update the user's auth metadata (name, phone)
+            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
             const { error: updateError } = await supabase.auth.updateUser({
                 data: { 
                     name: name.trim(),
@@ -95,6 +109,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate }) 
                 }
             });
             if (updateError) throw updateError;
+            
+            // Step 2: Refresh UI and show success
             onUpdate(); // Refreshes sidebar etc.
             setIsEditingProfile(false);
             showSuccess('Perfil atualizado com sucesso!');
@@ -128,6 +144,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate }) 
             }
 
             // 1. Verify current password by attempting to sign in.
+            // FIX: Updated to Supabase v2 API `signInWithPassword` to match library version.
             const { error: signInError } = await supabase.auth.signInWithPassword({
                 email: user.email,
                 password: currentPassword,
@@ -141,6 +158,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate }) 
             }
 
             // 2. If verification is successful, update to the new password.
+            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
             const { error: updateError } = await supabase.auth.updateUser({ password });
             if (updateError) throw updateError;
 
@@ -211,9 +229,14 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate }) 
                                 <p className="text-slate-500 mt-1">{formatPhoneNumber(phone) || 'Telefone não informado'}</p>
                             </>
                         )}
-                        <div className="mt-2 flex items-center justify-center sm:justify-start gap-4">
+                        <div className="mt-2 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
                             <span className="px-3 py-1 text-sm font-semibold rounded-full bg-indigo-100 text-indigo-800">{roleDisplay}</span>
-                            {departmentName && <span className="px-3 py-1 text-sm font-semibold rounded-full bg-slate-100 text-slate-700">{departmentName}</span>}
+                            {departmentDetails.map(dept => (
+                                <span key={dept.name} className="px-3 py-1 text-sm font-semibold rounded-full bg-slate-100 text-slate-700">{dept.name}</span>
+                            ))}
+                            {departmentDetails.length === 0 && (userRole === 'leader' || userRole === 'lider') && (
+                                <span className="px-3 py-1 text-sm font-semibold rounded-full bg-slate-100 text-slate-700">Nenhum departamento</span>
+                            )}
                         </div>
                     </div>
                      <div className="flex items-center gap-2 mt-4 sm:mt-0">

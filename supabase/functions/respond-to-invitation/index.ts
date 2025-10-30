@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     // 3. Fetch invitation and verify ownership
     const { data: invitation, error: invError } = await supabaseAdmin
       .from('invitations')
-      .select('*, volunteers!inner(id, user_id, name, departaments), departments(name)')
+      .select('*, volunteers!inner(id, user_id, name), departments(id, name)')
       .eq('id', invitationId)
       .eq('volunteers.user_id', user.id)
       .eq('status', 'pendente')
@@ -50,23 +50,24 @@ Deno.serve(async (req) => {
     
     // 4. Process based on response
     if (response === 'aceito') {
-      // Defensive check for volunteer and department data from the join
       const volunteer = Array.isArray(invitation.volunteers) ? invitation.volunteers[0] : invitation.volunteers;
       const department = Array.isArray(invitation.departments) ? invitation.departments[0] : invitation.departments;
 
-      if (!volunteer || !department || !department.name) {
+      if (!volunteer || !department) {
         throw new Error('Could not retrieve volunteer or department details for this invitation.');
       }
+      
+      const { error: insertError } = await supabaseAdmin
+          .from('volunteer_departments')
+          .insert({
+              volunteer_id: volunteer.id,
+              department_id: department.id,
+          });
 
-      // **REFACTORED LOGIC**: Call the database function (RPC) to handle the update robustly.
-      const { error: rpcError } = await supabaseAdmin.rpc('add_department_to_volunteer', {
-        volunteer_id_param: volunteer.id,
-        department_name_param: department.name,
-      });
-
-      if (rpcError) {
-        console.error('RPC Error (add_department_to_volunteer):', rpcError);
-        throw new Error(`Failed to update volunteer departments: ${rpcError.message}`);
+      // We don't throw on duplicate error (code 23505), as it means they are already in the dept.
+      if (insertError && insertError.code !== '23505') {
+          console.error('Error adding volunteer to department:', insertError);
+          throw new Error(`Failed to add to department: ${insertError.message}`);
       }
     }
 

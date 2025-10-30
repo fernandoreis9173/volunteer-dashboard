@@ -1,14 +1,15 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
-// FIX: Corrected import for EventResizeDoneArg to be from '@fullcalendar/interaction'.
 import interactionPlugin, { type EventResizeDoneArg } from '@fullcalendar/interaction';
 import { EventInput, EventClickArg, DayHeaderContentArg, EventContentArg, DatesSetArg, type EventDropArg } from '@fullcalendar/core';
 import ptBrBaseLocale from '@fullcalendar/core/locales/pt-br';
 
 import NewEventForm from './NewScheduleForm';
-import { Event, NotificationRecord } from '../types';
+import { Event, NotificationRecord, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 
@@ -147,11 +148,11 @@ const MobileHeader: React.FC<{
             <div className="flex justify-between items-center gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                     <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Anterior">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.25 19.5 7.75 12l7.5-7.5" /></svg>
                     </button>
                     <h2 className="text-base font-bold text-slate-800 capitalize text-center truncate">{title}</h2>
                     <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Próximo">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.75 4.5 7.5 7.5-7.5 7.5" /></svg>
                     </button>
                 </div>
                 <button onClick={onMenuClick} className="p-2 text-slate-600 hover:text-slate-900 flex-shrink-0" aria-label="Open menu">
@@ -173,7 +174,7 @@ const MobileHeader: React.FC<{
                             aria-expanded={isViewDropdownOpen}
                         >
                             <span>{currentViewLabel}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-500 transition-transform ${isViewDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                         </button>
                         {isViewDropdownOpen && (
                             <div className="absolute left-0 mt-2 w-36 bg-white rounded-lg shadow-lg border border-slate-200 z-10" role="menu">
@@ -266,8 +267,8 @@ const MobileMonthEventList: React.FC<{ events: Event[], selectedDate: Date, onEv
     }, [events, selectedDate]);
 
     const EventItemCard: React.FC<{event: Event}> = ({ event }) => {
-        const colorKey = event.color || (event.event_departments[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
-        const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor(event.event_departments[0]?.department_id);
+        const colorKey = event.color || ((event.event_departments || [])[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
+        const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor((event.event_departments || [])[0]?.department_id);
         const initials = event.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase() || 'E';
 
         return (
@@ -277,7 +278,7 @@ const MobileMonthEventList: React.FC<{ events: Event[], selectedDate: Date, onEv
                 </div>
                 <div className="flex-grow">
                     <p className="font-semibold text-slate-800">{event.name}</p>
-                    <p className="text-sm text-slate-500">{event.event_departments[0]?.departments?.name || 'Geral'}</p>
+                    <p className="text-sm text-slate-500">{(event.event_departments || [])[0]?.departments?.name || 'Geral'}</p>
                     <div className="mt-2 px-3 py-1 text-sm font-semibold rounded-full inline-block" style={{backgroundColor: colors.bg, color: colors.text}}>
                         {event.start_time} - {event.end_time}
                     </div>
@@ -344,11 +345,11 @@ const CalendarHeader: React.FC<{
                     Hoje
                 </button>
                 <div className="flex items-center">
-                    <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors" aria-label="Anterior">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+                    <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors flex-shrink-0" aria-label="Anterior">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.25 19.5 7.75 12l7.5-7.5" /></svg>
                     </button>
-                    <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors" aria-label="Próximo">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                    <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors flex-shrink-0" aria-label="Próximo">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.75 4.5 7.5 7.5-7.5 7.5" /></svg>
                     </button>
                 </div>
                  <h2 className="text-3xl font-bold text-slate-800 capitalize">{title}</h2>
@@ -364,7 +365,7 @@ const CalendarHeader: React.FC<{
                         aria-expanded={isViewDropdownOpen}
                     >
                         <span>{currentViewLabel}</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-500 transition-transform ${isViewDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                     </button>
                     {isViewDropdownOpen && (
                         <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
@@ -409,6 +410,7 @@ interface CalendarPageProps {
 
 const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentId, onDataChange, setIsSidebarOpen }) => {
     const [allEvents, setAllEvents] = useState<Event[]>([]);
+    const [allDepartments, setAllDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -424,6 +426,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
     const [calendarTitle, setCalendarTitle] = useState('');
     const [statusFilters, setStatusFilters] = useState<string[]>(['Confirmado', 'Pendente']);
     const isAdmin = userRole === 'admin';
+    const isLeader = userRole === 'leader' || userRole === 'lider';
 
     const ptBrLocale = useMemo(() => ({
         ...ptBrBaseLocale,
@@ -463,9 +466,9 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                         <p className="font-semibold whitespace-normal mt-1" style={{color: eventInfo.event.textColor}}>{eventInfo.event.title}</p>
                     </div>
                     
-                    {(eventData.event_departments?.length > 0) && (
+                    {((eventData.event_departments || []).length > 0) && (
                         <div className="mt-2 pt-2 border-t w-full space-y-2" style={{borderColor: eventInfo.event.textColor + '40'}}>
-                            {(eventData.event_departments).map(({ departments }) => {
+                            {(eventData.event_departments || []).map(({ departments }) => {
                                 if (!departments) return null;
                                 const volunteers = volunteersByDept.get(departments.id) || [];
                                 return (
@@ -525,19 +528,39 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setIsFormOpen(false);
         setEditingEvent(null);
     };
+    const fetchAllDepartments = useCallback(async () => {
+        const { data, error } = await supabase.from('departments').select('id, name');
+        if (error) {
+            console.error("Failed to fetch all departments for form:", getErrorMessage(error));
+        } else {
+            setAllDepartments((data as Department[]) || []);
+        }
+    }, []);
 
     const fetchAllEvents = useCallback(async (setLoadingState = true) => {
         if (setLoadingState) setLoading(true);
         setError(null);
         try {
-            const { data, error: fetchError } = await supabase.from('events').select(`*, event_departments(department_id, departments(id, name)), event_volunteers(*, volunteers(id, name, initials))`);
-            if (fetchError) throw fetchError;
+            // Use the secure RPC function to fetch events for the current user (admin or leader).
+            // This bypasses potential RLS issues.
+            const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
+            
+            if (rpcError) throw rpcError;
+            
+            // The RPC function returns data already filtered and enriched.
             setAllEvents((data as unknown as Event[]) || []);
-        } catch (err) { setError(getErrorMessage(err)); } 
-        finally { if (setLoadingState) setLoading(false); }
+
+        } catch (err) {
+            setError(getErrorMessage(err));
+        } finally {
+            if (setLoadingState) setLoading(false);
+        }
     }, []);
 
-    useEffect(() => { fetchAllEvents(); }, [fetchAllEvents]);
+    useEffect(() => { 
+        fetchAllEvents();
+        fetchAllDepartments();
+    }, [fetchAllEvents, fetchAllDepartments]);
     
     const handleDatesSet = (arg: DatesSetArg) => {
         const view = arg.view;
@@ -570,23 +593,25 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         calendarRef.current?.getApi().gotoDate(date);
     };
 
-    const calendarEvents = useMemo((): EventInput[] => allEvents
-        .filter(event => statusFilters.includes(event.status))
-        .map(event => {
-            const colorKey = event.color || (event.event_departments[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
-            const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor(event.event_departments[0]?.department_id);
-            return {
-                id: String(event.id),
-                title: event.name,
-                start: `${event.date}T${event.start_time}`,
-                end: `${event.date}T${event.end_time}`,
-                backgroundColor: colors.bg,
-                borderColor: colors.border,
-                textColor: colors.text,
-                classNames: ['custom-event'],
-                extendedProps: { ...event, color: colorKey, dotColor: colors.border }
-            };
-    }), [allEvents, statusFilters]);
+    const calendarEvents = useMemo((): EventInput[] => {
+        return allEvents
+            .filter(event => statusFilters.includes(event.status))
+            .map(event => {
+                const colorKey = event.color || ((event.event_departments || [])[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
+                const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor((event.event_departments || [])[0]?.department_id);
+                return {
+                    id: String(event.id),
+                    title: event.name,
+                    start: `${event.date}T${event.start_time}`,
+                    end: `${event.date}T${event.end_time}`,
+                    backgroundColor: colors.bg,
+                    borderColor: colors.border,
+                    textColor: colors.text,
+                    classNames: ['custom-event'],
+                    extendedProps: { ...event, color: colorKey, dotColor: colors.border }
+                };
+            });
+    }, [allEvents, statusFilters]);
 
     const handleDateClick = (arg: { date: Date, dateStr: string }) => {
         if (mobileView === 'dayGridMonth') {
@@ -634,7 +659,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             await fetchAllEvents(false); 
             onDataChange();
             
-            // Notify leaders and volunteers via centralized function
             const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
                 body: { 
                     notifyType: 'event_updated',
@@ -669,7 +693,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             await fetchAllEvents(false);
             onDataChange();
             
-            // Notify leaders and volunteers via centralized function
             const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
                 body: { 
                     notifyType: 'event_updated',
@@ -688,38 +711,39 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setIsSaving(true);
         setSaveError(null);
         try {
-            const isLeader = userRole === 'leader' || userRole === 'lider';
-            const isSchedulingMode = isLeader && eventPayload.id && leaderDepartmentId;
+            const { volunteer_ids, ...eventDetails } = eventPayload;
+            const schedulingDepartmentId = eventPayload.scheduling_department_id;
+            const isSchedulingMode = isLeader && eventPayload.id && schedulingDepartmentId;
     
             if (isSchedulingMode) {
                 const eventId = eventPayload.id;
                 const eventName = eventPayload.name;
-                const newVolunteerIds = new Set(eventPayload.volunteer_ids || []);
+                const newVolunteerIds = new Set(volunteer_ids || []);
     
                 const { data: currentVolunteersData, error: currentVolError } = await supabase
                     .from('event_volunteers')
                     .select('volunteer_id, volunteers(user_id, name)')
                     .eq('event_id', eventId)
-                    .eq('department_id', leaderDepartmentId);
+                    .eq('department_id', schedulingDepartmentId);
     
                 if (currentVolError) throw currentVolError;
+    
+                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', schedulingDepartmentId);
+                if (deleteError) throw deleteError;
                 
+                if (volunteer_ids && volunteer_ids.length > 0) {
+                    const volunteersToInsert = volunteer_ids.map((vol_id: number) => ({
+                        event_id: eventId, volunteer_id: vol_id, department_id: schedulingDepartmentId,
+                    }));
+                    const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
+                    if (insertError) throw insertError;
+                }
+    
                 const currentVolunteers = currentVolunteersData || [];
                 const currentVolunteerIds = new Set(currentVolunteers.map(v => v.volunteer_id));
     
                 const addedVolunteerIds = [...newVolunteerIds].filter(id => !currentVolunteerIds.has(id));
                 const removedVolunteers = currentVolunteers.filter(v => !newVolunteerIds.has(v.volunteer_id));
-    
-                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', leaderDepartmentId);
-                if (deleteError) throw deleteError;
-                
-                if (eventPayload.volunteer_ids && eventPayload.volunteer_ids.length > 0) {
-                    const volunteersToInsert = eventPayload.volunteer_ids.map((vol_id: number) => ({
-                        event_id: eventId, volunteer_id: vol_id, department_id: leaderDepartmentId,
-                    }));
-                    const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
-                    if (insertError) throw insertError;
-                }
     
                 const notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[] = [];
     
@@ -746,7 +770,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                 }
             
             } else if (isAdmin) {
-                const { volunteer_ids, ...upsertData } = eventPayload;
+                const { department_ids, ...upsertData } = eventDetails;
                 
                 let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', upsertData.date).lt('start_time', upsertData.end_time).gt('end_time', upsertData.start_time);
                 if (upsertData.id) conflictQuery = conflictQuery.neq('id', upsertData.id);
@@ -766,16 +790,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                     if (error) throw error;
                     if (!newEvent) throw new Error("Falha ao criar o evento.");
                     savedEvent = newEvent;
-                    
-                    const { error: leaderNotifyError } = await supabase.functions.invoke('create-notifications', {
-                        body: {
-                            notifyType: 'event_created',
-                            event: savedEvent,
-                        },
-                    });
-                    if (leaderNotifyError) {
-                        console.error("Falha ao acionar notificações para líderes na criação do evento:", getErrorMessage(leaderNotifyError));
-                    }
                 } else { // Updating
                     const eventId = upsertData.id;
                     const { id, ...updatePayload } = upsertData;
@@ -783,16 +797,27 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                     if (error) throw error;
                     if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
                     savedEvent = updatedEvent;
+                }
+                
+                // Sync departments
+                const eventId = savedEvent.id;
+                const { error: deleteDeptError } = await supabase.from('event_departments').delete().eq('event_id', eventId);
+                if (deleteDeptError) throw deleteDeptError;
 
-                    const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
-                        body: { 
-                            notifyType: 'event_updated',
-                            event: savedEvent,
-                        },
-                    });
-                    if (notifyError) {
-                        console.error("Falha ao acionar notificações na atualização do evento:", getErrorMessage(notifyError));
-                    }
+                if (department_ids && department_ids.length > 0) {
+                    const assignments = department_ids.map((deptId: number) => ({ event_id: eventId, department_id: deptId }));
+                    const { error: insertDeptError } = await supabase.from('event_departments').insert(assignments);
+                    if (insertDeptError) throw insertDeptError;
+                }
+
+                const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                    body: { 
+                        notifyType: isCreating ? 'event_created' : 'event_updated',
+                        event: savedEvent,
+                    },
+                });
+                if (notifyError) {
+                    console.error("Falha ao acionar notificações:", getErrorMessage(notifyError));
                 }
             }
     
@@ -824,9 +849,18 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
     const renderModal = () => {
         if (!isFormOpen) return null;
         return (
-            <div className="fixed inset-0 bg-black/60 z-40 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={handleCloseForm}>
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={handleCloseForm}>
                 <div className="w-full max-w-3xl my-8" onClick={e => e.stopPropagation()}>
-                    <NewEventForm initialData={editingEvent} onCancel={handleCloseForm} onSave={handleSaveEvent} isSaving={isSaving} saveError={saveError} userRole={userRole} leaderDepartmentId={leaderDepartmentId} />
+                    <NewEventForm 
+                        initialData={editingEvent} 
+                        onCancel={handleCloseForm} 
+                        onSave={handleSaveEvent} 
+                        isSaving={isSaving} 
+                        saveError={saveError || ''}
+                        userRole={userRole} 
+                        leaderDepartmentId={leaderDepartmentId}
+                        allDepartments={allDepartments}
+                    />
                 </div>
             </div>
         );

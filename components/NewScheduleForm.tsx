@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Event } from '../types';
+import { Event, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import ConfirmationModal from './ConfirmationModal';
 import CustomDatePicker from './CustomDatePicker';
+import SmartSearch, { type SearchItem } from './SmartSearch';
 
 interface NewEventFormProps {
     initialData?: Event | null;
@@ -12,6 +13,7 @@ interface NewEventFormProps {
     saveError: string | null;
     userRole: string | null;
     leaderDepartmentId: number | null;
+    allDepartments: Department[];
 }
 
 type VolunteerOption = { id: number; name: string; email: string; initials: string; departments: string[] };
@@ -22,6 +24,51 @@ interface VolunteerItemProps {
     onAction: () => void;
     actionType: 'add' | 'remove';
 }
+
+const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove: () => void; }> = ({ text, color, onRemove }) => {
+    const getInitials = (name: string): string => {
+        if (!name) return '??';
+        const parts = name.trim().split(' ').filter(p => p);
+        if (parts.length === 0) return '??';
+        if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+        return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
+    };
+
+    const initials = getInitials(text);
+
+    const colorClasses = {
+        blue: {
+            container: 'bg-blue-100 text-blue-800 border-blue-200',
+            avatar: 'bg-blue-500 text-white',
+            buttonHover: 'hover:bg-blue-200'
+        },
+        yellow: {
+            container: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+            avatar: 'bg-yellow-500 text-white',
+            buttonHover: 'hover:bg-yellow-200'
+        },
+    };
+    const classes = colorClasses[color];
+
+    return (
+        <div className={`inline-flex items-center space-x-2 pl-1 pr-2 py-1 rounded-full text-sm font-semibold border ${classes.container}`}>
+            <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${classes.avatar}`}>
+                {initials}
+            </div>
+            <span>{text}</span>
+            <button
+                type="button"
+                onClick={onRemove}
+                className={`ml-1 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover}`}
+                aria-label={`Remove ${text}`}
+            >
+                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+    );
+};
 
 const colorOptions = [
     { name: 'Azul', value: '#3b82f6', bg: 'bg-blue-500' },
@@ -40,27 +87,14 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                     </div>
                     <p className="font-semibold text-slate-800 text-sm truncate">{volunteer.name}</p>
                 </div>
-              <button
-    type="button"
-    onClick={onAction}
-    className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-red-600 bg-red-100 hover:bg-red-200"
-    aria-label={`Remover ${volunteer.name}`}
->
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        className="h-5 w-5" 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor" 
-        strokeWidth={1.5}
-    >
-        <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            d="M6 18L18 6M6 6l12 12" 
-        />
-    </svg>
-</button>
+                <button
+                    type="button"
+                    onClick={onAction}
+                    className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-red-600 bg-red-100 hover:bg-red-200"
+                    aria-label={`Remover ${volunteer.name}`}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} ><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
             </div>
         );
     }
@@ -76,8 +110,8 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                 <div className="flex-1 overflow-hidden">
                     <p className={`font-semibold text-slate-800 text-sm truncate ${isAlreadyScheduled ? 'text-slate-500' : ''}`}>{volunteer.name}</p>
                     <div className="flex items-center text-xs space-x-2">
-                        <p className="text-slate-500 truncate" title={volunteer.departments?.join(', ')}>
-                            {volunteer.departments?.join(', ')}
+                        <p className="text-slate-500 truncate" title={(volunteer.departments || []).join(', ')}>
+                            {(volunteer.departments || []).join(', ')}
                         </p>
                         {isAlreadyScheduled && (
                             <span className="font-semibold text-orange-600 flex-shrink-0">Já escalado</span>
@@ -85,49 +119,41 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
                     </div>
                 </div>
             </div>
-         <button
-    type="button"
-    onClick={onAction}
-    disabled={isAlreadyScheduled}
-    className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-green-600 bg-green-100 hover:bg-green-200 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
-    aria-label={`Adicionar ${volunteer.name}`}
->
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        className="h-5 w-5" 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor" 
-        strokeWidth={1.5}
-    >
-        <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            d="M12 4.5v15m7.5-7.5h-15" 
-        />
-    </svg>
-</button>
+            <button
+                type="button"
+                onClick={onAction}
+                disabled={isAlreadyScheduled}
+                className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full transition-colors text-green-600 bg-green-100 hover:bg-green-200 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                aria-label={`Adicionar ${volunteer.name}`}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} ><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+            </button>
         </div>
     );
 };
 
 
-const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId }) => {
+const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId, allDepartments }) => {
     const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
     const [selectedVolunteers, setSelectedVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [allVolunteers, setAllVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [volunteerSearch, setVolunteerSearch] = useState('');
-    const [leaderDepartmentName, setLeaderDepartmentName] = useState('');
     const [isStatusChangeModalOpen, setIsStatusChangeModalOpen] = useState(false);
     const [pendingStatus, setPendingStatus] = useState<string | null>(null);
     const [isCustomStatusDropdownOpen, setIsCustomStatusDropdownOpen] = useState(false);
     const statusDropdownRef = useRef<HTMLDivElement>(null);
+    const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
 
     const isEditing = !!initialData;
     const isSchedulingMode = isEditing && (userRole === 'leader' || userRole === 'lider' || userRole === 'líder');
-    const isSchedulingAllowed = isSchedulingMode && formData.status === 'Confirmado';
     const isAdminMode = userRole === 'admin';
 
+    const isDepartmentInvolved = isSchedulingMode && initialData && leaderDepartmentId 
+        ? (initialData.event_departments || []).some(ed => ed.department_id === leaderDepartmentId)
+        : false;
+    
+    const isSchedulingAllowed = isSchedulingMode && formData.status === 'Confirmado' && isDepartmentInvolved;
+    
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
@@ -140,66 +166,77 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
     useEffect(() => {
         const fetchData = async () => {
-            if (!isSchedulingMode || !initialData || !leaderDepartmentId) return;
-
-            const { data: leaderDept, error: ldError } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
-            if (ldError) {
-                console.error("Error fetching leader's department name", ldError);
+            if (!isSchedulingAllowed || !leaderDepartmentId) {
+                setAllVolunteers([]);
                 return;
-            }
+            };
+
+            const { data: dept } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
+            if (!dept) return;
             
-            setLeaderDepartmentName(leaderDept.name);
-            
-            const { data: vols, error: vError } = await supabase.from('volunteers').select('id, name, email, initials, departments:departaments').eq('status', 'Ativo').contains('departaments', [leaderDept.name]).order('name');
+            const { data: vols, error: vError } = await supabase
+                .from('volunteer_departments')
+                .select('volunteers(id, name, email, initials)')
+                .eq('department_id', leaderDepartmentId);
+
             if (vError) {
                 console.error("Error fetching volunteers for leader", vError);
                 return;
             }
+            const activeVolunteers = (vols || []).map(v => v.volunteers).filter(Boolean);
 
             const scheduledElsewhereIds = new Set(
-                initialData.event_volunteers
+                (initialData?.event_volunteers || [])
                     .filter(ev => ev.department_id !== leaderDepartmentId)
                     .map(ev => ev.volunteer_id)
             );
 
-            const processedVols = (vols as VolunteerOption[] || []).map(vol => ({
+            const processedVols = (activeVolunteers as any[] || []).map(vol => ({
                 ...vol,
-                departments: vol.departments || [],
+                departments: [dept.name], // Simplified for this context
                 isScheduledElsewhere: scheduledElsewhereIds.has(vol.id)
             }));
             
             setAllVolunteers(processedVols);
         };
         fetchData();
-    }, [isSchedulingMode, initialData, leaderDepartmentId]);
+    }, [isSchedulingAllowed, initialData, leaderDepartmentId]);
 
     useEffect(() => {
         if (initialData) {
             setFormData({ name: initialData.name, date: initialData.date, start_time: initialData.start_time, end_time: initialData.end_time, local: initialData.local || '', status: initialData.status, observations: initialData.observations || '', color: initialData.color || '' });
-            if (initialData.event_volunteers && isSchedulingMode) {
+            if (isSchedulingMode && leaderDepartmentId) {
                 const scheduledElsewhereIds = new Set(
-                    initialData.event_volunteers
+                    (initialData.event_volunteers || [])
                         .filter(ev => ev.department_id !== leaderDepartmentId)
                         .map(ev => ev.volunteer_id)
                 );
-                const volunteersFromData = initialData.event_volunteers
+                const volunteersFromData = (initialData.event_volunteers || [])
                     .filter(sv => sv.department_id === leaderDepartmentId)
                     .map(sv => sv.volunteers)
-                    .filter((v): v is { id: number; name: string; email: string; initials: string; departments: string[]; } => v !== undefined && v !== null)
-                    .map(v => ({
-                        ...v,
-                        departments: v.departments || [],
-                        isScheduledElsewhere: scheduledElsewhereIds.has(v.id)
-                    }));
-                setSelectedVolunteers(volunteersFromData);
+                    .filter((v): v is { id: number; name: string; email: string; initials: string; departments: string[]; } => v !== undefined && v !== null);
+                
+                setSelectedVolunteers(volunteersFromData.map(v => ({
+                    ...v,
+                    departments: v.departments || [],
+                    isScheduledElsewhere: scheduledElsewhereIds.has(v.id)
+                })));
             } else {
                 setSelectedVolunteers([]);
+            }
+
+            if (isAdminMode && allDepartments) {
+                const initialSelectedDepts = (initialData.event_departments || [])
+                    .map(ed => allDepartments.find(d => d.id === ed.department_id))
+                    .filter((d): d is Department => d !== undefined);
+                setSelectedDepartments(initialSelectedDepts);
             }
         } else {
             setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
             setSelectedVolunteers([]);
+            setSelectedDepartments([]);
         }
-    }, [initialData, isSchedulingMode, leaderDepartmentId]);
+    }, [initialData, isSchedulingMode, leaderDepartmentId, isAdminMode, allDepartments]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -236,6 +273,21 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
         setPendingStatus(null);
     };
 
+    const handleSelectDepartment = (item: SearchItem) => {
+        const department = allDepartments.find(d => d.id === item.id);
+        if (department && !selectedDepartments.some(d => d.id === department.id)) {
+            setSelectedDepartments([...selectedDepartments, department]);
+        }
+    };
+
+    const handleAddAllDepartments = () => {
+        setSelectedDepartments(allDepartments);
+    };
+
+    const handleRemoveDepartment = (departmentId: number | string) => {
+        setSelectedDepartments(selectedDepartments.filter(d => d.id !== departmentId));
+    };
+
     const addVolunteer = (volunteer: ProcessedVolunteerOption) => {
         if (!selectedVolunteers.some(v => v.id === volunteer.id)) {
             setSelectedVolunteers([...selectedVolunteers, volunteer]);
@@ -270,6 +322,11 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
         if (isSchedulingMode) {
             payload.volunteer_ids = selectedVolunteers.map(v => v.id);
+            payload.scheduling_department_id = leaderDepartmentId;
+        }
+
+        if (isAdminMode) {
+            payload.department_ids = selectedDepartments.map(d => d.id);
         }
         onSave(payload);
     };
@@ -313,7 +370,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                                     disabled={!isAdminMode}
                                 >
                                     <span className="text-slate-900">{selectedStatusLabel}</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isCustomStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isCustomStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                                 </button>
                                 {isCustomStatusDropdownOpen && isAdminMode && (
                                     <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
@@ -346,6 +403,36 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                     <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
                     {isAdminMode && (
                         <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-sm font-medium text-slate-700">Departamentos Envolvidos</label>
+                                <button
+                                    type="button"
+                                    onClick={handleAddAllDepartments}
+                                    className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                                >
+                                    Adicionar Todos
+                                </button>
+                            </div>
+                            <SmartSearch
+                                items={allDepartments.filter(d => d.id != null) as SearchItem[]}
+                                selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
+                                onSelectItem={handleSelectDepartment}
+                                placeholder="Buscar e adicionar departamentos..."
+                            />
+                            <div className="mt-2 flex flex-wrap gap-2 min-h-[40px]">
+                                {selectedDepartments.map(department => (
+                                    <RemovableTag 
+                                        key={department.id}
+                                        text={department.name}
+                                        color="yellow"
+                                        onRemove={() => handleRemoveDepartment(department.id!)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {isAdminMode && (
+                        <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">Cor do Evento</label>
                             <div className="flex items-center space-x-3">
                                 {colorOptions.map(option => (
@@ -371,8 +458,8 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                     <div className="text-center bg-yellow-50 text-yellow-800 p-4 rounded-lg border border-yellow-200">
                         <p className="font-semibold">A escala de voluntários não está disponível.</p>
                         <p className="text-sm mt-1">
-                            {formData.status === 'Pendente' && 'Este evento ainda está pendente de confirmação. A escala só pode ser feita após a confirmação pelo administrador.'}
-                            {formData.status === 'Cancelado' && 'Este evento foi cancelado e não pode mais ter voluntários escalados.'}
+                            {formData.status !== 'Confirmado' && 'Este evento ainda está pendente de confirmação. A escala só pode ser feita após a confirmação pelo administrador.'}
+                            {!isDepartmentInvolved && 'Seu departamento não foi adicionado a este evento ainda.'}
                         </p>
                     </div>
                  </div>
@@ -380,9 +467,6 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
             {isSchedulingAllowed && (
                 <div className="pt-5 border-t border-slate-200">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Voluntários do Departamento "{leaderDepartmentName}"
-                    </label>
                     {allVolunteers.length > 0 ? (
                         <div className="space-y-4">
                             <input

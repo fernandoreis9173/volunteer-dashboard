@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AuthView } from '../types';
-import logoNovaUrl from '../assets/icons/logonova.svg';
 
 interface LoginPageProps {
     setAuthView: (view: AuthView) => void;
@@ -21,6 +20,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
         setError(null);
         setSuccessMessage(null);
         try {
+            // FIX: Updated to Supabase v2 API `signInWithPassword` to match library version.
             const { error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
@@ -45,6 +45,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
         setError(null);
         setSuccessMessage(null);
         try {
+            // FIX: Updated to Supabase v2 API `resetPasswordForEmail` to match library version.
             const { error } = await supabase.auth.resetPasswordForEmail(email);
             if (error) {
                 throw error;
@@ -60,10 +61,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4">
             <div className="w-full max-w-md">
-                <div className="flex items-center justify-center space-x-4 mb-6">
-    <img src={logoNovaUrl} alt="Logo" className="h-16 w-auto" />
-    <h1 className="text-3xl font-bold text-slate-800">Volunteers</h1>
-</div>
+                <div className="flex justify-center mb-6">
+                    <div className="p-3 bg-blue-600 text-white rounded-xl shadow-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                        </svg>
+                    </div>
+                </div>
 
                 <div className="p-6 sm:p-8 space-y-8 bg-white rounded-2xl shadow-lg">
                     <div className="text-left">

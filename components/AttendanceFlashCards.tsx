@@ -1,22 +1,29 @@
 import React, { useMemo } from 'react';
 import type { DashboardEvent } from '../types';
 
+// FIX: Reverted UserProfileState to use a single `department_id` to match the rest of the application.
+interface UserProfileState {
+  role: string | null;
+  department_id: number | null;
+  volunteer_id: number | null;
+  status: string | null;
+}
+
 interface AttendanceFlashCardsProps {
   schedules: DashboardEvent[] | undefined;
-  userProfile: { role: string | null; department_id: number | null } | null;
+  userProfile: UserProfileState | null;
 }
 
 const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, userProfile }) => {
     
     const attendanceData = useMemo(() => {
         if (!schedules || !userProfile?.department_id) {
-            return { name: '', present: 0, absent: 0, total: 0 };
+            return { present: 0, absent: 0, total: 0 };
         }
 
         let present = 0;
         let absent = 0;
         let total = 0;
-        let name = '';
 
         schedules.forEach(event => {
             if (event.status !== 'Confirmado') return;
@@ -34,14 +41,9 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
                     }
                 }
             });
-
-            if (!name) {
-                const dept = (event.event_departments || []).find(ed => ed.departments?.id === userProfile.department_id);
-                if(dept) name = dept.departments.name;
-            }
         });
 
-        return { name, present, absent, total };
+        return { present, absent, total };
     }, [schedules, userProfile]);
 
     const { present, absent, total } = attendanceData;
@@ -102,7 +104,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
             </div>
             
             <p className="text-center text-sm text-slate-600 px-6 -mt-4">
-              Você tem <strong>{present} de {total}</strong> presenças confirmadas. Mantenha o bom trabalho!
+              Você tem <strong>{present} de {total}</strong> presenças confirmadas em seu departamento. Mantenha o bom trabalho!
             </p>
 
             {/* Bottom Section */}

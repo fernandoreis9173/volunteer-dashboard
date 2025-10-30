@@ -1,4 +1,4 @@
-// FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
+// FIX: Restored Supabase v2 User type import.
 import type { User } from '@supabase/supabase-js';
 
 export interface Volunteer {
@@ -13,6 +13,7 @@ export interface EventVolunteer {
   volunteer_id: number;
   department_id: number;
   present: boolean | null;
+  // FIX: Changed `departments` to `string[]` to match the data from `volunteers` table.
   volunteers?: { id: number; name: string; email: string; initials: string; departments: string[]; };
 }
 
@@ -44,6 +45,8 @@ export interface DashboardEvent {
   start_time: string;
   end_time: string;
   status: string;
+  local?: string;
+  observations?: string;
   event_departments: { departments: { id: number; name: string; leader?: string; } }[] | null;
   event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } }[] | null;
 }
@@ -75,7 +78,7 @@ export interface DetailedVolunteer {
     phone: string;
     initials: string;
     status: 'Ativo' | 'Inativo' | 'Pendente';
-    departments: string[];
+    departments: { id: number; name: string; }[];
     skills: string[];
     availability: string[] | string;
     created_at?: string;
@@ -85,10 +88,7 @@ export interface Department {
   id?: number;
   name: string;
   description: string;
-  leader: string;
-  // FIX: Added optional `leader_id` to align the type with application logic and database schema, resolving downstream type errors.
-  leader_id?: string | null;
-  leader_contact?: string;
+  leaders: { id: string; name: string }[];
   skills_required: string[];
   meeting_days: string[];
   status: 'Ativo' | 'Inativo';
@@ -125,17 +125,7 @@ export interface NotificationRecord {
     type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader' | 'invitation_received' | 'shift_swap_request';
     is_read: boolean;
     related_event_id: number | null;
-}
-
-export interface Invitation {
-  id: number;
-  leader_id: string;
-  volunteer_id: number;
-  department_id: number;
-  status: 'pendente' | 'aceito' | 'recusado';
-  created_at: string;
-  departments?: { name: string; leader: string };
-  volunteers?: { name: string };
+    data?: any;
 }
 
 export interface ShiftSwapRequest {
@@ -147,3 +137,14 @@ export interface ShiftSwapRequest {
   status: 'pendente' | 'aprovado' | 'recusado';
   reason_for_swap?: string;
 }
+
+export interface Invitation {
+    id: number;
+    created_at: string;
+    departments: {
+      name: string;
+    } | null;
+    profiles: {
+      name: string | null;
+    } | null;
+  }

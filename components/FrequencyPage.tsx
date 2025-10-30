@@ -6,6 +6,7 @@ import CustomDatePicker from './CustomDatePicker';
 import Pagination from './Pagination';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { User } from '@supabase/supabase-js';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -20,7 +21,7 @@ const VolunteerStatusBadge: React.FC<{ present: boolean | null }> = ({ present }
 };
 
 
-const FrequencyPage: React.FC = () => {
+const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
     const [masterEvents, setMasterEvents] = useState<Event[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -49,7 +50,7 @@ const FrequencyPage: React.FC = () => {
         try {
             const { data, error: fetchError } = await supabase
                 .from('events')
-                .select('*, event_departments(department_id, departments(id, name, leader)), event_volunteers(volunteer_id, department_id, present, volunteers(id, name))')
+                .select('*, event_departments(department_id, departments(id, name)), event_volunteers(volunteer_id, department_id, present, volunteers(id, name))')
                 .order('date', { ascending: false })
                 .order('start_time', { ascending: false });
     
@@ -68,8 +69,29 @@ const FrequencyPage: React.FC = () => {
         fetchEvents();
     }, [fetchEvents]);
 
+    const enrichedEvents = useMemo(() => {
+        if (leaders.length === 0) return masterEvents;
+        
+        return masterEvents.map(event => ({
+            ...event,
+            event_departments: (event.event_departments || []).map((ed: any) => {
+                if (ed.departments?.id) {
+                    const leader = leaders.find(l => l.user_metadata?.department_id === ed.departments.id);
+                    return {
+                        ...ed,
+                        departments: {
+                            ...ed.departments,
+                            leader: leader?.user_metadata?.name || 'N/A'
+                        }
+                    };
+                }
+                return ed;
+            })
+        }));
+    }, [masterEvents, leaders]);
+
     const filteredEvents = useMemo(() => {
-        let events = [...masterEvents];
+        let events = [...enrichedEvents];
         
         // This page is now only for confirmed events, simplifying the view.
         events = events.filter(event => event.status === 'Confirmado');
@@ -97,7 +119,7 @@ const FrequencyPage: React.FC = () => {
         });
 
         return events;
-    }, [masterEvents, dateFilters]);
+    }, [enrichedEvents, dateFilters]);
 
     const paginatedEvents = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -420,25 +442,12 @@ const FrequencyPage: React.FC = () => {
                     <p className="text-slate-500 mt-1">Monitore a presença dos voluntários nos eventos confirmados.</p>
                 </div>
                 <button 
-    onClick={handleExportPDF}
-    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm w-full md:w-auto justify-center"
->
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        className="h-5 w-5" 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor" 
-        strokeWidth={1.5}
-    >
-        <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" 
-        />
-    </svg>
-    <span>Exportar PDF</span>
-</button>
+                    onClick={handleExportPDF}
+                    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm w-full md:w-auto justify-center"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                    <span>Exportar PDF</span>
+                </button>
             </div>
 
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
@@ -454,7 +463,7 @@ const FrequencyPage: React.FC = () => {
                             aria-expanded={isAttendanceDropdownOpen}
                         >
                             <span className="text-slate-900">{selectedAttendanceLabel}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isAttendanceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isAttendanceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>

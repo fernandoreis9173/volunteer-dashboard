@@ -30,60 +30,57 @@ Deno.serve(async (req) => {
     if (!user) throw new Error('Authentication failed.');
 
     // 2. Get leader's department
-    const { data: leaderProfile, error: profileError } = await supabaseAdmin
-      .from('profiles')
+    const { data: leaderDept, error: profileError } = await supabaseAdmin
+      .from('department_leaders')
       .select('department_id')
-      .eq('id', user.id)
+      .eq('leader_id', user.id)
       .single();
-    if (profileError || !leaderProfile || !leaderProfile.department_id) {
+      
+    if (profileError || !leaderDept || !leaderDept.department_id) {
       throw new Error('Could not find a department associated with this leader.');
     }
-    const leaderDepartmentId = leaderProfile.department_id;
+    const leaderDepartmentId = leaderDept.department_id;
 
-    // 3. Get volunteer ID from request and fetch volunteer data
+    // 3. Get volunteer ID from request
     const { volunteerId } = await req.json();
     if (!volunteerId) throw new Error('Volunteer ID is required.');
     
-    const { data: volunteer, error: volunteerError } = await supabaseAdmin
-      .from('volunteers')
-      .select('id, user_id, name, departaments')
-      .eq('id', volunteerId)
-      .single();
-    
-    if (volunteerError) throw volunteerError;
-    if (!volunteer) throw new Error('Volunteer not found.');
-    
-    // 4. Fetch department name
-    const { data: department, error: deptError } = await supabaseAdmin
-        .from('departments')
-        .select('name')
-        .eq('id', leaderDepartmentId)
-        .single();
-    if(deptError || !department) throw new Error('Could not find the leader\'s department name.');
-    const departmentNameToRemove = department.name;
+    // 4. Delete the association from the junction table
+    const { error: deleteError } = await supabaseAdmin
+        .from('volunteer_departments')
+        .delete()
+        .match({
+            volunteer_id: volunteerId,
+            department_id: leaderDepartmentId,
+        });
 
-    // 5. Check if volunteer is actually in the department
-    const currentDepartments = Array.isArray(volunteer.departaments) ? volunteer.departaments : [];
-    if(!currentDepartments.includes(departmentNameToRemove)) {
-        throw new Error(`This volunteer is not in your department.`);
-    }
+    if (deleteError) throw deleteError;
 
-    // 6. Remove the department and update the volunteer record
-    const updatedDepartments = currentDepartments.filter(dept => dept !== departmentNameToRemove);
-    const { error: updateError } = await supabaseAdmin
+    // 5. Create a notification for the volunteer
+    const { data: volunteer, error: volError } = await supabaseAdmin
         .from('volunteers')
-        .update({ departaments: updatedDepartments })
-        .eq('id', volunteer.id);
+        .select('user_id')
+        .eq('id', volunteerId)
+        .single();
+    
+    if (volError) {
+        console.warn(`Could not fetch volunteer for notification: ${volError.message}`);
+    } else if (volunteer && volunteer.user_id) {
+        const { data: department, error: deptError } = await supabaseAdmin
+            .from('departments')
+            .select('name')
+            .eq('id', leaderDepartmentId)
+            .single();
 
-    if (updateError) throw updateError;
-
-    // 7. Create a notification for the volunteer
-    if (volunteer.user_id) {
-      await supabaseAdmin.from('notifications').insert({
-        user_id: volunteer.user_id,
-        message: `Você foi removido(a) do departamento "${departmentNameToRemove}".`,
-        type: 'info'
-      });
+        if (deptError || !department) {
+             console.warn(`Could not fetch department name for notification.`);
+        } else {
+             await supabaseAdmin.from('notifications').insert({
+              user_id: volunteer.user_id,
+              message: `Você foi removido(a) do departamento "${department.name}".`,
+              type: 'info'
+            });
+        }
     }
 
     return new Response(JSON.stringify({ success: true, message: 'Voluntário removido com sucesso!' }), {

@@ -7,6 +7,7 @@ interface DisabledUserPageProps {
 
 const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ userRole }) => {
     const handleLogout = async () => {
+        // FIX: Reverted to Supabase v1 API `signOut` to fix method error.
         await supabase.auth.signOut();
     };
 
@@ -27,7 +28,7 @@ const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ userRole }) => {
             <div className="w-full max-w-lg p-8 space-y-6 bg-white rounded-2xl shadow-lg text-center">
                 <div className="flex justify-center mb-4">
                     <div className="p-3 bg-red-500 text-white rounded-xl flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
                         </svg>
                     </div>

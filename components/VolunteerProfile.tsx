@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { type Session } from '@supabase/supabase-js';
+// FIX: Restored Supabase v2 types for type safety.
+import { type Session, type User } from '@supabase/supabase-js';
 import { DetailedVolunteer } from '../types';
 import { getErrorMessage, parseArrayFromString } from '../lib/utils';
 
 interface VolunteerProfileProps {
     session: Session | null;
     onUpdate: () => void;
+    leaders: User[];
 }
 
 const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
@@ -18,7 +20,7 @@ const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = (
   return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
 };
 
-const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }) => {
+const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, leaders }) => {
     const [volunteerData, setVolunteerData] = useState<DetailedVolunteer | null>(null);
     const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -33,38 +35,57 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }
     });
     
     const fetchProfileData = useCallback(async () => {
-        if (!session) return;
+        if (!session?.user) return;
         setLoading(true);
         setError(null);
         try {
-            const { data, error: fetchError } = await supabase
+            const { data: volunteerProfile, error: fetchError } = await supabase
                 .from('volunteers')
-                .select('*, departments:departaments')
+                .select('*, volunteer_departments(departments(id, name))')
                 .eq('user_id', session.user.id)
                 .single();
+
             if (fetchError) throw fetchError;
-            setVolunteerData(data as DetailedVolunteer);
 
-            const departmentNames = parseArrayFromString(data?.departments);
+            const transformedProfile = {
+                ...volunteerProfile,
+                departments: (volunteerProfile.volunteer_departments || []).map((vd: any) => vd.departments).filter(Boolean)
+            };
+            setVolunteerData(transformedProfile as DetailedVolunteer);
 
-            if (departmentNames.length > 0) {
-                const { data: departmentsData, error: deptsError } = await supabase
-                    .from('departments')
-                    .select('name, leader')
-                    .in('name', departmentNames);
-                
-                if (deptsError) throw deptsError;
-                setDepartmentDetails(departmentsData || []);
+            const departmentIds = transformedProfile.departments.map((d: any) => d.id);
+
+            if (departmentIds.length > 0) {
+                const { data: leadersData, error: leadersError } = await supabase
+                    .from('department_leaders')
+                    .select('department_id, leader_id')
+                    .in('department_id', departmentIds);
+                if (leadersError) throw leadersError;
+
+                const leaderMap = new Map(leaders.map(l => [l.id, l.user_metadata?.name]));
+
+                const enrichedDepts = transformedProfile.departments.map((dept: any) => {
+                    const deptLeaders = leadersData
+                        .filter(rel => rel.department_id === dept.id)
+                        .map(rel => leaderMap.get(rel.leader_id))
+                        .filter(Boolean);
+                    
+                    return {
+                        name: dept.name,
+                        leader: deptLeaders.join(', ') || 'Não atribuído'
+                    };
+                });
+                setDepartmentDetails(enrichedDepts);
             } else {
                 setDepartmentDetails([]);
             }
-
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
-    }, [session]);
+    }, [session, leaders]);
+
 
     useEffect(() => {
         fetchProfileData();
@@ -117,10 +138,11 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate }
             
             if (updateError) throw updateError;
             
+            // FIX: Use the correct Supabase v2 API `updateUser` to update user metadata.
             await supabase.auth.updateUser({ data: { name: formData.name } });
 
-            await fetchProfileData(); // Refetch local data
-            onUpdate(); // Propagate global changes if needed (like notification count)
+            await fetchProfileData();
+            onUpdate();
             setIsEditing(false);
 
         } catch (e: any) {

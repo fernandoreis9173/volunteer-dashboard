@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. Initialize clients and get authenticated user (the leader)
+    // 1. Initialize clients and get authenticated user
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     if (!supabaseUrl || !serviceRoleKey) {
@@ -52,29 +52,50 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) throw new Error('Falha na autenticação.');
 
-    // 2. Get leader's profile to verify their department
-    const { data: leaderProfile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('department_id')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !leaderProfile) {
-      throw new Error('Não foi possível encontrar um perfil para o líder autenticado.');
-    }
-
-    // 3. Get data from the scanned QR code
+    // 2. Get data from request body
     const { volunteerId, eventId, departmentId } = await req.json();
     if (!volunteerId || !eventId || !departmentId) {
-      throw new Error('Dados do QR code inválidos. IDs de voluntário, evento e departamento são necessários.');
+      throw new Error('Dados inválidos. IDs de voluntário, evento e departamento são necessários.');
     }
 
-    // 4. SECURITY CHECK: Ensure the leader is marking attendance for their own department
-    if (leaderProfile.department_id !== departmentId) {
-        throw new Error('Permissão negada. Você só pode marcar presença para o seu próprio departamento.');
+    const userRole = user.user_metadata?.role;
+
+    // 3. Authorization check based on user role
+    if (userRole === 'admin') {
+      // Admin can mark for any department, so we bypass the department check.
+    } else if (userRole === 'leader' || userRole === 'lider') {
+      // Leader is scanning a volunteer's QR code. Verify they are the leader of the specified department.
+      const { data: leaderDept, error: deptError } = await supabaseAdmin
+        .from('department_leaders') // Correct table
+        .select('department_id')
+        .eq('leader_id', user.id) // Correct column
+        .single();
+
+      if (deptError || !leaderDept) {
+        throw new Error('Não foi possível encontrar um perfil de líder ou departamento associado para o usuário autenticado.');
+      }
+      if (leaderDept.department_id !== departmentId) {
+          throw new Error('Permissão negada. Você só pode marcar presença para o seu próprio departamento.');
+      }
+    } else if (userRole === 'volunteer') {
+      // Volunteer is scanning an event's QR code. Verify they are marking their own attendance.
+      const { data: volunteerProfile, error: volError } = await supabaseAdmin
+        .from('volunteers')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      if (volError || !volunteerProfile) {
+        throw new Error('Perfil de voluntário não encontrado.');
+      }
+      if (volunteerProfile.id !== volunteerId) {
+        throw new Error('Permissão negada. Você só pode confirmar sua própria presença.');
+      }
+    } else {
+      throw new Error('Permissão negada. Apenas administradores, líderes ou voluntários podem marcar presença.');
     }
 
-    // 5. Fetch the attendance record to check its current status
+
+    // 4. Fetch the attendance record to check its current status
     const { data: attendanceRecord, error: fetchError } = await supabaseAdmin
         .from('event_volunteers')
         .select('present')
@@ -96,7 +117,7 @@ Deno.serve(async (req) => {
         throw new Error('Este voluntário já teve a presença confirmada.');
     }
 
-    // 6. Update the record to mark as present
+    // 5. Update the record to mark as present
     const { error: updateError } = await supabaseAdmin
         .from('event_volunteers')
         .update({ present: true })
@@ -108,7 +129,7 @@ Deno.serve(async (req) => {
     
     if (updateError) throw updateError;
     
-    // 7. If successful, send notification to the volunteer
+    // 6. If successful, send notification to the volunteer
     try {
         const { data: volunteerData, error: volunteerError } = await supabaseAdmin
             .from('volunteers')
@@ -120,7 +141,7 @@ Deno.serve(async (req) => {
             console.error("Could not fetch volunteer user_id for notification.", { volunteerError });
             throw new Error("Dados do voluntário para notificação não encontrados.");
         }
-        const userId = volunteerData.user_id;
+        const userIdToNotify = volunteerData.user_id;
 
         const { data: eventData, error: eventError } = await supabaseAdmin
             .from('events')
@@ -136,7 +157,7 @@ Deno.serve(async (req) => {
         const notificationMessage = `Sua presença foi confirmada no evento: "${eventName}".`;
 
         await supabaseAdmin.from('notifications').insert({
-            user_id: userId,
+            user_id: userIdToNotify,
             message: notificationMessage,
             type: 'info',
             related_event_id: eventId,
@@ -151,7 +172,7 @@ Deno.serve(async (req) => {
             const { data: subscriptions, error: subsError } = await supabaseAdmin
                 .from('push_subscriptions')
                 .select('endpoint, subscription_data')
-                .eq('user_id', userId);
+                .eq('user_id', userIdToNotify);
 
             if (subsError) {
                 console.error('Error fetching push subscriptions:', subsError.message);
