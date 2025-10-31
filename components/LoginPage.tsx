@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AuthView } from '../types';
+import { LogoMobileIcon } from '@/assets/icons';
 
 interface LoginPageProps {
     setAuthView: (view: AuthView) => void;
@@ -61,12 +62,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4">
             <div className="w-full max-w-md">
-                <div className="flex justify-center mb-6">
-                    <div className="p-3 bg-blue-600 text-white rounded-xl shadow-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-                        </svg>
-                    </div>
+                <div className="flex justify-center items-center mb-6 space-x-1">
+                    <img src={LogoMobileIcon} alt="Logo" className="h-14 w-14" />
+                    <span className="text-2xl font-bold text-slate-800">Volunteers</span>
                 </div>
 
                 <div className="p-6 sm:p-8 space-y-8 bg-white rounded-2xl shadow-lg">

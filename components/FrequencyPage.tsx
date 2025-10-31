@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -21,7 +23,7 @@ const VolunteerStatusBadge: React.FC<{ present: boolean | null }> = ({ present }
 };
 
 
-const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
+const FrequencyPage: React.FC = () => {
     const [masterEvents, setMasterEvents] = useState<Event[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -48,18 +50,23 @@ const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
         setLoading(true);
         setError(null);
         try {
-            const { data, error: fetchError } = await supabase
-                .from('events')
-                .select('*, event_departments(department_id, departments(id, name)), event_volunteers(volunteer_id, department_id, present, volunteers(id, name))')
-                .order('date', { ascending: false })
-                .order('start_time', { ascending: false });
+            // Use the secure RPC function to fetch events.
+            const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
     
-            if (fetchError) throw fetchError;
-            setMasterEvents((data as Event[]) || []);
+            if (rpcError) throw rpcError;
+            
+            // The data is already filtered, enriched, and ready to use.
+            const eventsData = data.map(item => item as unknown as Event);
+            setMasterEvents(eventsData);
+
         } catch (err) {
             const errorMessage = getErrorMessage(err);
-            console.error('Error fetching events:', errorMessage);
-            setError(`Falha ao carregar eventos: ${errorMessage}`);
+            console.error('Error fetching events for frequency page via RPC:', errorMessage);
+             if (errorMessage.includes("failed to run function")) {
+                setError('Falha ao carregar eventos: A função do banco de dados (get_events_for_user) não foi encontrada ou falhou. Peça a um administrador para aplicar o script SQL.');
+            } else {
+                setError(`Falha ao carregar eventos: ${errorMessage}`);
+            }
         } finally {
             setLoading(false);
         }
@@ -69,29 +76,8 @@ const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
         fetchEvents();
     }, [fetchEvents]);
 
-    const enrichedEvents = useMemo(() => {
-        if (leaders.length === 0) return masterEvents;
-        
-        return masterEvents.map(event => ({
-            ...event,
-            event_departments: (event.event_departments || []).map((ed: any) => {
-                if (ed.departments?.id) {
-                    const leader = leaders.find(l => l.user_metadata?.department_id === ed.departments.id);
-                    return {
-                        ...ed,
-                        departments: {
-                            ...ed.departments,
-                            leader: leader?.user_metadata?.name || 'N/A'
-                        }
-                    };
-                }
-                return ed;
-            })
-        }));
-    }, [masterEvents, leaders]);
-
     const filteredEvents = useMemo(() => {
-        let events = [...enrichedEvents];
+        let events = [...masterEvents];
         
         // This page is now only for confirmed events, simplifying the view.
         events = events.filter(event => event.status === 'Confirmado');
@@ -119,7 +105,7 @@ const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
         });
 
         return events;
-    }, [enrichedEvents, dateFilters]);
+    }, [masterEvents, dateFilters]);
 
     const paginatedEvents = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -213,8 +199,8 @@ const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
 
         filteredEvents.forEach(event => {
             const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
-            totalScheduled += event.event_volunteers.length;
-            event.event_volunteers.forEach(v => {
+            totalScheduled += (event.event_volunteers || []).length;
+            (event.event_volunteers || []).forEach(v => {
                 if (v.present === true) {
                     totalPresent++;
                 } else if (v.present === false || v.present === null) {
@@ -256,8 +242,8 @@ const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
 
         filteredEvents.forEach((event) => {
             const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
-            const totalVolunteers = event.event_volunteers.length;
-            const presentVolunteers = event.event_volunteers.filter(v => v.present === true).length;
+            const totalVolunteers = (event.event_volunteers || []).length;
+            const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
             
             const eventBlockHeight = 25;
             if (y + eventBlockHeight > 280) {
@@ -280,10 +266,10 @@ const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
             y += 8;
 
             const tableBody: any[][] = [];
-            event.event_departments.forEach(eventDept => {
+            (event.event_departments || []).forEach(eventDept => {
                 if (!eventDept.departments) return;
 
-                let volunteersForDept = event.event_volunteers.filter(ev => ev.department_id === eventDept.departments.id);
+                let volunteersForDept = (event.event_volunteers || []).filter(ev => ev.department_id === eventDept.departments.id);
 
                 if (attendanceFilter !== 'all') {
                     if (attendanceFilter === 'present') {
@@ -356,8 +342,8 @@ const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
                 {paginatedEvents.map(event => {
                     const isExpanded = expandedEvents.has(event.id!);
                     const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
-                    const totalVolunteers = event.event_volunteers.length;
-                    const presentVolunteers = event.event_volunteers.filter(v => v.present === true).length;
+                    const totalVolunteers = (event.event_volunteers || []).length;
+                    const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
                     
                     return (
                         <div key={event.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -378,10 +364,10 @@ const FrequencyPage: React.FC<{ leaders: User[] }> = ({ leaders }) => {
                             </div>
                             {isExpanded && (
                                 <div className="bg-slate-50/70 border-t border-slate-200 px-4 py-4 space-y-4">
-                                    {event.event_departments.length > 0 ? event.event_departments.map(({ departments }) => {
+                                    {(event.event_departments || []).length > 0 ? (event.event_departments || []).map(({ departments }) => {
                                         if (!departments) return null;
                                         
-                                        let volunteersForDept = event.event_volunteers.filter(ev => ev.department_id === departments.id);
+                                        let volunteersForDept = (event.event_volunteers || []).filter(ev => ev.department_id === departments.id);
                                         const totalInDept = volunteersForDept.length;
                                         const presentInDept = volunteersForDept.filter(v => v.present === true).length;
                                         

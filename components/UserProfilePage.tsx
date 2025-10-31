@@ -3,14 +3,23 @@ import { supabase } from '../lib/supabaseClient';
 // FIX: Restored Supabase v2 types for type safety.
 import { type Session, type User } from '@supabase/supabase-js';
 import { DetailedVolunteer } from '../types';
-// FIX: Import 'formatPhoneNumber' from utils to resolve reference errors.
-import { getErrorMessage, parseArrayFromString, formatPhoneNumber } from '../lib/utils';
+import { getErrorMessage, parseArrayFromString } from '../lib/utils';
 
 interface UserProfilePageProps {
     session: Session | null;
     onUpdate: () => void;
     leaders: User[];
 }
+
+const formatPhoneNumber = (value: string) => {
+    if (!value) return '';
+    const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
+    const { length } = phoneNumber;
+    if (length <= 2) return `(${phoneNumber}`;
+    if (length <= 6) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
+    if (length <= 10) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
+    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
+};
 
 const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
   const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";

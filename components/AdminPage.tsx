@@ -209,7 +209,7 @@ const AdminPage: React.FC = () => {
         <div className="space-y-8">
             <div>
                 <h1 className="text-3xl font-bold text-slate-800">Painel do Administrador</h1>
-                <p className="text-slate-500 mt-1">Gerencie usuários e envie notificações para toda a igreja.</p>
+                <p className="text-slate-500 mt-1">Gerencie usuários e envie notificações.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
@@ -239,7 +239,7 @@ const AdminPage: React.FC = () => {
                                         aria-expanded={isRoleDropdownOpen}
                                     >
                                         <span className="text-slate-900">{selectedRoleLabel}</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                                     </button>
                                     {isRoleDropdownOpen && (
                                         <div className="absolute z-10 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
@@ -279,7 +279,7 @@ const AdminPage: React.FC = () => {
 
                  {/* Broadcast Form */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
-                    <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa (Broadcast)</h2>
+                    <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa</h2>
                     <form onSubmit={handleBroadcastSubmit} className="space-y-4 flex-grow flex flex-col">
                         <div className="flex-grow">
                             <label htmlFor="broadcast-message" className="block text-sm font-medium text-slate-700 mb-1">Mensagem</label>
