@@ -7,7 +7,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // Verifica se as variáveis estão definidas
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
-    '❌ Variáveis de ambiente do Supabase não estão definidas! Verifique seu .env.local'
+    '❌ Variáveis de ambiente do Supabase não estão definidas! Verifique seu arquivo .env.local'
   );
 }
 
