@@ -1,5 +1,6 @@
 import React from 'react';
 import { Department } from '../types';
+import { DepartamentsIcon } from '@/assets/icons';
 
 const Tag: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-200">{children}</span>
@@ -14,17 +15,14 @@ interface DepartmentCardProps {
 }
 
 const DepartmentCard: React.FC<DepartmentCardProps> = ({ department, onEdit, onDelete, userRole, isLeaderDepartment = false }) => {
+  const leaderNames = department.leaders.map(l => l.name).join(', ');
+  
   return (
     <div className={`bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col space-y-4 transition-all ${isLeaderDepartment ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-4">
           <div className={`w-12 h-12 rounded-full ${isLeaderDepartment ? 'bg-blue-100 text-blue-500' : 'bg-blue-100 text-blue-500'} flex-shrink-0 flex items-center justify-center`}>
-            <img 
-    src="/assets/icons/departaments.svg" 
-    alt="Departamentos" 
-    className="h-6 w-6"
-    style={{ filter: 'brightness(0) saturate(100%) invert(21%) sepia(96%) saturate(3571%) hue-rotate(216deg) brightness(91%) contrast(101%)' }}
-/>
+            <img src={DepartamentsIcon} alt="Department" className="h-6 w-6" style={{ filter: 'invert(48%) sepia(94%) saturate(1007%) hue-rotate(194deg) brightness(98%) contrast(95%)' }} />
           </div>
           <div>
             <p className="font-bold text-slate-800 text-lg">{department.name}</p>
@@ -49,7 +47,7 @@ const DepartmentCard: React.FC<DepartmentCardProps> = ({ department, onEdit, onD
       <div className="space-y-3 pt-2">
         <div className="flex items-center space-x-2 text-sm text-slate-600">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
-          <span>Líder: <span className="font-semibold">{department.leader}</span></span>
+          <span>Líder(es): <span className="font-semibold">{leaderNames || 'Não atribuído'}</span></span>
         </div>
         
         {(department.skills_required || []).length > 0 && (

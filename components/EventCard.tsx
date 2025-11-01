@@ -78,7 +78,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
     
     const isLeader = userRole === 'leader' || userRole === 'lider';
     const isAdmin = userRole === 'admin';
-    const isDepartmentInvolved = !!leaderDepartmentId && event.event_departments.some(ed => Number(ed.department_id) === Number(leaderDepartmentId));
+    const isDepartmentInvolved = isLeader && leaderDepartmentId ? event.event_departments.some(ed => ed.department_id === leaderDepartmentId) : false;
     const canLeaderSchedule = isLeader && event.status === 'Confirmado';
     
     const d = new Date();
@@ -94,7 +94,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
 
     const departmentsToDisplay = useMemo(() => {
         if (isLeader && isFilteredByMyDepartment && leaderDepartmentId) {
-            return event.event_departments.filter(ed => Number(ed.department_id) === Number(leaderDepartmentId));
+            return event.event_departments.filter(ed => ed.department_id === leaderDepartmentId);
         }
         return event.event_departments;
     }, [event.event_departments, isLeader, isFilteredByMyDepartment, leaderDepartmentId]);
@@ -113,7 +113,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
 
     return (
         <div 
-            className={`bg-white p-5 rounded-xl shadow-sm border border-slate-200 transition-all duration-300 border-l-4 relative ${isHighlighted ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+            className={`p-5 rounded-xl shadow-sm border transition-all duration-300 border-l-4 relative ${isHighlighted ? 'ring-2 ring-offset-2 ring-blue-500' : ''} ${isDepartmentInvolved ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200'}`}
             style={{ borderLeftColor: event.color || '#e2e8f0' }}
         >
             {/* --- Top Right Controls --- */}
@@ -148,19 +148,12 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
             {/* --- Leader Action Buttons --- */}
             <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 {isFinished ? (
-                    <div className="flex items-center space-x-2 text-sm text-red-700 font-medium bg-red-100 px-4 py-2 rounded-lg">
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        className="h-5 w-5 text-red-500 flex-shrink-0" 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor" 
-        strokeWidth={2}
-    >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-    <span>Este evento já foi encerrado.</span>
-</div>
+                    <div className="flex items-center space-x-2 text-sm text-red-500 font-medium bg-red-100 px-4 py-2 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Este evento já foi encerrado.</span>
+                    </div>
                 ) : (
                     <>
                         {isLeader && isToday && isDepartmentInvolved && (
@@ -188,10 +181,10 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
                 <div className="space-y-4">
                     {departmentsToDisplay.length > 0 ? departmentsToDisplay.map(({ departments }) => {
                         if (!departments) return null;
-                        const volunteersForDept = event.event_volunteers.filter(ev => ev.department_id === departments.id);
+                        const volunteersForDept = (event.event_volunteers || []).filter(ev => ev.department_id === departments.id);
                         const presentCount = volunteersForDept.filter(v => v.present).length;
                         const hasScheduled = volunteersForDept.length > 0;
-                        const isLeadersDept = isLeader && departments.id === leaderDepartmentId;
+                        const isLeadersDept = isLeader && leaderDepartmentId === departments.id;
 
                         const MAX_VISIBLE_VOLUNTEERS = 3;
                         const isLongList = volunteersForDept.length > MAX_VISIBLE_VOLUNTEERS;

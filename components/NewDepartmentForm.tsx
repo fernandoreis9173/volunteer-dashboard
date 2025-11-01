@@ -162,26 +162,14 @@ const TagInputField: React.FC<{
 interface NewDepartmentFormProps {
     initialData?: Department | null;
     onCancel: () => void;
-    onSave: (department: Omit<Department, 'created_at'>, new_leader_id?: string) => void;
+    onSave: (department: Omit<Department, 'created_at' | 'leaders'> & { leaders: any[] }, leader_ids: string[]) => void;
     isSaving: boolean;
     saveError: string | null;
     leaders: User[];
 }
 
-const getInitials = (name?: string): string => {
-    if (!name) return '??';
-    const parts = name.trim().split(' ');
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
-};
-
 const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
-    const [formData, setFormData] = useState({ 
-        name: '', 
-        description: '', 
-        leader: '', 
-        leader_contact: '' 
-    });
+    const [formData, setFormData] = useState({ name: '', description: '' });
     const [skills, setSkills] = useState<string[]>([]);
     const [meetingDays, setMeetingDays] = useState({
         domingo: false, segunda: false, terca: false,
@@ -191,21 +179,7 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
     const isEditing = !!initialData;
     const [leaderSearch, setLeaderSearch] = useState('');
     const [isLeaderDropdownOpen, setIsLeaderDropdownOpen] = useState(false);
-    const [allDepartments, setAllDepartments] = useState<Department[]>([]);
-    const [leaderConflictError, setLeaderConflictError] = useState<string | null>(null);
-    const [selectedLeader, setSelectedLeader] = useState<User | null>(null);
-
-    useEffect(() => {
-        const fetchAllDepartments = async () => {
-            const { data: departmentsData, error: departmentsError } = await supabase.from('departments').select('*');
-            if (departmentsError) {
-                console.error('Error fetching departments for conflict check:', getErrorMessage(departmentsError));
-            } else {
-                setAllDepartments(departmentsData || []);
-            }
-        };
-        fetchAllDepartments();
-    }, []);
+    const [selectedLeaders, setSelectedLeaders] = useState<User[]>([]);
 
     useEffect(() => {
         const meetingDayKeys = {
@@ -217,8 +191,6 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
             setFormData({
                 name: initialData.name,
                 description: initialData.description,
-                leader: initialData.leader,
-                leader_contact: initialData.leader_contact || ''
             });
             setSkills(initialData.skills_required || []);
             setIsActive(initialData.status === 'Ativo');
@@ -232,59 +204,30 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
             });
             setMeetingDays(newMeetingDaysState);
             
-            if (initialData.leader) {
-                const leaderUser = leaders.find(l => l.user_metadata?.name === initialData.leader);
-                setSelectedLeader(leaderUser || null);
-            } else {
-                setSelectedLeader(null);
-            }
+            const initialLeaderIds = new Set(initialData.leaders.map(l => l.id));
+            setSelectedLeaders(leaders.filter(l => initialLeaderIds.has(l.id)));
         } else {
             // Reset for new
-            setFormData({ name: '', description: '', leader: '', leader_contact: '' });
+            setFormData({ name: '', description: '' });
             setSkills([]);
             setMeetingDays(meetingDayKeys);
             setIsActive(true);
-            setSelectedLeader(null);
+            setSelectedLeaders([]);
         }
     }, [initialData, leaders]);
     
-    useEffect(() => {
-        if (selectedLeader) {
-            // @ts-ignore
-            const leaderDeptId = selectedLeader.user_metadata?.department_id;
-            const leaderDept = allDepartments.find(d => d.id === leaderDeptId);
+    const availableLeaders = useMemo(() => {
+        const selectedIds = new Set(selectedLeaders.map(l => l.id));
+        return leaders
+            .filter(l => (l.user_metadata?.role === 'leader' || l.user_metadata?.role === 'lider'))
+            .filter(l => !selectedIds.has(l.id));
+    }, [leaders, selectedLeaders]);
 
-            if (leaderDept && (!isEditing || leaderDept.id !== initialData?.id)) {
-                setLeaderConflictError(`${selectedLeader.user_metadata?.name} já é líder do departamento ${leaderDept.name}.`);
-            } else {
-                setLeaderConflictError(null);
-            }
-        } else {
-            setLeaderConflictError(null);
-        }
-    }, [selectedLeader, allDepartments, isEditing, initialData]);
-    
     const filteredLeaders = useMemo(() => {
-        const assignedLeaders = new Map<string, string>();
-        allDepartments.forEach(d => {
-            if (d.leader_id) {
-                assignedLeaders.set(d.leader_id, d.name);
-            }
-        });
-
-        let availableLeaders = leaders.filter(l => {
-            // FIX: Removed `as any` cast. With `leader_id` now part of the Department type, this access is type-safe.
-            if (isEditing && l.id === initialData?.leader_id) {
-                return true;
-            }
-            return !assignedLeaders.has(l.id);
-        });
-
         if (!leaderSearch) return availableLeaders;
-
         const lowercasedQuery = leaderSearch.toLowerCase();
         return availableLeaders.filter(l => l.user_metadata?.name?.toLowerCase().includes(lowercasedQuery));
-    }, [leaderSearch, leaders, allDepartments, isEditing, initialData]);
+    }, [leaderSearch, availableLeaders]);
     
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -297,9 +240,15 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
     };
 
     const handleLeaderSelect = (leader: User) => {
-        setSelectedLeader(leader);
+        setSelectedLeaders(prev => [...prev, leader]);
         setIsLeaderDropdownOpen(false);
+        setLeaderSearch('');
     };
+    
+    const handleLeaderRemove = (leaderId: string) => {
+        setSelectedLeaders(prev => prev.filter(l => l.id !== leaderId));
+    };
+
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -309,29 +258,23 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
             return;
         }
 
-        if (leaderConflictError) {
-            alert(leaderConflictError);
-            return;
-        }
-
         const selectedMeetingDays = Object.entries(meetingDays)
             .filter(([, isSelected]) => isSelected)
             .map(([day]) => day);
 
-        // FIX: With `leader_id` added to the Department interface, this object now correctly
-        // matches the type expected by the onSave function, removing the need for @ts-ignore.
-        const departmentData: Omit<Department, 'created_at'> & {id?: number} = {
+        const departmentData = {
             id: initialData?.id,
             name: formData.name,
             description: formData.description,
-            leader: selectedLeader?.user_metadata?.name || 'Não atribuído',
-            leader_id: selectedLeader?.id || null, 
-            leader_contact: selectedLeader?.email || '',
-            status: isActive ? 'Ativo' : 'Inativo',
+            leaders: selectedLeaders.map(l => ({ id: l.id, name: l.user_metadata?.name || '' })),
+            // FIX: Added 'as const' to ensure TypeScript infers the correct literal type ('Ativo' | 'Inativo')
+            // instead of a generic string, resolving the type error when calling onSave.
+            status: isActive ? 'Ativo' as const : 'Inativo' as const,
             skills_required: skills,
             meeting_days: selectedMeetingDays,
         };
-        onSave(departmentData, selectedLeader?.id);
+        const leaderIds = selectedLeaders.map(l => l.id);
+        onSave(departmentData, leaderIds);
     };
 
     return (
@@ -343,33 +286,24 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
             `}</style>
             <h2 className="text-2xl font-bold text-slate-800 mb-6">{isEditing ? 'Editar Departamento' : 'Novo Departamento'}</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InputField label="Nome do Departamento" type="text" name="name" value={formData.name} onChange={handleInputChange} required />
-                    
+                <InputField label="Nome do Departamento" type="text" name="name" value={formData.name} onChange={handleInputChange} required />
+                
+                <div className="relative">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Líderes do Departamento</label>
                     <div className="relative">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Líder do Departamento</label>
-                        <div 
-                            onClick={() => setIsLeaderDropdownOpen(prev => !prev)}
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer"
-                        >
-                            {selectedLeader ? (
-                                <span className="text-slate-900">{selectedLeader.user_metadata?.name}</span>
-                            ) : (
-                                <span className="text-slate-400">Selecione um líder</span>
-                            )}
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
-                        </div>
+                        <input
+                            type="text"
+                            placeholder="Buscar e adicionar líderes..."
+                            value={leaderSearch}
+                            onChange={(e) => {
+                                setLeaderSearch(e.target.value);
+                                setIsLeaderDropdownOpen(true);
+                            }}
+                            onFocus={() => setIsLeaderDropdownOpen(true)}
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
+                        />
                         {isLeaderDropdownOpen && (
                             <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-                                <div className="p-2">
-                                    <input 
-                                        type="text"
-                                        placeholder="Buscar líder..."
-                                        value={leaderSearch}
-                                        onChange={(e) => setLeaderSearch(e.target.value)}
-                                        className="w-full px-2 py-1.5 border border-slate-300 rounded-md"
-                                    />
-                                </div>
                                 <ul className="py-1">
                                     {filteredLeaders.map(leader => (
                                         <li key={leader.id} onClick={() => handleLeaderSelect(leader)} className="px-4 py-2 hover:bg-slate-100 cursor-pointer text-slate-700">
@@ -380,7 +314,16 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
                                 </ul>
                             </div>
                         )}
-                        {leaderConflictError && <p className="text-xs text-red-500 mt-1">{leaderConflictError}</p>}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 min-h-[40px]">
+                        {selectedLeaders.map(leader => (
+                            <RemovableTag 
+                                key={leader.id}
+                                text={leader.user_metadata?.name || ''}
+                                color="yellow"
+                                onRemove={() => handleLeaderRemove(leader.id)}
+                            />
+                        ))}
                     </div>
                 </div>
                 
@@ -415,7 +358,7 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
                 <div className="pt-6 border-t border-slate-200 flex justify-end items-center gap-3">
                     {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
                     <button type="button" onClick={onCancel} className="px-4 py-2 bg-white border border-slate-300 font-semibold rounded-lg">Cancelar</button>
-                    <button type="submit" disabled={isSaving || !!leaderConflictError} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-blue-400">
+                    <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-blue-400">
                         {isSaving ? 'Salvando...' : 'Salvar Departamento'}
                     </button>
                 </div>

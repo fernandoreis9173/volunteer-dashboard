@@ -7,6 +7,7 @@ interface DisabledUserPageProps {
 
 const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ userRole }) => {
     const handleLogout = async () => {
+        // FIX: Reverted to Supabase v1 API `signOut` to fix method error.
         await supabase.auth.signOut();
     };
 

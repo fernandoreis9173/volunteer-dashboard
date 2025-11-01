@@ -1,33 +1,39 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import EventCard from './EventCard';
 import NewEventForm from './NewScheduleForm';
 import ConfirmationModal from './ConfirmationModal';
 import CustomDatePicker from './CustomDatePicker'; // Import the new component
 import QRScannerModal from './QRScannerModal'; // Import the QR scanner modal
-import { Event, NotificationRecord } from '../types';
+import { Event, NotificationRecord, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import Pagination from './Pagination';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { User } from '@supabase/supabase-js';
 
-interface EventsPageProps {
+interface SchedulesPageProps {
   isFormOpen: boolean;
   setIsFormOpen: (isOpen: boolean) => void;
   userRole: string | null;
   leaderDepartmentId: number | null;
+  onDataChange: () => void;
 }
 
 const ITEMS_PER_PAGE = 4;
 
-const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, userRole, leaderDepartmentId }) => {
+const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen, userRole, leaderDepartmentId, onDataChange }) => {
   const [masterEvents, setMasterEvents] = useState<Event[]>([]);
+  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [inputValue, setInputValue] = useState(''); // For immediate input
+  const [searchQuery, setSearchQuery] = useState(''); // For debounced filtering
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [eventToDeleteId, setEventToDeleteId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -40,13 +46,23 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
   // Filters State
   const [dateFilters, setDateFilters] = useState<{ start: string; end: string }>({ start: '', end: '' });
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [showOnlyMyDepartmentEvents, setShowOnlyMyDepartmentEvents] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
   const isAdmin = userRole === 'admin';
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        setSearchQuery(inputValue);
+    }, 300); // 300ms delay
+
+    return () => {
+        clearTimeout(timer);
+    };
+  }, [inputValue]);
 
   const showForm = useCallback(() => {
     setSaveError(null);
@@ -67,23 +83,39 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
-        .from('events')
-        .select('*, event_departments(department_id, departments(id, name, leader)), event_volunteers(volunteer_id, department_id, present, volunteers(id, user_id, name, email, initials, departments:departaments))')
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true });
+        // Use the secure RPC function to fetch events.
+        // This bypasses faulty RLS and securely filters data on the server.
+        const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
 
-      if (fetchError) throw fetchError;
-      setMasterEvents((data as Event[]) || []);
+        if (rpcError) throw rpcError;
+
+        // The data is returned as an array of JSON objects, cast it to the Event type.
+        // The data is already filtered and enriched by the database function.
+        const eventsData = data.map(item => item as unknown as Event);
+        setMasterEvents(eventsData);
+
     } catch (err) {
-      const errorMessage = getErrorMessage(err);
-      console.error('Error fetching events:', errorMessage);
-      setError(`Falha ao carregar eventos: ${errorMessage}`);
+        const errorMessage = getErrorMessage(err);
+        console.error('Error fetching events via RPC:', errorMessage);
+        if (errorMessage.includes("failed to run function")) {
+            setError('Falha ao carregar eventos: A função do banco de dados (get_events_for_user) não foi encontrada ou falhou. Peça a um administrador para aplicar o script SQL.');
+        } else {
+            setError(`Falha ao carregar eventos: ${errorMessage}`);
+        }
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   }, []);
   
+  const fetchAllDepartments = useCallback(async () => {
+    const { data, error } = await supabase.from('departments').select('id, name');
+    if (error) {
+        console.error("Failed to fetch all departments for form:", getErrorMessage(error));
+    } else {
+        setAllDepartments(data as Department[] || []);
+    }
+  }, []);
+
   const showNotification = useCallback((message: string, type: 'success' | 'error') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 5000);
@@ -101,7 +133,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
             if (data.eId !== scanningEvent?.id) {
                 throw new Error("Este QR Code é para um evento diferente.");
             }
-            if (data.dId !== leaderDepartmentId) {
+            if (leaderDepartmentId !== data.dId) {
                 throw new Error("Este voluntário não pertence ao seu departamento para este evento.");
             }
 
@@ -163,12 +195,13 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
 
   useEffect(() => {
     fetchEvents();
+    fetchAllDepartments();
     const highlightId = sessionStorage.getItem('highlightEventId');
     if (highlightId) {
         setHighlightedEventId(parseInt(highlightId, 10));
         sessionStorage.removeItem('highlightEventId');
     }
-  }, [fetchEvents]);
+  }, [fetchEvents, fetchAllDepartments]);
 
   useEffect(() => {
     const editId = sessionStorage.getItem('editEventId');
@@ -201,19 +234,13 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         events = events.filter(event => event.status === statusFilter);
     }
     
-    if (isLeader && showOnlyMyDepartmentEvents && leaderDepartmentId) {
-        events = events.filter(event => 
-            event.event_departments.some(ed => Number(ed.department_id) === Number(leaderDepartmentId))
-        );
-    }
-
     if (searchQuery) {
         const lowercasedQuery = searchQuery.toLowerCase();
         events = events.filter(e => e.name.toLowerCase().includes(lowercasedQuery));
     }
 
     return events;
-  }, [masterEvents, dateFilters, statusFilter, showOnlyMyDepartmentEvents, isLeader, leaderDepartmentId, searchQuery]);
+  }, [masterEvents, dateFilters, statusFilter, searchQuery]);
 
   const paginatedEvents = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -224,7 +251,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, dateFilters, statusFilter, showOnlyMyDepartmentEvents]);
+  }, [searchQuery, dateFilters, statusFilter]);
   
   const handleStartDateChange = (value: string) => {
     setDateFilters(prev => ({ ...prev, start: value }));
@@ -237,31 +264,28 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
   const handleClearFilters = () => {
     setDateFilters({ start: '', end: '' });
     setStatusFilter('all');
+    setInputValue('');
     setSearchQuery('');
-    if (isLeader) {
-      setShowOnlyMyDepartmentEvents(false);
-    }
     setCurrentPage(1);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const doc = new jsPDF();
     const today = new Date().toLocaleDateString('pt-BR');
     let lastHeaderPage = 0;
 
     const pageHeader = (docInstance: jsPDF) => {
-        // FIX: Cast `docInstance.internal` to `any` to access `getNumberOfPages` which may not be in the type definition.
         const currentPage = (docInstance.internal as any).getNumberOfPages();
         if (currentPage === lastHeaderPage) {
-            return; // Prevent duplicate headers on the same page
+            return;
         }
         lastHeaderPage = currentPage;
         
         docInstance.setFontSize(10);
         docInstance.setTextColor(150);
-        docInstance.text('Volunteers - Amar e servir', 14, 10);
+        docInstance.text('Volunteers - Sistema da Igreja', 14, 10);
         docInstance.text(`Gerado em: ${today}`, docInstance.internal.pageSize.width - 14, 10, { align: 'right' });
-        docInstance.setDrawColor(226, 232, 240); // slate-200
+        docInstance.setDrawColor(226, 232, 240);
         docInstance.line(14, 13, docInstance.internal.pageSize.width - 14, 13);
     };
 
@@ -274,8 +298,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
 
     let y = 35;
 
-    const isFilteredByMyDept = isLeader && showOnlyMyDepartmentEvents;
-    if (isFilteredByMyDept && leaderDepartmentId) {
+    if (isLeader && leaderDepartmentId) {
         let departmentName = '';
         let leaderName = '';
         let totalVolunteersForDept = 0;
@@ -291,7 +314,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         }
         
         filteredEvents.forEach(event => {
-            const volunteersInEventForDept = event.event_volunteers.filter(ev => ev.department_id === leaderDepartmentId);
+            const volunteersInEventForDept = (event.event_volunteers || []).filter(ev => ev.department_id === leaderDepartmentId);
             totalVolunteersForDept += volunteersInEventForDept.length;
             totalPresentForDept += volunteersInEventForDept.filter(ev => ev.present === true).length;
         });
@@ -331,7 +354,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         const departmentSummary = new Map<number, { name: string; leader: string; volunteerCount: number; presentCount: number }>();
 
         filteredEvents.forEach(event => {
-            event.event_departments.forEach(ed => {
+            (event.event_departments || []).forEach(ed => {
                 if (ed.departments && !departmentSummary.has(ed.department_id)) {
                     departmentSummary.set(ed.department_id, {
                         name: ed.departments.name,
@@ -344,7 +367,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         });
 
         filteredEvents.forEach(event => {
-            event.event_volunteers.forEach(ev => {
+            (event.event_volunteers || []).forEach(ev => {
                 const summary = departmentSummary.get(ev.department_id);
                 if (summary) {
                     summary.volunteerCount += 1;
@@ -372,7 +395,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 margin: { left: 14, right: 14 },
                 didDrawPage: () => pageHeader(doc)
             });
-            // @ts-ignore
             y = (doc as any).lastAutoTable.finalY + 15;
         } else {
             doc.setFontSize(10);
@@ -417,13 +439,13 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         
         let totalVolunteersInEvent = 0;
         let totalPresentInEvent = 0;
-        if (isFilteredByMyDept && leaderDepartmentId) {
-             const volunteersForMyDept = event.event_volunteers.filter(ev => ev.department_id === leaderDepartmentId);
+        if (isLeader && leaderDepartmentId) {
+             const volunteersForMyDept = (event.event_volunteers || []).filter(ev => ev.department_id === leaderDepartmentId);
             totalVolunteersInEvent = volunteersForMyDept.length;
             totalPresentInEvent = volunteersForMyDept.filter(ev => ev.present === true).length;
         } else {
-            totalVolunteersInEvent = event.event_volunteers.length;
-            totalPresentInEvent = event.event_volunteers.filter(ev => ev.present === true).length;
+            totalVolunteersInEvent = (event.event_volunteers || []).length;
+            totalPresentInEvent = (event.event_volunteers || []).filter(ev => ev.present === true).length;
         }
         
         doc.setFont('helvetica', 'bold');
@@ -433,9 +455,9 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         y += 8;
 
         const tableBody: any[][] = [];
-        let departmentsToProcess = event.event_departments;
-        if (isFilteredByMyDept && leaderDepartmentId) {
-             departmentsToProcess = event.event_departments.filter(ed => ed.department_id === leaderDepartmentId);
+        let departmentsToProcess = event.event_departments || [];
+        if (isLeader && leaderDepartmentId) {
+             departmentsToProcess = (event.event_departments || []).filter(ed => ed.department_id === leaderDepartmentId);
         }
         
         if (departmentsToProcess.length > 0) {
@@ -443,7 +465,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 const deptInfo = eventDept.departments;
                 if (!deptInfo) return;
                 const leaderName = deptInfo.leader || 'N/A';
-                const volunteersForDept = event.event_volunteers
+                const volunteersForDept = (event.event_volunteers || [])
                     .filter(ev => ev.department_id === deptInfo.id);
 
                 const presentCount = volunteersForDept.filter(v => v.present).length;
@@ -477,7 +499,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 margin: { left: 14, right: 14 },
                 didDrawPage: () => pageHeader(doc)
             });
-            // @ts-ignore
             y = (doc as any).lastAutoTable.finalY + 15;
         } else {
              doc.setFontSize(10);
@@ -526,142 +547,121 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
         }
     };
 
-    const handleSaveEvent = async (eventData: any) => {
+    const handleSaveEvent = async (eventPayload: any) => {
         setIsSaving(true);
         setSaveError(null);
         try {
-            const isSchedulingMode = isLeader && eventData.id;
+            const isSchedulingMode = isLeader && eventPayload.id && eventPayload.scheduling_department_id;
+    
             if (isSchedulingMode) {
-                const eventId = eventData.id;
-                const eventName = eventData.name;
-                const newVolunteerIds = new Set(eventData.volunteer_ids || []);
-
+                const eventId = eventPayload.id;
+                const eventName = eventPayload.name;
+                const schedulingDepartmentId = eventPayload.scheduling_department_id;
+                const newVolunteerIds = new Set(eventPayload.volunteer_ids || []);
+    
                 const { data: currentVolunteersData, error: currentVolError } = await supabase
                     .from('event_volunteers')
                     .select('volunteer_id, volunteers(user_id, name)')
                     .eq('event_id', eventId)
-                    .eq('department_id', leaderDepartmentId);
-
+                    .eq('department_id', schedulingDepartmentId);
+    
                 if (currentVolError) throw currentVolError;
-                
-                const currentVolunteers = currentVolunteersData || [];
-                const currentVolunteerIds = new Set(currentVolunteers.map(v => v.volunteer_id));
-
-                const addedVolunteerIds = [...newVolunteerIds].filter(id => !currentVolunteerIds.has(id));
-                const removedVolunteers = currentVolunteers.filter(v => !newVolunteerIds.has(v.volunteer_id));
-
-                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', leaderDepartmentId);
+    
+                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', schedulingDepartmentId);
                 if (deleteError) throw deleteError;
-
-                if (eventData.volunteer_ids && eventData.volunteer_ids.length > 0) {
-                    const volunteersToInsert = eventData.volunteer_ids.map((vol_id: number) => ({
-                        event_id: eventId, volunteer_id: vol_id, department_id: leaderDepartmentId,
+                
+                if (eventPayload.volunteer_ids && eventPayload.volunteer_ids.length > 0) {
+                    const volunteersToInsert = eventPayload.volunteer_ids.map((vol_id: number) => ({
+                        event_id: eventId, volunteer_id: vol_id, department_id: schedulingDepartmentId,
                     }));
                     const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
                     if (insertError) throw insertError;
                 }
-
+    
+                const currentVolunteers = currentVolunteersData || [];
+                const currentVolunteerIds = new Set(currentVolunteers.map(v => v.volunteer_id));
+    
+                const addedVolunteerIds = [...newVolunteerIds].filter(id => !currentVolunteerIds.has(id));
+                const removedVolunteers = currentVolunteers.filter(v => !newVolunteerIds.has(v.volunteer_id));
+    
                 const notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[] = [];
-
+    
                 if (addedVolunteerIds.length > 0) {
-                    const { data: addedUsers, error: usersError } = await supabase
-                        .from('volunteers')
-                        .select('user_id')
-                        .in('id', addedVolunteerIds);
-                    
-                    if (usersError) {
-                        console.error("Could not fetch added volunteers for notification:", usersError);
-                    } else if (addedUsers) {
-                        addedUsers.filter(u => u.user_id).forEach(u => {
-                            notifications.push({
-                                user_id: u.user_id!,
-                                message: `Você foi escalado(a) para o evento "${eventName}".`,
-                                type: 'new_schedule' as const,
-                                related_event_id: eventId,
-                            });
+                    const { data: addedUsers, error: usersError } = await supabase.from('volunteers').select('user_id').in('id', addedVolunteerIds);
+                    if (usersError) console.error("Error fetching added volunteers for notification", usersError);
+                    else if (addedUsers) {
+                        addedUsers.forEach(u => {
+                            if (u.user_id) notifications.push({ user_id: u.user_id, message: `Você foi escalado(a) para o evento "${eventName}".`, type: 'new_schedule', related_event_id: eventId });
                         });
                     }
                 }
-
+    
                 removedVolunteers.forEach(v => {
                     const volunteer = Array.isArray(v.volunteers) ? v.volunteers[0] : v.volunteers;
                     if (volunteer?.user_id) {
-                        notifications.push({
-                            user_id: volunteer.user_id,
-                            message: `Você foi removido(a) da escala do evento "${eventName}".`,
-                            type: 'event_update' as const,
-                            related_event_id: eventId,
-                        });
+                        notifications.push({ user_id: volunteer.user_id, message: `Você foi removido(a) da escala do evento "${eventName}".`, type: 'event_update', related_event_id: eventId });
                     }
                 });
                 
                 if (notifications.length > 0) {
                     await createAndSendNotifications(notifications);
                 }
-
-            } else { // Admin creating or editing an event
-                const { volunteer_ids, ...eventPayload } = eventData;
-
-                let conflictQuery = supabase
-                    .from('events')
-                    .select('id, name, start_time, end_time')
-                    .eq('date', eventPayload.date)
-                    .lt('start_time', eventPayload.end_time)
-                    .gt('end_time', eventPayload.start_time);
+            
+            } else if (isAdmin) {
+                const { department_ids, volunteer_ids, scheduling_department_id, ...eventDetails } = eventPayload;
                 
-                if (eventPayload.id) {
-                    conflictQuery = conflictQuery.neq('id', eventPayload.id);
+                let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', eventDetails.date).lt('start_time', eventDetails.end_time).gt('end_time', eventDetails.start_time);
+                if (eventDetails.id) conflictQuery = conflictQuery.neq('id', eventDetails.id);
+                const { data: conflicts, error: conflictError } = await conflictQuery;
+                if (conflictError) throw conflictError;
+                if (conflicts && conflicts.length > 0) {
+                    const c = conflicts[0];
+                    throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
                 }
-                const { data: conflictingEvents, error: conflictError } = await conflictQuery;
-                if (conflictError) throw new Error(`Erro ao verificar conflitos: ${getErrorMessage(conflictError)}`);
-                if (conflictingEvents && conflictingEvents.length > 0) {
-                    const conflict = conflictingEvents[0];
-                    const conflictMessage = `Conflito de horário com o evento "${conflict.name}" (${conflict.start_time.substring(0,5)} - ${conflict.end_time.substring(0,5)}).`;
-                    throw new Error(conflictMessage);
-                }
-                
+    
                 let savedEvent;
-                const isCreating = !eventPayload.id;
-
+                const isCreating = !eventDetails.id;
+    
                 if (isCreating) {
-                    const { id, ...insertPayload } = eventPayload;
+                    const { id, ...insertPayload } = eventDetails;
                     const { data: newEvent, error } = await supabase.from('events').insert(insertPayload).select().single();
                     if (error) throw error;
                     if (!newEvent) throw new Error("Falha ao criar o evento.");
                     savedEvent = newEvent;
-    
-                    // Notify leaders via Edge Function
-                    const { error: leaderNotifyError } = await supabase.functions.invoke('create-notifications', {
-                        body: {
-                            notifyType: 'event_created',
-                            event: savedEvent,
-                        },
-                    });
-                    if (leaderNotifyError) {
-                        console.error("Falha ao acionar notificações para líderes na criação do evento:", getErrorMessage(leaderNotifyError));
-                    }
-                } else { // Is Updating
-                    const eventId = eventPayload.id;
-                    const { id, ...updatePayload } = eventPayload;
+                } else { // Updating
+                    const eventId = eventDetails.id;
+                    const { id, ...updatePayload } = eventDetails;
                     const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
                     if (error) throw error;
                     if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
                     savedEvent = updatedEvent;
-    
-                    // Notify leaders and volunteers via Edge Function
-                    const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
-                        body: { 
-                            notifyType: 'event_updated',
-                            event: savedEvent,
-                        },
-                    });
-                    if (notifyError) {
-                        console.error("Falha ao acionar notificações na atualização do evento:", getErrorMessage(notifyError));
-                    }
+                }
+                
+                // Sync departments
+                const eventId = savedEvent.id;
+                const { error: deleteDeptError } = await supabase.from('event_departments').delete().eq('event_id', eventId);
+                if (deleteDeptError) throw deleteDeptError;
+
+                if (department_ids && department_ids.length > 0) {
+                    const assignments = department_ids.map((deptId: number) => ({ event_id: eventId, department_id: deptId }));
+                    const { error: insertDeptError } = await supabase.from('event_departments').insert(assignments);
+                    if (insertDeptError) throw insertDeptError;
+                }
+
+                const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                    body: { 
+                        notifyType: isCreating ? 'event_created' : 'event_updated',
+                        event: savedEvent,
+                    },
+                });
+                if (notifyError) {
+                    console.error("Falha ao acionar notificações:", getErrorMessage(notifyError));
                 }
             }
-            await fetchEvents();
+    
             hideForm();
+            onDataChange();
+            await fetchEvents();
         } catch (err) {
             setSaveError(getErrorMessage(err));
         } finally {
@@ -671,7 +671,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
   
     const handleAddDepartment = async (event: Event) => {
         if (!leaderDepartmentId || !event.id) return;
-        if (event.event_departments.some(ed => ed.department_id === leaderDepartmentId)) return;
+        if ((event.event_departments || []).some(ed => ed.department_id === leaderDepartmentId)) return;
         const { error } = await supabase.from('event_departments').insert({ event_id: event.id, department_id: leaderDepartmentId });
         if (error) {
             alert(`Falha ao adicionar departamento: ${getErrorMessage(error)}`);
@@ -689,17 +689,19 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
             }
 
             const { data: volunteers, error: volError } = await supabase
-                .from('volunteers')
-                .select('user_id')
-                .contains('departaments', [dept.name]);
+                .from('volunteer_departments')
+                .select('volunteers(user_id)')
+                .eq('department_id', leaderDepartmentId);
             
             if (volError) {
                 console.error("Não foi possível buscar voluntários para notificação do departamento:", volError);
             } else if (volunteers) {
                 const notifications = volunteers
-                    .filter(v => v.user_id)
-                    .map(v => ({
-                        user_id: v.user_id!,
+                    // @ts-ignore
+                    .map(v => v.volunteers?.user_id)
+                    .filter(Boolean)
+                    .map(userId => ({
+                        user_id: userId,
                         message: `Um novo evento, "${event.name}", foi adicionado para o seu departamento.`,
                         type: 'new_event_for_department' as const,
                         related_event_id: event.id,
@@ -726,7 +728,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
             <div className="space-y-6">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <input type="text" placeholder="Buscar por nome do evento..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                        <input type="text" placeholder="Buscar por nome do evento..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
                         <CustomDatePicker name="start" value={dateFilters.start} onChange={(value: string) => setDateFilters(prev => ({ ...prev, start: value }))} />
                         <CustomDatePicker name="end" value={dateFilters.end} onChange={(value: string) => setDateFilters(prev => ({ ...prev, end: value }))} />
                         <div className="relative" ref={statusDropdownRef}>
@@ -765,12 +767,6 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                         </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4">
-                        {isLeader && (
-                        <div className="flex items-center">
-                            <input type="checkbox" id="my-dept-filter" checked={showOnlyMyDepartmentEvents} onChange={(e) => setShowOnlyMyDepartmentEvents(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"/>
-                            <label htmlFor="my-dept-filter" className="ml-2 block text-sm text-slate-900">Mostrar apenas meu departamento</label>
-                        </div>
-                        )}
                         <button onClick={handleClearFilters} className="text-sm text-blue-600 font-semibold hover:underline">Limpar Filtros</button>
                     </div>
                 </div>
@@ -789,7 +785,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                             onAddDepartment={handleAddDepartment}
                             onMarkAttendance={handleMarkAttendance}
                             isHighlighted={event.id === highlightedEventId}
-                            isFilteredByMyDepartment={showOnlyMyDepartmentEvents}
+                            isFilteredByMyDepartment={false}
                         />
                         ))}
                     </div>
@@ -822,47 +818,21 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 <p className="text-slate-500 mt-1">Gerencie os eventos e escalas</p>
                 </div>
                 <div className="flex items-center gap-2">
-                   <button 
-    onClick={handleExportPDF}
-    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
->
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        className="h-5 w-5" 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor"
-    >
-        <path 
-            strokeWidth={1.5} 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-        />
-    </svg>
-    <span>Exportar PDF</span>
-</button>
+                    <button 
+                        onClick={handleExportPDF}
+                        className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span>Exportar PDF</span>
+                    </button>
                     {isAdmin && (
-                      <button 
-    onClick={() => { setEditingEvent(null); showForm(); }}
-    className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
->
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        className="h-5 w-5" 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor"
-    >
-        <path 
-            strokeWidth={1.5} 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" 
-        />
-    </svg>
-    <span>Novo Evento</span>
-</button>
+                        <button 
+                        onClick={() => { setEditingEvent(null); showForm(); }}
+                        className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span>Novo Evento</span>
+                        </button>
                     )}
                 </div>
             </div>
@@ -876,6 +846,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
                 saveError={saveError}
                 userRole={userRole}
                 leaderDepartmentId={leaderDepartmentId}
+                allDepartments={allDepartments}
                 />
             ) : (
                 renderContent()
@@ -900,4 +871,5 @@ const EventsPage: React.FC<EventsPageProps> = ({ isFormOpen, setIsFormOpen, user
     );
 }
 
-export default EventsPage;
+// FIX: Changed export name from EventsPage to SchedulesPage to match the component's name and resolve the error.
+export default SchedulesPage;

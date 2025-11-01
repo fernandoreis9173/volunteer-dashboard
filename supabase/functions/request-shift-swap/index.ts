@@ -75,11 +75,12 @@ Deno.serve(async (req) => {
     if (insertError) throw insertError;
 
     // 5. Find the leader and notify them
+    // FIX: Query the correct table `department_leaders` to find the leader's ID.
     const { data: leader, error: leaderError } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
+        .from('department_leaders')
+        .select('leader_id')
         .eq('department_id', departmentId)
-        .or('role.eq.leader,role.eq.lider')
+        .limit(1) // Assuming one leader per dept for notification
         .maybeSingle();
     
     if (leaderError || !leader) {
@@ -90,7 +91,8 @@ Deno.serve(async (req) => {
         const message = `${volunteer.name} solicitou uma troca de escala para o evento "${eventName}". Por favor, encontre um substituto.`;
 
         await supabaseAdmin.from('notifications').insert({
-            user_id: leader.id,
+            // FIX: Use `leader_id` from the correct query result.
+            user_id: leader.leader_id,
             message: message,
             type: 'shift_swap_request',
             related_event_id: eventId,

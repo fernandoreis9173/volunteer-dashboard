@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AuthView } from '../types';
-import logoNovaUrl from '../assets/icons/logonova.svg';
+import { LogoMobileIcon } from '@/assets/icons';
 
 interface LoginPageProps {
     setAuthView: (view: AuthView) => void;
@@ -21,6 +21,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
         setError(null);
         setSuccessMessage(null);
         try {
+            // FIX: Updated to Supabase v2 API `signInWithPassword` to match library version.
             const { error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
@@ -45,6 +46,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
         setError(null);
         setSuccessMessage(null);
         try {
+            // FIX: Updated to Supabase v2 API `resetPasswordForEmail` to match library version.
             const { error } = await supabase.auth.resetPasswordForEmail(email);
             if (error) {
                 throw error;
@@ -60,10 +62,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4">
             <div className="w-full max-w-md">
-                <div className="flex items-center justify-center space-x-4 mb-6">
-    <img src={logoNovaUrl} alt="Logo" className="h-16 w-auto" />
-    <h1 className="text-3xl font-bold text-slate-800">Volunteers</h1>
-</div>
+                <div className="flex justify-center items-center mb-6 space-x-1">
+                    <img src={LogoMobileIcon} alt="Logo" className="h-14 w-14" />
+                    <span className="text-2xl font-bold text-slate-800">Volunteers</span>
+                </div>
 
                 <div className="p-6 sm:p-8 space-y-8 bg-white rounded-2xl shadow-lg">
                     <div className="text-left">

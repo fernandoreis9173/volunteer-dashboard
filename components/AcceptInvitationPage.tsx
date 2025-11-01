@@ -105,7 +105,7 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
                 className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover}`}
                 aria-label={`Remove ${text}`}
             >
-                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={3}>
+                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
@@ -193,7 +193,6 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [isVolunteer, setIsVolunteer] = useState(false);
     
-    // State for department selection
     const [departments, setDepartments] = useState<Department[]>([]);
     const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
     
@@ -202,9 +201,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
           setIsValidating(true);
           setError(null);
     
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          // FIX: Updated to Supabase v2 async API `getSession` to match library version.
+          const { data: { session } } = await supabase.auth.getSession();
     
-          if (sessionError || !session || session.user.aud !== 'authenticated') {
+          if (!session || session.user.aud !== 'authenticated') {
             setError("Token de convite inválido ou ausente. Por favor, use o link do seu e-mail.");
             setIsValidating(false);
             return;
@@ -279,12 +279,14 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
         setSuccessMessage(null);
 
         try {
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError || !session) {
+            // FIX: Updated to Supabase v2 async API `getSession` to match library version.
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
                 throw new Error("Sessão de convite inválida ou expirada. Por favor, use o link do seu e-mail novamente.");
             }
 
-            const { data: authData, error: updateError } = await supabase.auth.updateUser({
+            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
+            const { data: { user: authUser }, error: updateError } = await supabase.auth.updateUser({
                 password: password,
                 data: { 
                     name: fullName, 
@@ -294,9 +296,9 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             });
 
             if (updateError) throw updateError;
-            if (!authData.user) throw new Error("Não foi possível obter os dados do usuário após a atualização.");
+            if (!authUser) throw new Error("Não foi possível obter os dados do usuário após a atualização.");
 
-            const user = authData.user;
+            const user = authUser;
             const role = user.user_metadata?.role;
 
             if (role === 'volunteer') {
@@ -310,7 +312,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                     (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
                 ).toUpperCase();
 
-                const volunteerUpsertPayload = {
+                const volunteerPayload = {
                     user_id: user.id,
                     email: user.email!,
                     status: 'Ativo' as const,
@@ -318,47 +320,39 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                     phone: phone.replace(/[^\d]/g, ''),
                     availability: JSON.stringify(selectedAvailabilityDays),
                     initials: calculatedInitials,
-                    departaments: selectedDepartments.map(d => d.name),
                     skills: skills,
                 };
+                
+                const departmentIds = selectedDepartments.map(d => d.id!).filter(id => id != null);
 
-                const { error: volunteerUpsertError } = await supabase
-                    .from('volunteers')
-                    .upsert(volunteerUpsertPayload, { onConflict: 'user_id' });
+                const { error: saveProfileError } = await supabase.functions.invoke('save-volunteer-profile', {
+                    body: { volunteerData: volunteerPayload, departmentIds: departmentIds },
+                });
 
-                if (volunteerUpsertError) {
-                    console.error("Volunteer upsert error:", volunteerUpsertError);
+                if (saveProfileError) {
+                    console.error("save-volunteer-profile error:", saveProfileError);
                     throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil de voluntário. Por favor, contate um administrador.");
                 }
+
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
-                const { error: profileError } = await supabase
+                const normalizedRole = role === 'lider' ? 'leader' : role;
+                const { error: profileUpsertError } = await supabase
                     .from('profiles')
-                    .upsert({ id: user.id, role: role }, { onConflict: 'id' });
+                    .upsert({ id: user.id, role: normalizedRole }, { onConflict: 'id' });
 
-                if (profileError) {
+                if (profileUpsertError) {
+                    console.error("Critical error: Failed to upsert admin/leader profile.", profileUpsertError);
                     throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil. Por favor, contate um administrador.");
-                }
-                
-                // Cleanup step: If a volunteer record was somehow created (e.g., by a trigger), delete it.
-                const { error: deleteError } = await supabase
-                    .from('volunteers')
-                    .delete()
-                    .eq('user_id', user.id);
-
-                if (deleteError) {
-                    // Log the error but don't block the user, as the main process was successful.
-                    console.warn('Could not clean up stray volunteer record during admin/leader registration:', deleteError);
                 }
             }
             
             setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login para você acessar sua conta.');
             
-            // Sign out the current temporary session to force a manual login
+            // FIX: Reverted to Supabase v1 API `signOut` to fix method error.
             await supabase.auth.signOut();
             
             setTimeout(() => {
                 setAuthView('login');
-                // Clear the invite hash from the URL so it doesn't trigger the invite view again on reload
                 window.location.hash = ''; 
             }, 3000);
 

@@ -18,6 +18,8 @@ import DepartamentsIcon from './departaments.svg';
  import ProfileIcon from './profile.svg';
  import LogoutIcon from './logout.svg';
  import NextEventIcon from './nextEvent.svg';
+import LogoMobileIcon from './logomobile.svg';
+ 
 
 // Mapeamento de ícones por nome
 export const icons = {
@@ -53,6 +55,7 @@ export const icons = {
   sair: LogoutIcon,
   nextEvent: NextEventIcon,
   'next-event': NextEventIcon,
+  logomobile: LogoMobileIcon,
 } as const;
 
 // Tipos TypeScript
@@ -79,6 +82,7 @@ export {
    ProfileIcon,
   LogoutIcon,
   NextEventIcon,
+  LogoMobileIcon,
 };
 
 // Função helper para obter ícone por nome

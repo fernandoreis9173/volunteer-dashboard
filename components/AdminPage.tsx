@@ -18,7 +18,8 @@ const AdminPage: React.FC = () => {
     const [invitedUsers, setInvitedUsers] = useState<EnrichedUser[]>([]);
     const [listLoading, setListLoading] = useState(true);
     const [listError, setListError] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [inputValue, setInputValue] = useState(''); // For immediate input
+    const [searchQuery, setSearchQuery] = useState(''); // For debounced filtering
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -59,6 +60,18 @@ const AdminPage: React.FC = () => {
         fetchInvitedUsers();
     }, [fetchInvitedUsers]);
 
+    // Debounce search query
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setSearchQuery(inputValue);
+        }, 300); // 300ms delay
+
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [inputValue]);
+
+
     // Effect for closing dropdown on outside click
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -72,9 +85,14 @@ const AdminPage: React.FC = () => {
 
 
     const filteredUsers = useMemo(() => {
-        if (!searchQuery) return invitedUsers;
+        // Filter out volunteers, as they are managed separately on the Volunteers page.
+        const nonVolunteers = invitedUsers.filter(user => user.user_metadata?.role !== 'volunteer');
+        
+        if (!searchQuery) {
+            return nonVolunteers;
+        }
         const lowercasedQuery = searchQuery.toLowerCase();
-        return invitedUsers.filter(user =>
+        return nonVolunteers.filter(user =>
             (user.user_metadata?.name?.toLowerCase().includes(lowercasedQuery)) ||
             (user.email?.toLowerCase().includes(lowercasedQuery))
         );
@@ -261,7 +279,7 @@ const AdminPage: React.FC = () => {
 
                  {/* Broadcast Form */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
-                    <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa (Broadcast)</h2>
+                    <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa</h2>
                     <form onSubmit={handleBroadcastSubmit} className="space-y-4 flex-grow flex flex-col">
                         <div className="flex-grow">
                             <label htmlFor="broadcast-message" className="block text-sm font-medium text-slate-700 mb-1">Mensagem</label>
@@ -281,7 +299,7 @@ const AdminPage: React.FC = () => {
             {/* Users List */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <h2 className="text-xl font-bold text-slate-800 mb-4">Gerenciar Usuários</h2>
-                <input type="text" placeholder="Buscar por nome ou email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg mb-4"/>
+                <input type="text" placeholder="Buscar por nome ou email..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg mb-4"/>
                 
                 {listLoading ? <p>Carregando usuários...</p> : listError ? <p className="text-red-500">{listError}</p> : (
                     <div className="overflow-x-auto">
@@ -302,7 +320,7 @@ const AdminPage: React.FC = () => {
                                     <tr key={user.id} className="bg-white border-b hover:bg-slate-50">
                                         <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">{user.user_metadata?.name || 'N/A'}</td>
                                         <td className="px-6 py-4">{user.email}</td>
-                                        <td className="px-6 py-4 capitalize">{user.user_metadata?.role === 'lider' ? 'Líder' : user.user_metadata?.role}</td>
+                                        <td className="px-6 py-4 capitalize">{user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider' ? 'Líder' : user.user_metadata?.role}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.text}</span>
                                         </td>

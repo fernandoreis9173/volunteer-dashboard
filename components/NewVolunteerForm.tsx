@@ -6,7 +6,8 @@ import SmartSearch, { type SearchItem } from './SmartSearch';
 interface NewVolunteerFormProps {
     initialData?: DetailedVolunteer | null;
     onCancel: () => void;
-    onSave: (volunteer: Omit<DetailedVolunteer, 'created_at'>) => void;
+    // FIX: Updated `onSave` signature to include `departmentIds` to align with the parent component's handler.
+    onSave: (volunteer: Omit<DetailedVolunteer, 'created_at' | 'departments'>, departmentIds: number[]) => void;
     isSaving: boolean;
     saveError: string | null;
     departments: Department[];
@@ -105,8 +106,8 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
                 className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover} ${disabled ? 'hidden' : ''}`}
                 aria-label={`Remove ${text}`}
             >
-                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" >
-                    <path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
         </div>
@@ -177,7 +178,8 @@ const TagInputField: React.FC<{
 
 const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, departments, userRole }) => {
     const [skills, setSkills] = useState<string[]>([]);
-    const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
+    // FIX: Changed state type to match the shape of `initialData.departments` ({ id, name } objects).
+    const [selectedDepartments, setSelectedDepartments] = useState<{ id: number; name: string }[]>([]);
     const [formData, setFormData] = useState({
         fullName: '',
         email: '',
@@ -190,7 +192,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
     });
     const [isActive, setIsActive] = useState(true);
     const isEditing = !!initialData;
-    const canOnlyEditDepartments = isEditing && (userRole === 'admin' || userRole === 'leader' || userRole === 'lider');
+    const canOnlyEditDepartments = isEditing && (userRole === 'leader' || userRole === 'lider');
 
     const formatPhoneNumber = (value: string) => {
         if (!value) return '';
@@ -224,11 +226,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                 initials: initialData.initials || '',
             });
             setSkills(initialData.skills || []);
-            const initialSelectedDepts = (initialData.departments || [])
-                .map(deptName => departments.find(d => d.name === deptName))
-                .filter((d): d is Department => d !== undefined);
-            setSelectedDepartments(initialSelectedDepts);
-
+            setSelectedDepartments(initialData.departments || []);
             setIsActive(initialData.status === 'Ativo');
             
             let availabilityArray: string[] = [];
@@ -267,9 +265,8 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
         }
     }, [initialData, departments]);
 
-    // Automatically generate initials from full name, but only when editing.
     useEffect(() => {
-        if (!isEditing) return; // Only generate initials in edit mode.
+        if (!isEditing) return;
         const name = formData.fullName.trim();
         if (!name) {
             setFormData(prev => ({...prev, initials: ''}));
@@ -305,8 +302,9 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
 
     const handleSelectDepartment = (item: SearchItem) => {
         const department = departments.find(d => d.id === item.id);
-        if (department && !selectedDepartments.some(d => d.id === department.id)) {
-            setSelectedDepartments([...selectedDepartments, department]);
+        if (department && department.id && !selectedDepartments.some(d => d.id === department.id)) {
+            // FIX: Add a plain object {id, name} to match the state type, instead of the full Department object.
+            setSelectedDepartments([...selectedDepartments, { id: department.id, name: department.name }]);
         }
     };
 
@@ -330,19 +328,19 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             .filter(([, isSelected]) => isSelected)
             .map(([day]) => day);
 
-        const volunteerData: Omit<DetailedVolunteer, 'created_at'> = {
+        const volunteerData: Omit<DetailedVolunteer, 'created_at' | 'departments'> = {
             id: initialData?.id,
             name: formData.fullName,
             email: formData.email,
             phone: isEditing ? formData.phone.replace(/[^\d]/g, '') : '',
             initials: isEditing ? formData.initials : '',
             status: isEditing ? (isActive ? 'Ativo' : 'Inativo') : 'Pendente',
-            departments: isEditing ? selectedDepartments.map(d => d.name) : [],
             skills: isEditing ? skills : [],
             availability: isEditing ? selectedAvailabilityDays : [],
         };
 
-        onSave(volunteerData);
+        const departmentIds = selectedDepartments.map(d => d.id).filter((id): id is number => id !== undefined);
+        onSave(volunteerData, departmentIds);
     };
     
     return (
@@ -353,8 +351,8 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                 }
             `}</style>
             <div className="flex items-center space-x-3 mb-8">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" >
-                  <path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                 </svg>
                 <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Voluntário' : 'Convidar Novo Voluntário'}</h2>
             </div>
@@ -433,8 +431,8 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                         disabled={isSaving}
                         className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm disabled:bg-blue-400 disabled:cursor-not-allowed"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" >
-                           <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} >
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                         <span>{isSaving ? 'Salvando...' : (isEditing ? 'Atualizar Voluntário' : 'Enviar Convite')}</span>
                     </button>

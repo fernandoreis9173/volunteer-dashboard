@@ -1,22 +1,29 @@
 import React, { useMemo } from 'react';
 import type { DashboardEvent } from '../types';
 
+// FIX: Reverted UserProfileState to use a single `department_id` to match the rest of the application.
+interface UserProfileState {
+  role: string | null;
+  department_id: number | null;
+  volunteer_id: number | null;
+  status: string | null;
+}
+
 interface AttendanceFlashCardsProps {
   schedules: DashboardEvent[] | undefined;
-  userProfile: { role: string | null; department_id: number | null } | null;
+  userProfile: UserProfileState | null;
 }
 
 const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, userProfile }) => {
     
     const attendanceData = useMemo(() => {
         if (!schedules || !userProfile?.department_id) {
-            return { name: '', present: 0, absent: 0, total: 0 };
+            return { present: 0, absent: 0, total: 0 };
         }
 
         let present = 0;
         let absent = 0;
         let total = 0;
-        let name = '';
 
         schedules.forEach(event => {
             if (event.status !== 'Confirmado') return;
@@ -34,14 +41,9 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
                     }
                 }
             });
-
-            if (!name) {
-                const dept = (event.event_departments || []).find(ed => ed.departments?.id === userProfile.department_id);
-                if(dept) name = dept.departments.name;
-            }
         });
 
-        return { name, present, absent, total };
+        return { present, absent, total };
     }, [schedules, userProfile]);
 
     const { present, absent, total } = attendanceData;
@@ -79,7 +81,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
                         <p className="text-sm text-slate-500">Desempenho do seu departamento</p>
                     </div>
                     <button className="text-slate-400 hover:text-slate-600 p-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                         </svg>
                     </button>
@@ -102,7 +104,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
             </div>
             
             <p className="text-center text-sm text-slate-600 px-6 -mt-4">
-              Você tem <strong>{present} de {total}</strong> presenças confirmadas. Mantenha o bom trabalho!
+              Você tem <strong>{present} de {total}</strong> presenças confirmadas em seu departamento. Mantenha o bom trabalho!
             </p>
 
             {/* Bottom Section */}

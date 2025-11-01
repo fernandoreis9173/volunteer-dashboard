@@ -12,12 +12,41 @@
     <link rel="apple-touch-icon" href="/icon.svg" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Volunteers" />
 
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+
     <!-- TailwindCSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: '#2563EB',
+            },
+            fontFamily: {
+              display: ['Poppins', 'sans-serif'],
+            },
+            borderRadius: {
+              DEFAULT: '0.75rem', // 12px
+            },
+          },
+        },
+      };
+    </script>
 
     <!-- Import Map (corrigido e padronizado) -->
     <script type="importmap">
@@ -48,7 +77,7 @@
   <link rel="stylesheet" href="/index.css">
 </head>
 
-  <body class="bg-slate-50 antialiased">
+  <body class="bg-slate-50 antialiased font-display text-gray-800">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

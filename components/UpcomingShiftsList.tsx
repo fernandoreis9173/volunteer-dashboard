@@ -31,9 +31,11 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
   const remainingDepartments = departmentNames.length - MAX_DISPLAY;
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
+  
+  const cardContainerClasses = isToday ? 'w-full' : 'w-80 flex-shrink-0';
 
   return (
-    <div className="bg-white p-5 rounded-xl border border-slate-200 relative w-full flex flex-col h-full">
+    <div className={`bg-white p-5 rounded-xl border border-slate-200 relative flex flex-col h-full ${cardContainerClasses}`}>
       <span className={`absolute top-4 right-4 text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'Confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
        <div className="absolute bottom-4 right-4 flex items-center space-x-1">
         {isLeader && isToday && (
@@ -43,14 +45,9 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
                 aria-label="Marcar presença"
                 title="Marcar Presença"
             >
-               <img 
-    src="/assets/icons/scanner.svg" 
-    alt="Scanner" 
-    className="h-5 w-5 cursor-pointer transition-all"
-    style={{ filter: 'brightness(0) saturate(100%) invert(29%) sepia(8%) saturate(1038%) hue-rotate(183deg) brightness(95%) contrast(87%)' }}
-    onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0) saturate(100%) invert(64%) sepia(98%) saturate(561%) hue-rotate(81deg) brightness(95%) contrast(87%)'}
-    onMouseLeave={(e) => e.currentTarget.style.filter = 'brightness(0) saturate(100%) invert(29%) sepia(8%) saturate(1038%) hue-rotate(183deg) brightness(95%) contrast(87%)'}
-/>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
+                </svg>
             </button>
         )}
         <button 
@@ -59,20 +56,9 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
             aria-label="Ver detalhes do evento"
             title="Ver detalhes"
         >
-           <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    className="h-5 w-5 text-slate-600 hover:text-blue-500 transition-colors cursor-pointer" 
-    fill="none" 
-    viewBox="0 0 24 24" 
-    stroke="currentColor" 
-    strokeWidth="1.5"
->
-    <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
-    />
-</svg>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
         </button>
       </div>
 
@@ -80,8 +66,8 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
         <h3 className="font-bold text-slate-800 mb-2 pr-24">{schedule.name}</h3>
         <div className="space-y-2 text-sm text-slate-500">
           <div className="flex items-center space-x-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1v12z" />
             </svg>
             <span>{formattedDate}</span>
           </div>
@@ -175,8 +161,16 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
 
   const isToday = activeFilter === 'today';
 
+  const listContainerClasses = isToday
+    ? "grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow"
+    : "flex overflow-x-auto space-x-4 pb-4 no-scrollbar";
+
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm h-full flex flex-col">
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="flex items-center space-x-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
@@ -189,10 +183,10 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
             <FilterButton label="Próximos" value="upcoming" activeValue={activeFilter} onClick={setActiveFilter} />
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow">
+      <div className={listContainerClasses}>
         {loading && activeFilter === 'upcoming' ? null : loading ? (
             Array.from({ length: 2 }).map((_, index) => (
-                <div key={index} className="bg-slate-50 p-5 rounded-xl border border-slate-200 animate-pulse w-full">
+                <div key={index} className={`p-5 rounded-xl border border-slate-200 animate-pulse ${!isToday ? 'w-80 flex-shrink-0' : 'w-full'}`}>
                     <div className="h-4 bg-slate-200 rounded w-3/4 mb-4"></div>
                     <div className="space-y-2">
                         <div className="h-3 bg-slate-200 rounded w-1/2"></div>
@@ -214,7 +208,7 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
             />
           ))
         ) : (
-          <div className="md:col-span-2 w-full flex items-center justify-center h-48">
+          <div className="col-span-1 md:col-span-2 w-full flex items-center justify-center h-48">
             <p className="text-slate-500">
                 {activeFilter === 'today' ? 'Nenhum evento para hoje.' : 'Nenhum evento encontrado para os próximos dias.'}
             </p>

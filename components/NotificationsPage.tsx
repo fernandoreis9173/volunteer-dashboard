@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-// FIX: Use 'type' import for Session to resolve potential module resolution issues with Supabase v2.
+// FIX: Restored Supabase v2 Session type for type safety.
 import { type Session } from '@supabase/supabase-js';
 import { NotificationRecord, Page } from '../types';
 import ConfirmationModal from './ConfirmationModal';
@@ -42,7 +42,7 @@ const NotificationIcon: React.FC<{ type: NotificationRecord['type'] }> = ({ type
         case 'new_schedule':
             return <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>;
         case 'invitation_received':
-            return <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></div>;
+             return <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></div>;
         case 'shift_swap_request':
             return <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg></div>;
         case 'event_update':
@@ -229,8 +229,8 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
                 <ul className="divide-y divide-slate-200">
                     {notifications.length > 0 ? notifications.map(n => (
-                        <li key={n.id} className="group">
-                            <div className={`flex items-center space-x-4 p-4 ${!n.is_read ? 'bg-blue-50/50' : 'bg-white'}`}>
+                        <li key={n.id} className="group p-4">
+                            <div className={`flex items-center space-x-4 ${!n.is_read ? 'font-semibold' : ''}`}>
                                 <div 
                                     className="flex-grow flex items-start space-x-4 cursor-pointer"
                                     onClick={() => handleNotificationClick(n)}

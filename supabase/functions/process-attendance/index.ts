@@ -115,11 +115,17 @@ Deno.serve(async (req) => {
             const userIdsToNotify = new Set<string>([...adminIds]);
 
             if (departmentIds.length > 0) {
-                const { data: leaders, error: leadersError } = await supabaseAdmin.from('profiles').select('id').in('department_id', departmentIds).or('role.eq.leader,role.eq.lider');
+                // FIX: Query the correct table `department_leaders` to find leaders by `department_id`.
+                const { data: leaders, error: leadersError } = await supabaseAdmin
+                    .from('department_leaders')
+                    .select('leader_id')
+                    .in('department_id', departmentIds);
+
                 if (leadersError) {
                     console.error(`Could not fetch leaders for event ${eventId}:`, leadersError);
-                } else {
-                    leaders.forEach(l => userIdsToNotify.add(l.id));
+                } else if (leaders) {
+                    // FIX: Use `leader_id` from the correct query result.
+                    leaders.forEach(l => userIdsToNotify.add(l.leader_id));
                 }
             }
             

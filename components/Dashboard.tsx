@@ -1,9 +1,11 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
 import ActiveVolunteersList from './ActiveVolunteersList';
 // FIX: Moved ChartDataPoint to types.ts and updated import path.
-import type { DashboardEvent, Stat, EnrichedUser, ChartDataPoint, Event, Page, DashboardData } from '../types';
+import type { DashboardEvent, Stat, EnrichedUser, ChartDataPoint, Event, Page, DashboardData, DetailedVolunteer } from '../types';
 import EventDetailsModal from './EventDetailsModal';
 // FIX: Changed import to be a named import to match the export from TrafficChart.tsx
 import { AnalysisChart } from './TrafficChart';
@@ -51,7 +53,7 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) =>
                     className="p-2 text-red-600 hover:text-red-800 bg-red-100 hover:bg-red-200 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 flex-shrink-0"
                     aria-label="Ver detalhes do evento"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5" >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </button>
@@ -60,244 +62,158 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) =>
     );
 };
 
+// FIX: Reverted UserProfileState to use a single `department_id` to enforce business rules.
+interface UserProfileState {
+  role: string | null;
+  department_id: number | null;
+  volunteer_id: number | null;
+  status: string | null;
+}
+
 interface LeaderDashboardProps {
+    userProfile: UserProfileState;
     activeEvent: Event | null;
     onNavigate: (page: Page) => void;
 }
 
-const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNavigate }) => {
+const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEvent, onNavigate }) => {
   const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
-  const [dashboardData, setDashboardData] = useState<Partial<DashboardData>>({});
+  const [allDepartmentEvents, setAllDepartmentEvents] = useState<DashboardEvent[]>([]);
+  const [departmentVolunteers, setDepartmentVolunteers] = useState<DetailedVolunteer[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [userProfile, setUserProfile] = useState<{ role: string | null; department_id: number | null } | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [isQrDisplayOpen, setIsQrDisplayOpen] = useState(false);
   const [scannedQrData, setScannedQrData] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                const { data: profileData, error } = await supabase
-                    .from('profiles')
-                    .select('role, department_id')
-                    .eq('id', session.user.id)
-                    .single();
-
-                if (error) {
-                    console.error("Error fetching user profile in Dashboard", getErrorMessage(error));
-                    setUserProfile(null);
-                } else {
-                    setUserProfile(profileData as { role: string | null; department_id: number | null });
-                }
-            } else {
-                setUserProfile(null);
-            }
-        } catch (err) {
-             console.error("Exception fetching user profile in Dashboard", getErrorMessage(err));
-             setUserProfile(null);
-        }
-    };
-    fetchProfile();
-  }, []);
-
   const fetchDashboardData = useCallback(async () => {
-    if (!userProfile) return;
+      if (!userProfile?.department_id) return;
 
-    setDashboardData({}); 
-    setError(null);
+      setError(null);
+      const leaderDepartmentId = userProfile.department_id;
 
-    const isLeader = userProfile.role === 'leader' || userProfile.role === 'lider';
-    const isAdmin = userProfile.role === 'admin';
-    let leaderDepartmentName: string | null = null;
-    const leaderDepartmentId = isLeader ? userProfile.department_id : null;
+      try {
+          // Use RPC to fetch events, which is RLS-safe and correctly filtered for the leader.
+          const { data: eventsRpcData, error: eventsError } = await supabase.rpc('get_events_for_user');
+          if (eventsError) throw eventsError;
+          const eventsData = (eventsRpcData || []).map(item => item as unknown as DashboardEvent);
+          setAllDepartmentEvents(eventsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
-    if (isLeader && leaderDepartmentId) {
-        const { data: deptData } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
-        if (deptData) {
-            leaderDepartmentName = deptData.name;
-        }
-    }
+          // Robust query for leader's volunteers, starting from the junction table to work better with RLS.
+          const { data: volunteerDepartments, error: vdError } = await supabase
+            .from('volunteer_departments')
+            .select(`
+                volunteers:volunteers!inner(
+                    *,
+                    volunteer_departments(departments(id, name))
+                )
+            `)
+            .eq('department_id', leaderDepartmentId)
+            .eq('volunteers.status', 'Ativo');
 
-    // --- STAGE 1: Fetch fast stats and today's data first ---
-    try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayStr = today.toISOString().split('T')[0];
-        
-        const next7DaysInitial = new Date(today);
-        next7DaysInitial.setDate(today.getDate() + 7);
-        const next7DaysStrInitial = next7DaysInitial.toISOString().split('T')[0];
+          if (vdError) throw vdError;
 
-        const currentYear = today.getFullYear();
-        const startOfYear = `${currentYear}-01-01`;
-        const endOfYear = `${currentYear}-12-31`;
-        
-        let activeVolunteersQuery = supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo');
-        if (leaderDepartmentName) {
-            activeVolunteersQuery = activeVolunteersQuery.contains('departaments', [leaderDepartmentName]);
-        }
+          const leaderVolunteers = volunteerDepartments
+            ? volunteerDepartments.map((vd: any) => vd.volunteers).filter(Boolean)
+            : [];
+          
+          const transformedVols = (leaderVolunteers || []).map((v: any) => ({
+              ...v,
+              departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean)
+          }));
+          setDepartmentVolunteers(transformedVols);
 
-        let upcomingSchedulesCountQuery = supabase.from('events').select('*, event_departments!inner(department_id)', { count: 'exact', head: true }).gt('date', todayStr).lte('date', next7DaysStrInitial);
-        if (leaderDepartmentId) {
-            upcomingSchedulesCountQuery = upcomingSchedulesCountQuery.eq('event_departments.department_id', leaderDepartmentId);
-        }
-        
-        // FIX: The query builder is not a `Promise`, causing a type error on assignment.
-        // This is refactored to conditionally define `annualAttendanceQuery` so TypeScript
-        // correctly infers a union type that works with `Promise.all`.
-        let annualAttendanceQuery;
-        if (isLeader && leaderDepartmentId) {
-            annualAttendanceQuery = supabase
-                .from('event_volunteers')
-                .select('*, events!inner(*)', { count: 'exact', head: true })
-                .eq('department_id', leaderDepartmentId)
-                .eq('present', true)
-                .gte('events.date', startOfYear)
-                .lte('events.date', endOfYear);
-        } else {
-            annualAttendanceQuery = Promise.resolve({ count: null, error: null });
-        }
-
-        let todaySchedulesQuery;
-        if (leaderDepartmentId) {
-            todaySchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments!inner(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').eq('date', todayStr).eq('event_departments.department_id', leaderDepartmentId).order('start_time');
-        } else {
-            todaySchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').eq('date', todayStr).order('start_time');
-        }
-
-        const [
-            activeVolunteersCountRes,
-            departmentsCountRes,
-            upcomingSchedulesCountRes,
-            todaySchedulesRes,
-            annualAttendanceRes
-        ] = await Promise.all([
-            activeVolunteersQuery,
-            supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-            upcomingSchedulesCountQuery,
-            todaySchedulesQuery,
-            annualAttendanceQuery
-        ]);
-
-
-        // FIX: Cast to unknown first to resolve type mismatch from Supabase client's inference.
-        const todaySchedules = (todaySchedulesRes.data as unknown as DashboardEvent[]) || [];
-
-        const initialStats: DashboardData['stats'] = {
-            activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
-            departments: { value: String(departmentsCountRes.count ?? 0), change: 0 },
-            schedulesToday: { value: String(todaySchedules.length), change: 0 },
-            upcomingSchedules: { value: String(upcomingSchedulesCountRes.count ?? 0), change: 0 },
-            annualAttendance: { value: String(annualAttendanceRes.count ?? 0), change: 0 },
-        };
-
-        // Update state with initial data, UI will re-render showing stats and today's events
-        setDashboardData(prev => ({
-            ...prev,
-            stats: initialStats,
-            todaySchedules: todaySchedules,
-        }));
-    } catch (err) {
-        const errorMessage = getErrorMessage(err);
-        console.error("Failed to fetch initial dashboard data:", errorMessage);
-        setError(`Falha ao carregar dados essenciais: ${errorMessage}`);
-    }
-
-    // --- STAGE 2: Fetch remaining heavier content in the background ---
-    try {
-        const today = new Date(); // Recalculate just in case of long-running Stage 1
-        today.setHours(0, 0, 0, 0);
-        const todayStr = today.toISOString().split('T')[0];
-        const next7Days = new Date(today);
-        next7Days.setDate(today.getDate() + 7);
-        const last30Days = new Date(today);
-        last30Days.setDate(today.getDate() - 29);
-        
-        const next7DaysStr = next7Days.toISOString().split('T')[0];
-        const last30DaysStr = last30Days.toISOString().split('T')[0];
-
-        let upcomingSchedulesQuery;
-        if (leaderDepartmentId) {
-            upcomingSchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments!inner(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').gt('date', todayStr).lte('date', next7DaysStr).eq('event_departments.department_id', leaderDepartmentId).order('date').order('start_time').limit(10);
-        } else {
-            upcomingSchedulesQuery = supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').gt('date', todayStr).lte('date', next7DaysStr).order('date').order('start_time').limit(10);
-        }
-
-        let activeLeadersQuery = Promise.resolve({ data: { users: [] }, error: null });
-        if (isAdmin) {
-             activeLeadersQuery = supabase.functions.invoke('list-users', { body: { context: 'dashboard' } });
-        }
-
-        let chartEventsQuery;
-        if (leaderDepartmentId) {
-            chartEventsQuery = supabase.from('events').select('date, name, event_volunteers(count), event_departments!inner(department_id)').gte('date', last30DaysStr).lte('date', todayStr).eq('event_departments.department_id', leaderDepartmentId);
-        } else {
-            chartEventsQuery = supabase.from('events').select('date, name, event_volunteers(count), event_departments(department_id)').gte('date', last30DaysStr).lte('date', todayStr);
-        }
-
-        const [
-            upcomingSchedulesRes,
-            activeLeadersRes,
-            chartEventsRes
-        ] = await Promise.all([
-            upcomingSchedulesQuery,
-            activeLeadersQuery,
-            chartEventsQuery
-        ]);
-        
-        // Process chart data
-        const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
-        if (chartEventsRes.data) {
-            for (const event of chartEventsRes.data) {
-                const date = event.date;
-                if (!chartDataMap.has(date)) {
-                    chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
-                }
-                const entry = chartDataMap.get(date)!;
-                entry.scheduledVolunteers += (event.event_volunteers[0] as any)?.count ?? 0;
-                (event.event_departments as any[]).forEach((ed: any) => entry.involvedDepartments.add(ed.department_id));
-                entry.eventNames.push(event.name);
-            }
-        }
-
-        const chartData: ChartDataPoint[] = [];
-        for (let i = 0; i < 30; i++) {
-            const day = new Date(last30Days);
-            day.setDate(last30Days.getDate() + i);
-            const dateStr = day.toISOString().split('T')[0];
-            const dataForDay = chartDataMap.get(dateStr);
-            chartData.push({
-                date: dateStr,
-                scheduledVolunteers: dataForDay?.scheduledVolunteers || 0,
-                involvedDepartments: dataForDay?.involvedDepartments.size || 0,
-                eventNames: dataForDay?.eventNames || [],
-            });
-        }
-        
-        // Update state with the rest of the data
-        setDashboardData(prev => ({
-            ...prev,
-            // FIX: Cast to unknown first to resolve type mismatch from Supabase client's inference.
-            upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
-            activeLeaders: activeLeadersRes.data?.users || [],
-            chartData: chartData,
-        }));
-    } catch (err) {
-         console.error("Failed to fetch secondary dashboard data:", getErrorMessage(err));
-         // Optionally set a partial error message
-    }
+      } catch (err) {
+          const errorMessage = getErrorMessage(err);
+          console.error("Failed to fetch leader dashboard data:", errorMessage);
+          setError(`Falha ao carregar dados do dashboard: ${errorMessage}`);
+      }
   }, [userProfile]);
 
-
   useEffect(() => {
-    if (userProfile) { // Only fetch data once the user profile is loaded
+    if (userProfile?.department_id) {
         fetchDashboardData();
     }
   }, [userProfile, fetchDashboardData]);
+
+  const dashboardData = useMemo(() => {
+    if (!userProfile?.department_id) {
+        // FIX: Return `stats` as `undefined` and include an empty `activeLeaders` array to satisfy the `DashboardData` type and fix downstream prop errors.
+        return { stats: undefined, todaySchedules: [], upcomingSchedules: [], chartData: [], activeLeaders: [] };
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+
+    const next7Days = new Date(today);
+    next7Days.setDate(today.getDate() + 7);
+    const next7DaysStr = next7Days.toISOString().split('T')[0];
+    
+    const last30Days = new Date(today);
+    last30Days.setDate(today.getDate() - 29);
+    const last30DaysStr = last30Days.toISOString().split('T')[0];
+
+    const currentYear = today.getFullYear();
+    const startOfYear = `${currentYear}-01-01`;
+
+    const todaySchedules = allDepartmentEvents.filter(e => e.date === todayStr);
+    const upcomingSchedules = allDepartmentEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr).slice(0, 10);
+    const chartEvents = allDepartmentEvents.filter(e => e.date >= last30DaysStr && e.date <= todayStr);
+    const annualEvents = allDepartmentEvents.filter(e => e.date >= startOfYear);
+
+    const annualAttendanceCount = annualEvents.reduce((count, event) => {
+        return count + (event.event_volunteers || []).filter(v => v.department_id === userProfile.department_id && v.present).length;
+    }, 0);
+
+    const newStats: DashboardData['stats'] = {
+        activeVolunteers: { value: String(departmentVolunteers.length), change: 0 },
+        departments: { value: '1', change: 0 },
+        schedulesToday: { value: String(todaySchedules.length), change: 0 },
+        upcomingSchedules: { value: String(allDepartmentEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr).length), change: 0 },
+        annualAttendance: { value: String(annualAttendanceCount), change: 0 },
+    };
+
+    const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
+    for (const event of chartEvents) {
+        const date = event.date;
+        if (!chartDataMap.has(date)) {
+            chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
+        }
+        const entry = chartDataMap.get(date)!;
+        const scheduledInDept = (event.event_volunteers || []).filter(v => v.department_id === userProfile.department_id).length;
+        entry.scheduledVolunteers += scheduledInDept;
+        if (userProfile.department_id) {
+            entry.involvedDepartments.add(userProfile.department_id);
+        }
+        entry.eventNames.push(event.name);
+    }
+
+    const newChartData: ChartDataPoint[] = [];
+    for (let i = 0; i < 30; i++) {
+        const day = new Date(last30Days);
+        day.setDate(last30Days.getDate() + i);
+        const dateStr = day.toISOString().split('T')[0];
+        const dataForDay = chartDataMap.get(dateStr);
+        newChartData.push({
+            date: dateStr,
+            scheduledVolunteers: dataForDay?.scheduledVolunteers || 0,
+            involvedDepartments: dataForDay?.involvedDepartments.size || 0,
+            eventNames: dataForDay?.eventNames || [],
+        });
+    }
+
+    return {
+        stats: newStats,
+        todaySchedules,
+        upcomingSchedules,
+        chartData: newChartData,
+        // FIX: Added an empty `activeLeaders` array. Although this component doesn't use it,
+        // this ensures a consistent return type for `dashboardData` and resolves the type error for the `ActivityFeed` component.
+        activeLeaders: [],
+    };
+  }, [allDepartmentEvents, departmentVolunteers, userProfile.department_id]);
   
   const showNotification = useCallback((message: string, type: 'success' | 'error') => {
     setNotification({ message, type });
@@ -342,7 +258,6 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNaviga
         const volunteerName = scanningEvent?.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
         showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
         
-        // Refetch to update presence count
         fetchDashboardData();
 
     } catch (err: any) {
@@ -417,7 +332,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNaviga
             )}
         </div>
         <div className="lg:col-span-1">
-            <ActiveVolunteersList stats={dashboardData.stats} userRole={userProfile?.role} />
+            <ActiveVolunteersList volunteers={departmentVolunteers} stats={dashboardData.stats} userRole={userProfile?.role} />
         </div>
       </div>
       
@@ -432,7 +347,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ activeEvent, onNaviga
           />
         </div>
         <div className="lg:col-span-1 space-y-8">
-          {isLeader && (
+          {isLeader && userProfile && (
             <AttendanceFlashCards
               schedules={dashboardData.todaySchedules}
               userProfile={userProfile}

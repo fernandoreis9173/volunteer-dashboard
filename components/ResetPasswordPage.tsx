@@ -31,6 +31,7 @@ const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ setAuthView }) =>
         setSuccessMessage(null);
         
         try {
+            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
             const { error: updateError } = await supabase.auth.updateUser({ password });
 
             if (updateError) throw updateError;
@@ -38,6 +39,7 @@ const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ setAuthView }) =>
             setSuccessMessage('Sua senha foi redefinida com sucesso! Você será redirecionado para a tela de login em alguns segundos.');
             
             setTimeout(async () => {
+                // FIX: Reverted to Supabase v1 API `signOut` to fix method error.
                 await supabase.auth.signOut();
                 setAuthView('login');
                 // We don't want the recovery hash in the URL on the login page.

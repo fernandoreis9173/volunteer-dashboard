@@ -104,45 +104,20 @@ Deno.serve(async (req: any) => {
 
                 if (allDepartmentIds.length > 0) {
                     console.log(`Buscando líderes dos departamentos [${allDepartmentIds.join(', ')}] para notificação de atualização.`);
-                    const { data: leadersFromProfiles, error: leaderError } = await supabaseAdmin
-                        .from('profiles')
-                        .select('id')
-                        .in('department_id', allDepartmentIds)
-                        .or('role.eq.leader,role.eq.lider,role.eq.líder');
+                    // FIX: Query the correct table `department_leaders` to find leaders by `department_id`.
+                    const { data: leadersData, error: leaderError } = await supabaseAdmin
+                        .from('department_leaders')
+                        .select('leader_id')
+                        .in('department_id', allDepartmentIds);
                     
                     if (leaderError) throw leaderError;
                     
-                    let leaders = leadersFromProfiles || [];
-
-                    if (leaders.length === 0) {
-                        console.log("Nenhum líder encontrado em 'profiles' para os departamentos. Buscando no 'auth.users' como fallback.");
-                        const { data: usersInDepts, error: profileFallbackError } = await supabaseAdmin
-                            .from('profiles')
-                            .select('id')
-                            .in('department_id', allDepartmentIds);
-
-                        if (profileFallbackError) {
-                             console.error("Erro ao buscar perfis de fallback:", profileFallbackError);
-                        } else if (usersInDepts && usersInDepts.length > 0) {
-                            const userIdsInDepts = new Set(usersInDepts.map(p => p.id));
-                            const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
-                            
-                            if (authError) {
-                                console.error("Erro ao buscar usuários do auth como fallback:", authError);
-                            } else {
-                                leaders = authData.users
-                                    .filter(u => userIdsInDepts.has(u.id) && ['leader', 'lider', 'líder'].includes(u.user_metadata?.role))
-                                    .map(u => ({ id: u.id }));
-                                console.log(`Encontrados ${leaders.length} líderes no fallback do auth para os departamentos especificados.`);
-                            }
-                        }
-                    } else {
-                         console.log(`Encontrados ${leaders.length} líderes diretamente em 'profiles'.`);
-                    }
-
+                    const leaders = leadersData || [];
+                    
                     if (leaders.length > 0) {
+                        // FIX: Use `leader_id` from the correct query result.
                         const newNotifications = leaders.map(l => ({
-                            user_id: l.id,
+                            user_id: l.leader_id,
                             message: `O evento "${event.name}", do qual seu departamento participa, foi alterado. Verifique as mudanças.`,
                             type: 'event_update',
                             related_event_id: event.id,

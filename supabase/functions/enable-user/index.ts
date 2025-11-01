@@ -17,39 +17,45 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Supabase URL e Service Role Key são obrigatórios.');
-    }
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
     
-    const { userId } = await req.json()
+    const { userId, volunteerId } = await req.json()
      if (!userId) {
       throw new Error('User ID is required.')
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-    // 1. Fetch the user to get existing metadata
+    // --- Update Auth User Metadata ---
     const { data: { user }, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId)
     if (getUserError) throw getUserError;
     if (!user) throw new Error(`Usuário com ID ${userId} não encontrado.`);
     
-    // 2. Safely merge metadata, ensuring it's an object
     const existingMetadata = (typeof user.user_metadata === 'object' && user.user_metadata !== null)
       ? user.user_metadata
       : {};
     const newMetadata = { ...existingMetadata, status: 'Ativo' };
 
-    // 3. Update the user with the merged metadata to avoid data loss
-    const { data: updatedUserData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+    const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
       { user_metadata: newMetadata }
     )
+    if (updateAuthError) throw updateAuthError;
 
-    if (updateError) throw updateError;
+    // --- Update Volunteers Table Status (if volunteerId is provided) ---
+    if (volunteerId) {
+        const { error: updateProfileError } = await supabaseAdmin
+            .from('volunteers')
+            .update({ status: 'Ativo' })
+            .eq('id', volunteerId);
+        
+        if (updateProfileError) {
+             console.warn(`Auth status updated for user ${userId}, but failed to update volunteers table for volunteer ${volunteerId}:`, updateProfileError.message);
+        }
+    }
 
-    return new Response(JSON.stringify({ message: 'Líder reativado com sucesso.' }), {
+    return new Response(JSON.stringify({ message: 'Usuário reativado com sucesso.' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })

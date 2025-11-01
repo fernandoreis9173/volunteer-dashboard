@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { CalendarIcon } from '@/assets/icons';
 
 interface CustomDatePickerProps {
     value: string;
@@ -109,9 +110,7 @@ const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onChange, na
                     placeholder="dd/mm/aaaa"
                 />
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
-                    </svg>
+                    <img src={CalendarIcon} alt="Calendar" className="h-5 w-5 text-slate-400" style={{ filter: 'brightness(0) saturate(100%)' }} />
                 </div>
             </div>
 
@@ -119,13 +118,13 @@ const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onChange, na
                 <div className="absolute top-full mt-2 w-full sm:w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-20 p-4">
                     <div className="flex justify-between items-center mb-4">
                         <button type="button" onClick={() => changeMonth(-1)} className="p-1 text-slate-500 hover:text-blue-600 rounded-full hover:bg-slate-100">
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                         </button>
                         <p className="font-semibold text-slate-800 capitalize">
                             {displayDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                         </p>
                         <button type="button" onClick={() => changeMonth(1)} className="p-1 text-slate-500 hover:text-blue-600 rounded-full hover:bg-slate-100">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                         </button>
                     </div>
                     <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-500 mb-2">

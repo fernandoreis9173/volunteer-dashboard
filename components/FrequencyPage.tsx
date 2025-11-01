@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -6,6 +8,7 @@ import CustomDatePicker from './CustomDatePicker';
 import Pagination from './Pagination';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { User } from '@supabase/supabase-js';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -47,18 +50,23 @@ const FrequencyPage: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const { data, error: fetchError } = await supabase
-                .from('events')
-                .select('*, event_departments(department_id, departments(id, name, leader)), event_volunteers(volunteer_id, department_id, present, volunteers(id, name))')
-                .order('date', { ascending: false })
-                .order('start_time', { ascending: false });
+            // Use the secure RPC function to fetch events.
+            const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
     
-            if (fetchError) throw fetchError;
-            setMasterEvents((data as Event[]) || []);
+            if (rpcError) throw rpcError;
+            
+            // The data is already filtered, enriched, and ready to use.
+            const eventsData = data.map(item => item as unknown as Event);
+            setMasterEvents(eventsData);
+
         } catch (err) {
             const errorMessage = getErrorMessage(err);
-            console.error('Error fetching events:', errorMessage);
-            setError(`Falha ao carregar eventos: ${errorMessage}`);
+            console.error('Error fetching events for frequency page via RPC:', errorMessage);
+             if (errorMessage.includes("failed to run function")) {
+                setError('Falha ao carregar eventos: A função do banco de dados (get_events_for_user) não foi encontrada ou falhou. Peça a um administrador para aplicar o script SQL.');
+            } else {
+                setError(`Falha ao carregar eventos: ${errorMessage}`);
+            }
         } finally {
             setLoading(false);
         }
@@ -191,8 +199,8 @@ const FrequencyPage: React.FC = () => {
 
         filteredEvents.forEach(event => {
             const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
-            totalScheduled += event.event_volunteers.length;
-            event.event_volunteers.forEach(v => {
+            totalScheduled += (event.event_volunteers || []).length;
+            (event.event_volunteers || []).forEach(v => {
                 if (v.present === true) {
                     totalPresent++;
                 } else if (v.present === false || v.present === null) {
@@ -234,8 +242,8 @@ const FrequencyPage: React.FC = () => {
 
         filteredEvents.forEach((event) => {
             const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
-            const totalVolunteers = event.event_volunteers.length;
-            const presentVolunteers = event.event_volunteers.filter(v => v.present === true).length;
+            const totalVolunteers = (event.event_volunteers || []).length;
+            const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
             
             const eventBlockHeight = 25;
             if (y + eventBlockHeight > 280) {
@@ -258,10 +266,10 @@ const FrequencyPage: React.FC = () => {
             y += 8;
 
             const tableBody: any[][] = [];
-            event.event_departments.forEach(eventDept => {
+            (event.event_departments || []).forEach(eventDept => {
                 if (!eventDept.departments) return;
 
-                let volunteersForDept = event.event_volunteers.filter(ev => ev.department_id === eventDept.departments.id);
+                let volunteersForDept = (event.event_volunteers || []).filter(ev => ev.department_id === eventDept.departments.id);
 
                 if (attendanceFilter !== 'all') {
                     if (attendanceFilter === 'present') {
@@ -334,8 +342,8 @@ const FrequencyPage: React.FC = () => {
                 {paginatedEvents.map(event => {
                     const isExpanded = expandedEvents.has(event.id!);
                     const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
-                    const totalVolunteers = event.event_volunteers.length;
-                    const presentVolunteers = event.event_volunteers.filter(v => v.present === true).length;
+                    const totalVolunteers = (event.event_volunteers || []).length;
+                    const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
                     
                     return (
                         <div key={event.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -356,10 +364,10 @@ const FrequencyPage: React.FC = () => {
                             </div>
                             {isExpanded && (
                                 <div className="bg-slate-50/70 border-t border-slate-200 px-4 py-4 space-y-4">
-                                    {event.event_departments.length > 0 ? event.event_departments.map(({ departments }) => {
+                                    {(event.event_departments || []).length > 0 ? (event.event_departments || []).map(({ departments }) => {
                                         if (!departments) return null;
                                         
-                                        let volunteersForDept = event.event_volunteers.filter(ev => ev.department_id === departments.id);
+                                        let volunteersForDept = (event.event_volunteers || []).filter(ev => ev.department_id === departments.id);
                                         const totalInDept = volunteersForDept.length;
                                         const presentInDept = volunteersForDept.filter(v => v.present === true).length;
                                         
@@ -420,25 +428,12 @@ const FrequencyPage: React.FC = () => {
                     <p className="text-slate-500 mt-1">Monitore a presença dos voluntários nos eventos confirmados.</p>
                 </div>
                 <button 
-    onClick={handleExportPDF}
-    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm w-full md:w-auto justify-center"
->
-    <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        className="h-5 w-5" 
-        fill="none" 
-        viewBox="0 0 24 24" 
-        stroke="currentColor" 
-        strokeWidth={1.5}
-    >
-        <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" 
-        />
-    </svg>
-    <span>Exportar PDF</span>
-</button>
+                    onClick={handleExportPDF}
+                    className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm w-full md:w-auto justify-center"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                    <span>Exportar PDF</span>
+                </button>
             </div>
 
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
@@ -454,7 +449,7 @@ const FrequencyPage: React.FC = () => {
                             aria-expanded={isAttendanceDropdownOpen}
                         >
                             <span className="text-slate-900">{selectedAttendanceLabel}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isAttendanceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isAttendanceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>
