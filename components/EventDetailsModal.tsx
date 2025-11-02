@@ -17,7 +17,7 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
 
-  const formattedDate = new Date(event.date + 'T00:00:00').toLocaleDateString('pt-BR', {
+  const formattedDate = new Date(`${event.date}T${event.start_time}Z`).toLocaleDateString('pt-BR', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -85,7 +85,7 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                 </svg>
-                <span className="font-medium">{event.start_time} - {event.end_time}</span>
+                <span className="font-medium">{new Date(`${event.date}T${event.start_time}Z`).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - {new Date(`${event.date}T${event.end_time}Z`).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
         </div>
         

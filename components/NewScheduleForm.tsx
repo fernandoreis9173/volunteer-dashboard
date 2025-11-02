@@ -3,7 +3,9 @@ import { Event, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import ConfirmationModal from './ConfirmationModal';
 import CustomDatePicker from './CustomDatePicker';
+import CustomTimePicker from './CustomTimePicker';
 import SmartSearch, { type SearchItem } from './SmartSearch';
+import { convertUTCToLocal } from '../lib/utils';
 
 interface NewEventFormProps {
     initialData?: Event | null;
@@ -204,7 +206,36 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
     useEffect(() => {
         if (initialData) {
-            setFormData({ name: initialData.name, date: initialData.date, start_time: initialData.start_time, end_time: initialData.end_time, local: initialData.local || '', status: initialData.status, observations: initialData.observations || '', color: initialData.color || '' });
+            const { dateTime: localStart } = convertUTCToLocal(initialData.date, initialData.start_time);
+            const { dateTime: localEnd } = convertUTCToLocal(initialData.date, initialData.end_time);
+    
+            let localDate = initialData.date;
+            let localStartTime = initialData.start_time;
+            let localEndTime = initialData.end_time;
+    
+            if (localStart && localEnd) {
+                // toISOString().split('T')[0] can be off by a day due to timezone.
+                // A more reliable way to get YYYY-MM-DD in local time.
+                const year = localStart.getFullYear();
+                const month = String(localStart.getMonth() + 1).padStart(2, '0');
+                const day = String(localStart.getDate()).padStart(2, '0');
+                localDate = `${year}-${month}-${day}`;
+                
+                localStartTime = localStart.toTimeString().substring(0, 5);
+                localEndTime = localEnd.toTimeString().substring(0, 5);
+            }
+    
+            setFormData({
+                name: initialData.name,
+                date: localDate,
+                start_time: localStartTime,
+                end_time: localEndTime,
+                local: initialData.local || '',
+                status: initialData.status,
+                observations: initialData.observations || '',
+                color: initialData.color || ''
+            });
+
             if (isSchedulingMode && leaderDepartmentId) {
                 const scheduledElsewhereIds = new Set(
                     (initialData.event_volunteers || [])
@@ -240,6 +271,10 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleTimeChange = (name: 'start_time' | 'end_time', value: string) => {
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleStatusSelect = (value: string) => {
@@ -397,8 +432,20 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                             <label className="block text-sm font-medium text-slate-700 mb-1">Data *</label>
                             <CustomDatePicker name="date" value={formData.date} onChange={handleDateChange} />
                         </div>
-                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Início *</label><input type="time" name="start_time" value={formData.start_time} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
-                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label><input type="time" name="end_time" value={formData.end_time} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Início *</label>
+                            <CustomTimePicker 
+                                value={formData.start_time}
+                                onChange={(time) => handleTimeChange('start_time', time)}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label>
+                            <CustomTimePicker 
+                                value={formData.end_time}
+                                onChange={(time) => handleTimeChange('end_time', time)}
+                            />
+                        </div>
                     </div>
                     <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
                     {isAdminMode && (

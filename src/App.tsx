@@ -30,10 +30,8 @@ import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type D
 import { supabase } from './lib/supabaseClient';
 // FIX: Restored Supabase v2 types to ensure type safety.
 import { type Session, type User } from '@supabase/supabase-js';
-import { getErrorMessage } from './lib/utils';
+import { getErrorMessage, convertUTCToLocal } from './lib/utils';
 
-// CORREÇÃO 1: Usar import.meta.env para variáveis de ambiente no Vite.
-// Check for required environment variables for the frontend
 const areApiKeysConfigured = 
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
@@ -306,31 +304,38 @@ const App: React.FC = () => {
             setActiveEvent(null);
             return;
         }
-        
-        try {
-            // Use the secure RPC function to get the active event.
-            // This bypasses faulty RLS policies and is highly performant.
-            const { data, error } = await supabase.rpc('get_active_event_for_user');
     
+        try {
+            // Use the existing, working RPC function that fetches all events for the user.
+            // This is RLS-safe and avoids the "function not found" error.
+            const { data: allUserEvents, error } = await supabase.rpc('get_events_for_user');
+            
             if (error) throw error;
     
-            setActiveEvent(data as AppEvent | null);
+            // Now, filter these events on the client to find the one that is currently "live".
+            const now = new Date();
+            const liveEvent = (allUserEvents as unknown as AppEvent[] || []).find((event: AppEvent) => {
+                if (event.status !== 'Confirmado') return false;
+    
+                // Use the existing utility to handle timezone conversion
+                const { dateTime: startDateTime } = convertUTCToLocal(event.date, event.start_time);
+                const { dateTime: endDateTime } = convertUTCToLocal(event.date, event.end_time);
+    
+                return startDateTime && endDateTime && now >= startDateTime && now < endDateTime;
+            });
+    
+            setActiveEvent(liveEvent || null);
     
         } catch (err) {
             const errorMessage = getErrorMessage(err);
-            // The RPC function should not return an RLS error, but we keep this for diagnostics.
-            if (errorMessage.includes('column "department_id" does not exist')) {
-                console.error("RLS/RPC Policy Error:", "A função do banco de dados (RPC) 'get_active_event_for_user' falhou ou uma política de segurança (RLS) interferiu.");
-            } else {
-                console.error("Error fetching active event via RPC:", errorMessage);
-            }
-            setActiveEvent(null);
+            console.error("Error fetching active event:", errorMessage);
+            setActiveEvent(null); // Clear on error
         }
     }, [session]);
     
     useEffect(() => {
         checkForActiveEvent(); // Check immediately on session change/load
-        const interval = setInterval(checkForActiveEvent, 60000); // And then check every minute
+        const interval = setInterval(checkForActiveEvent, 10000); // And then check every 10 seconds
         return () => clearInterval(interval);
     }, [checkForActiveEvent]);
 
@@ -586,7 +591,7 @@ const App: React.FC = () => {
                     return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
                 case 'dashboard':
                 default:
-                    return <VolunteerDashboard session={session} onDataChange={refetchUserData} activeEvent={eventForSidebar} onNavigate={handleNavigate} leaders={leaders} />;
+                    return <VolunteerDashboard session={session} onDataChange={refetchUserData} activeEvent={activeEvent} onNavigate={handleNavigate} leaders={leaders} />;
             }
         }
 
@@ -615,10 +620,10 @@ const App: React.FC = () => {
             case 'dashboard':
             default:
                 if (userProfile.role === 'admin') {
-                    return <AdminDashboard onDataChange={refetchNotificationCount} activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
+                    return <AdminDashboard onDataChange={refetchNotificationCount} activeEvent={activeEvent} onNavigate={handleNavigate} />;
                 }
                 // FIX: Pass the updated userProfile (with single department_id) to LeaderDashboard.
-                return <LeaderDashboard userProfile={userProfile} activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
+                return <LeaderDashboard userProfile={userProfile} activeEvent={activeEvent} onNavigate={handleNavigate} />;
         }
     };
 

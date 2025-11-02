@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
-import { getErrorMessage } from '../lib/utils';
+import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 import jsPDF from 'jspdf';
 
 // Define types for this component
@@ -18,13 +18,14 @@ type FilterPeriod = '30d' | '90d' | 'all';
 
 const EventHistoryCard: React.FC<{ event: PastEvent, onGeneratePDF: (event: PastEvent) => void }> = ({ event, onGeneratePDF }) => {
     const isAbsent = event.present === false || event.present === null;
+    const { fullDate: localFullDate } = convertUTCToLocal(event.date, event.end_time);
 
     return (
         <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-slate-100 hover:shadow-md transition-shadow">
             <div className="min-w-0 flex-grow">
                 <p className="font-semibold text-slate-800" title={event.name}>{event.name}</p>
                 <p className="text-sm text-slate-500 mt-1">
-                    {new Date(event.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    {localFullDate}
                 </p>
             </div>
             <div className="flex items-center gap-3 w-full sm:w-auto mt-3 sm:mt-0">
@@ -40,7 +41,7 @@ const EventHistoryCard: React.FC<{ event: PastEvent, onGeneratePDF: (event: Past
                     className="p-2 text-slate-500 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
                     title="Baixar comprovante"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                 </button>
@@ -155,7 +156,7 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(textColor);
     
-        const eventDate = new Date(event.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+        const { fullDate: eventDate } = convertUTCToLocal(event.date, event.end_time);
         doc.text(event.name, boxX + 50, boxY + 12);
         doc.text(eventDate, boxX + 50, boxY + 22);
         doc.text(event.departmentName, boxX + 50, boxY + 32);
@@ -215,9 +216,8 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
                         departmentName: item.departments?.name || 'N/A'
                     }))
                     .filter(e => { // Ensure we only count events that have truly ended
-                        const now = new Date();
-                        const eventEnd = new Date(`${e.date}T${e.end_time}`);
-                        return now > eventEnd;
+                        const { dateTime: endDateTime } = convertUTCToLocal(e.date, e.end_time);
+                        return endDateTime ? new Date() > endDateTime : false;
                     });
 
                 setAllPastEvents(formattedEvents);

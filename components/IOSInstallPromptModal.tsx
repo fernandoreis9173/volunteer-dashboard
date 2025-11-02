@@ -22,7 +22,7 @@ const IOSInstallPromptModal: React.FC<IOSInstallPromptModalProps> = ({ isOpen, o
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24 " stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
         </div>
@@ -31,7 +31,7 @@ const IOSInstallPromptModal: React.FC<IOSInstallPromptModalProps> = ({ isOpen, o
           <p>Para adicionar este aplicativo à sua Tela de Início, siga estes passos:</p>
           <ol className="text-left list-decimal list-inside space-y-2 bg-slate-50 p-4 rounded-lg">
             <li>Toque no ícone de <strong>Compartilhar</strong>
-              <svg xmlns="http://www.w3.org/2000/svg" className="inline-block h-5 w-5 align-middle mx-1" viewBox="0 0 24 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg xmlns="http://www.w3.org/2000/svg" className="inline-block h-5 w-5 align-middle mx-1" viewBox="0 0 24 24 " fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
                 <polyline points="16 6 12 2 8 6"></polyline>
                 <line x1="12" y1="2" x2="12" y2="15"></line>

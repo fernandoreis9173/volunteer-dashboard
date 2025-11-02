@@ -6,7 +6,7 @@ import { DetailedVolunteer, Department, Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import Pagination from './Pagination';
-import QRScannerModal from './QRScannerModal';
+
 
 interface VolunteersPageProps {
   isFormOpen: boolean;
@@ -31,7 +31,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   const [searchQuery, setSearchQuery] = useState(''); // For debounced filtering
   const [currentPage, setCurrentPage] = useState(1);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [volunteerToInvite, setVolunteerToInvite] = useState<DetailedVolunteer | null>(null);
@@ -173,54 +173,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     setTimeout(() => setNotification(null), 5000);
   }, []);
 
-  const handleScanSuccess = useCallback(async (decodedText: string) => {
-    setIsScannerOpen(false);
 
-    if (!activeEvent || !leaderDepartmentId) {
-        showNotification('Não há evento ativo ou departamento de líder definido para marcar a presença.', 'error');
-        return;
-    }
-
-    try {
-        const data = JSON.parse(decodedText);
-        if (!data.vId || !data.eId || !data.dId) {
-            throw new Error("QR Code inválido: Faltando dados essenciais.");
-        }
-        if (data.eId !== activeEvent.id) {
-            throw new Error("Este QR Code é para um evento diferente.");
-        }
-        if (data.dId !== leaderDepartmentId) {
-            throw new Error("Este voluntário não pertence ao seu departamento para este evento.");
-        }
-
-        const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
-            body: { volunteerId: data.vId, eventId: data.eId, departmentId: data.dId },
-        });
-
-        if (invokeError) throw invokeError;
-        
-        const volunteer = masterVolunteers.find(v => v.id === data.vId);
-        const volunteerName = volunteer?.name || 'Voluntário';
-        showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
-        onDataChange();
-        
-    } catch (err: any) {
-        if (err.context && typeof err.context.json === 'function') {
-            try {
-                const errorJson = await err.context.json();
-                if (errorJson && errorJson.error) {
-                    showNotification(errorJson.error, 'error');
-                } else {
-                    showNotification(getErrorMessage(err), 'error');
-                }
-            } catch (parseError) {
-                showNotification(getErrorMessage(err), 'error');
-            }
-        } else {
-            showNotification(getErrorMessage(err), 'error');
-        }
-    }
-}, [activeEvent, leaderDepartmentId, showNotification, masterVolunteers, onDataChange]);
 
 
   const handleInviteRequest = (volunteer: DetailedVolunteer) => {
@@ -416,20 +369,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-slate-800">Voluntários</h1>
-                        <p className="text-slate-500 mt-1">Gerencie os voluntários da igreja</p>
+                        <p className="text-slate-500 mt-1">Gerencie os voluntários da sua organização</p>
                     </div>
                      <div className="flex items-center gap-2 w-full md:w-auto">
-                        {isLeader && activeEvent && (
-                            <button
-                                onClick={() => setIsScannerOpen(true)}
-                                className="bg-teal-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-teal-600 transition-colors shadow-sm w-full md:w-auto justify-center flex-shrink-0"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
-                                </svg>
-                                <span>Marcar Presença</span>
-                            </button>
-                        )}
+                        
                         <button 
                           onClick={() => { setEditingVolunteer(null); showForm(); }}
                           className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto justify-center flex-shrink-0"
@@ -479,14 +422,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
             message={`Tem certeza que deseja remover ${volunteerToRemove?.name} do seu departamento?`}
             isLoading={isRemoving}
         />
-        {isScannerOpen && (
-            <QRScannerModal
-                isOpen={isScannerOpen}
-                onClose={() => setIsScannerOpen(false)}
-                onScanSuccess={handleScanSuccess}
-                scanningEventName={activeEvent?.name}
-            />
-        )}
+
     </div>
   );
 };

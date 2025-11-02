@@ -58,3 +58,52 @@ export const parseArrayFromString = (data: string[] | string | null | undefined)
     }
     return items.filter(item => item && item.trim() !== '');
 };
+
+// FIX: Add and export the 'formatPhoneNumber' utility function.
+export const formatPhoneNumber = (value: string) => {
+    if (!value) return '';
+    const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
+    const { length } = phoneNumber;
+    if (length <= 2) return `(${phoneNumber}`;
+    if (length <= 6) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
+    if (length <= 10) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
+    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
+};
+
+export const convertUTCToLocal = (utcDateStr: string, utcTimeStr: string) => {
+    if (!utcDateStr || !utcTimeStr) {
+      return {
+        date: '',
+        time: '',
+        fullDate: '',
+        dateTime: null,
+        isValid: false,
+      };
+    }
+    const date = new Date(`${utcDateStr}T${utcTimeStr}Z`);
+    if (isNaN(date.getTime())) {
+      return {
+        date: 'Data inválida',
+        time: 'Hora inválida',
+        fullDate: 'Data/Hora inválida',
+        dateTime: null,
+        isValid: false,
+      };
+    }
+  
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
+    return {
+      date: date.toLocaleDateString('pt-BR', { timeZone }),
+      time: date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone }),
+      fullDate: date.toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        timeZone,
+      }),
+      dateTime: date,
+      isValid: true,
+    };
+  };

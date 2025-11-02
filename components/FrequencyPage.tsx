@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
-import { getErrorMessage } from '../lib/utils';
+import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 import CustomDatePicker from './CustomDatePicker';
 import Pagination from './Pagination';
 import jsPDF from 'jspdf';
@@ -198,7 +198,8 @@ const FrequencyPage: React.FC = () => {
         let totalScheduled = 0;
 
         filteredEvents.forEach(event => {
-            const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
+            const { dateTime: endDateTime } = convertUTCToLocal(event.date, event.end_time);
+            const hasEventEnded = endDateTime ? new Date() > endDateTime : false;
             totalScheduled += (event.event_volunteers || []).length;
             (event.event_volunteers || []).forEach(v => {
                 if (v.present === true) {
@@ -241,7 +242,8 @@ const FrequencyPage: React.FC = () => {
 
 
         filteredEvents.forEach((event) => {
-            const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
+            const { dateTime: endDateTime } = convertUTCToLocal(event.date, event.end_time);
+            const hasEventEnded = endDateTime ? new Date() > endDateTime : false;
             const totalVolunteers = (event.event_volunteers || []).length;
             const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
             
@@ -258,11 +260,13 @@ const FrequencyPage: React.FC = () => {
             doc.text(event.name, 14, y);
             y += 8;
 
-            const eventDate = new Date(event.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const { date: eventDate, time: startTime } = convertUTCToLocal(event.date, event.start_time);
+            const { time: endTime } = convertUTCToLocal(event.date, event.end_time);
+            const details = `Data: ${eventDate} | Presença Total: ${presentVolunteers}/${totalVolunteers}`;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(100);
-            doc.text(`Data: ${eventDate} | Presença Total: ${presentVolunteers}/${totalVolunteers}`, 14, y);
+            doc.text(details, 14, y);
             y += 8;
 
             const tableBody: any[][] = [];
@@ -341,7 +345,8 @@ const FrequencyPage: React.FC = () => {
             <div className="space-y-4">
                 {paginatedEvents.map(event => {
                     const isExpanded = expandedEvents.has(event.id!);
-                    const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
+                    const { dateTime: endDateTime } = convertUTCToLocal(event.date, event.end_time);
+                    const hasEventEnded = endDateTime ? new Date() > endDateTime : false;
                     const totalVolunteers = (event.event_volunteers || []).length;
                     const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
                     
@@ -351,7 +356,7 @@ const FrequencyPage: React.FC = () => {
                                 <div className="min-w-0">
                                     <p className="font-bold text-slate-800 text-lg truncate">{event.name}</p>
                                     <p className="text-sm text-slate-500">
-                                        {new Date(event.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                        {convertUTCToLocal(event.date, event.start_time).fullDate}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-4 ml-4 flex-shrink-0">
@@ -359,7 +364,7 @@ const FrequencyPage: React.FC = () => {
                                         <p className="font-semibold text-slate-700">Presença</p>
                                         <p className="text-lg font-bold text-blue-600">{presentVolunteers}/{totalVolunteers}</p>
                                     </div>
-                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
                                 </div>
                             </div>
                             {isExpanded && (
@@ -449,7 +454,7 @@ const FrequencyPage: React.FC = () => {
                             aria-expanded={isAttendanceDropdownOpen}
                         >
                             <span className="text-slate-900">{selectedAttendanceLabel}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isAttendanceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isAttendanceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>

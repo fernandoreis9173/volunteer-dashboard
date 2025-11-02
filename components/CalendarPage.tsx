@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -11,7 +9,7 @@ import ptBrBaseLocale from '@fullcalendar/core/locales/pt-br';
 import NewEventForm from './NewScheduleForm';
 import { Event, NotificationRecord, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
-import { getErrorMessage } from '../lib/utils';
+import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 
 // --- Status Filter Component & Options ---
 const statusOptions = [
@@ -599,11 +597,20 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             .map(event => {
                 const colorKey = event.color || ((event.event_departments || [])[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
                 const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor((event.event_departments || [])[0]?.department_id);
+                
+                // FIX: Create local Date objects by removing the 'Z' suffix. This ensures FullCalendar interprets event times in the browser's local timezone.
+                const startDate = new Date(`${event.date}T${event.start_time}`);
+                const endDate = new Date(`${event.date}T${event.end_time}`);
+    
+                if (endDate < startDate) {
+                    endDate.setDate(endDate.getDate() + 1);
+                }
+
                 return {
                     id: String(event.id),
                     title: event.name,
-                    start: `${event.date}T${event.start_time}`,
-                    end: `${event.date}T${event.end_time}`,
+                    start: startDate, // Pass local Date object
+                    end: endDate,     // Pass local Date object
                     backgroundColor: colors.bg,
                     borderColor: colors.border,
                     textColor: colors.text,
@@ -643,30 +650,62 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         const { event } = info;
         if (!event.start) { info.revert(); return; }
         const eventId = parseInt(event.id, 10);
-        const newDate = event.start.toISOString().split('T')[0];
-        const newStartTime = event.start.toTimeString().substring(0, 8);
-        const newEndTime = event.end ? event.end.toTimeString().substring(0, 8) : newStartTime;
-        try {
-            const { data: conflicts, error: conflictError } = await supabase.from('events').select('id, name, start_time, end_time').eq('date', newDate).neq('id', eventId).lt('start_time', newEndTime).gt('end_time', newStartTime);
-            if (conflictError) throw conflictError;
-            if (conflicts && conflicts.length > 0) {
-                const c = conflicts[0];
-                throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
+    
+        const newStartDate = event.start;
+        const originalDuration = info.oldEvent.end!.getTime() - info.oldEvent.start!.getTime();
+        const newEndDate = event.end ? event.end : new Date(newStartDate.getTime() + originalDuration);
+    
+        // --- NEW: Client-side conflict check ---
+        const conflictingEvent = allEvents.find(existingEvent => {
+            if (existingEvent.id === eventId) return false;
+            
+            const { dateTime: existingStartLocal, isValid: startIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.start_time);
+            let { dateTime: existingEndLocal, isValid: endIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.end_time);
+    
+            if (!startIsValid || !endIsValid || !existingStartLocal || !existingEndLocal) {
+                console.warn(`Skipping conflict check for event ID ${existingEvent.id} due to invalid date/time.`);
+                return false;
             }
+    
+            if (existingEndLocal < existingStartLocal) {
+                existingEndLocal.setDate(existingEndLocal.getDate() + 1);
+            }
+    
+            // The overlap condition: (StartA < EndB) and (EndA > StartB)
+            return (newStartDate < existingEndLocal && newEndDate > existingStartLocal);
+        });
+    
+        if (conflictingEvent) {
+            const { time: conflictStartTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.start_time);
+            const { time: conflictEndTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.end_time);
+            alert(`Conflito de horário com "${conflictingEvent.name}" (${conflictStartTime} - ${conflictEndTime}).`);
+            info.revert();
+            return;
+        }
+    
+        // --- If no conflict, proceed with saving ---
+        const formatDateLocal = (d: Date) => d.toISOString().split('T')[0];
+        const formatTimeLocal = (d: Date) => d.toTimeString().substring(0, 8); // HH:mm:ss
+    
+        const newDate = formatDateLocal(newStartDate);
+        const newStartTime = formatTimeLocal(newStartDate);
+        const newEndTime = formatTimeLocal(newEndDate);
+    
+        try {
             const { error: updateError } = await supabase.from('events').update({ date: newDate, start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
             if (updateError) throw updateError;
-            
-            await fetchAllEvents(false); 
+    
+            await fetchAllEvents(false);
             onDataChange();
-            
+    
             const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
-                body: { 
+                body: {
                     notifyType: 'event_updated',
                     event: { id: eventId, name: event.title, date: newDate, start_time: newStartTime, end_time: newEndTime },
                 },
             });
             if (notifyError) console.error("Falha ao notificar sobre reagendamento:", getErrorMessage(notifyError));
-
+    
         } catch (err) {
             alert('Erro ao mover evento: ' + getErrorMessage(err));
             info.revert();
@@ -678,29 +717,60 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         const { event } = info;
         if (!event.start || !event.end) { info.revert(); return; }
         const eventId = parseInt(event.id, 10);
-        const eventDate = event.start.toISOString().split('T')[0];
-        const newStartTime = event.start.toTimeString().substring(0, 8);
-        const newEndTime = event.end.toTimeString().substring(0, 8);
-        try {
-            const { data: conflicts, error: conflictError } = await supabase.from('events').select('id, name, start_time, end_time').eq('date', eventDate).neq('id', eventId).lt('start_time', newEndTime).gt('end_time', newStartTime);
-            if (conflictError) throw conflictError;
-            if (conflicts && conflicts.length > 0) {
-                const c = conflicts[0];
-                throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
+    
+        const newStartDate = event.start;
+        const newEndDate = event.end;
+    
+        // --- NEW: Client-side conflict check ---
+        const conflictingEvent = allEvents.find(existingEvent => {
+            if (existingEvent.id === eventId) return false;
+            
+            const { dateTime: existingStartLocal, isValid: startIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.start_time);
+            let { dateTime: existingEndLocal, isValid: endIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.end_time);
+    
+            if (!startIsValid || !endIsValid || !existingStartLocal || !existingEndLocal) {
+                console.warn(`Skipping conflict check for event ID ${existingEvent.id} due to invalid date/time.`);
+                return false;
             }
+    
+            if (existingEndLocal < existingStartLocal) {
+                existingEndLocal.setDate(existingEndLocal.getDate() + 1);
+            }
+    
+            return (newStartDate < existingEndLocal && newEndDate > existingStartLocal);
+        });
+    
+        if (conflictingEvent) {
+            const { time: conflictStartTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.start_time);
+            const { time: conflictEndTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.end_time);
+            alert(`Conflito de horário com "${conflictingEvent.name}" (${conflictStartTime} - ${conflictEndTime}).`);
+            info.revert();
+            return;
+        }
+    
+        // --- If no conflict, proceed with saving ---
+        const formatTimeLocal = (d: Date) => d.toTimeString().substring(0, 8); // HH:mm:ss
+        
+        const newStartTime = formatTimeLocal(event.start);
+        const newEndTime = formatTimeLocal(event.end);
+        
+        const eventDate = (event.extendedProps as Event).date;
+    
+        try {
             const { error: updateError } = await supabase.from('events').update({ start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
             if (updateError) throw updateError;
+            
             await fetchAllEvents(false);
             onDataChange();
-            
+    
             const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
-                body: { 
+                body: {
                     notifyType: 'event_updated',
                     event: { id: eventId, name: event.title, date: eventDate, start_time: newStartTime, end_time: newEndTime },
                 },
             });
             if (notifyError) console.error("Falha ao notificar sobre alteração de horário:", getErrorMessage(notifyError));
-            
+    
         } catch (err) {
             alert('Erro ao redimensionar evento: ' + getErrorMessage(err));
             info.revert();
@@ -711,119 +781,23 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setIsSaving(true);
         setSaveError(null);
         try {
-            const { volunteer_ids, ...eventDetails } = eventPayload;
-            const schedulingDepartmentId = eventPayload.scheduling_department_id;
-            const isSchedulingMode = isLeader && eventPayload.id && schedulingDepartmentId;
+            const { volunteer_ids, scheduling_department_id, ...eventDetails } = eventPayload;
     
-            if (isSchedulingMode) {
-                const eventId = eventPayload.id;
-                const eventName = eventPayload.name;
-                const newVolunteerIds = new Set(volunteer_ids || []);
+            // The times from the form are local. We just need to save them.
+            const { data, error: fetchError } = await supabase.rpc('get_events_for_user');
+            if (fetchError) throw new Error(`Não foi possível verificar conflitos: ${fetchError.message}`);
+            const allDbEvents = (fetchError as unknown as Event[]) || [];
     
-                const { data: currentVolunteersData, error: currentVolError } = await supabase
-                    .from('event_volunteers')
-                    .select('volunteer_id, volunteers(user_id, name)')
-                    .eq('event_id', eventId)
-                    .eq('department_id', schedulingDepartmentId);
+            const { error: saveError } = await supabase.functions.invoke('save-event', {
+                body: { eventDetails, department_ids: eventPayload.department_ids, allEvents: allDbEvents },
+            });
     
-                if (currentVolError) throw currentVolError;
-    
-                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', schedulingDepartmentId);
-                if (deleteError) throw deleteError;
-                
-                if (volunteer_ids && volunteer_ids.length > 0) {
-                    const volunteersToInsert = volunteer_ids.map((vol_id: number) => ({
-                        event_id: eventId, volunteer_id: vol_id, department_id: schedulingDepartmentId,
-                    }));
-                    const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
-                    if (insertError) throw insertError;
-                }
-    
-                const currentVolunteers = currentVolunteersData || [];
-                const currentVolunteerIds = new Set(currentVolunteers.map(v => v.volunteer_id));
-    
-                const addedVolunteerIds = [...newVolunteerIds].filter(id => !currentVolunteerIds.has(id));
-                const removedVolunteers = currentVolunteers.filter(v => !newVolunteerIds.has(v.volunteer_id));
-    
-                const notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[] = [];
-    
-                if (addedVolunteerIds.length > 0) {
-                    const { data: addedUsers, error: usersError } = await supabase.from('volunteers').select('user_id').in('id', addedVolunteerIds);
-                    if (usersError) console.error("Error fetching added volunteers for notification", usersError);
-                    else if (addedUsers) {
-                        addedUsers.forEach(u => {
-                            if (u.user_id) notifications.push({ user_id: u.user_id, message: `Você foi escalado(a) para o evento "${eventName}".`, type: 'new_schedule', related_event_id: eventId });
-                        });
-                    }
-                }
-    
-                removedVolunteers.forEach(v => {
-                    const volunteer = Array.isArray(v.volunteers) ? v.volunteers[0] : v.volunteers;
-                    if (volunteer?.user_id) {
-                        notifications.push({ user_id: volunteer.user_id, message: `Você foi removido(a) da escala do evento "${eventName}".`, type: 'event_update', related_event_id: eventId });
-                    }
-                });
-                
-                if (notifications.length > 0) {
-                     const { error: invokeError } = await supabase.functions.invoke('create-notifications', { body: { notifications } });
-                     if (invokeError) throw invokeError;
-                }
-            
-            } else if (isAdmin) {
-                const { department_ids, ...upsertData } = eventDetails;
-                
-                let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', upsertData.date).lt('start_time', upsertData.end_time).gt('end_time', upsertData.start_time);
-                if (upsertData.id) conflictQuery = conflictQuery.neq('id', upsertData.id);
-                const { data: conflicts, error: conflictError } = await conflictQuery;
-                if (conflictError) throw conflictError;
-                if (conflicts && conflicts.length > 0) {
-                    const c = conflicts[0];
-                    throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
-                }
-    
-                let savedEvent;
-                const isCreating = !upsertData.id;
-    
-                if (isCreating) {
-                    const { id, ...insertPayload } = upsertData;
-                    const { data: newEvent, error } = await supabase.from('events').insert(insertPayload).select().single();
-                    if (error) throw error;
-                    if (!newEvent) throw new Error("Falha ao criar o evento.");
-                    savedEvent = newEvent;
-                } else { // Updating
-                    const eventId = upsertData.id;
-                    const { id, ...updatePayload } = upsertData;
-                    const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
-                    if (error) throw error;
-                    if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
-                    savedEvent = updatedEvent;
-                }
-                
-                // Sync departments
-                const eventId = savedEvent.id;
-                const { error: deleteDeptError } = await supabase.from('event_departments').delete().eq('event_id', eventId);
-                if (deleteDeptError) throw deleteDeptError;
-
-                if (department_ids && department_ids.length > 0) {
-                    const assignments = department_ids.map((deptId: number) => ({ event_id: eventId, department_id: deptId }));
-                    const { error: insertDeptError } = await supabase.from('event_departments').insert(assignments);
-                    if (insertDeptError) throw insertDeptError;
-                }
-
-                const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
-                    body: { 
-                        notifyType: isCreating ? 'event_created' : 'event_updated',
-                        event: savedEvent,
-                    },
-                });
-                if (notifyError) {
-                    console.error("Falha ao acionar notificações:", getErrorMessage(notifyError));
-                }
-            }
+            if (saveError) throw saveError;
     
             handleCloseForm();
             onDataChange();
             await fetchAllEvents(false);
+    
         } catch (err) {
             setSaveError(getErrorMessage(err));
         } finally {
