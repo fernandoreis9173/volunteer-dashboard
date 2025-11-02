@@ -3,7 +3,7 @@ import type { Page } from '../types';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Use 'type' import for Session to resolve potential module resolution issues with Supabase v2.
 import { type Session } from '@supabase/supabase-js';
-import { DashboardIcon, VolunteerIcon, DepartamentsIcon, EventosIcon, AdminIcon, FrequenciaIcon, CalendarIcon, NewVolunteersIcon, AddEventsIcon, NotificationIcon, InstallAppIcon, LogoNovaIcon, ProfileIcon, LogoutIcon } from '@/assets/icons';
+import { DashboardIcon, VolunteerIcon, DepartamentsIcon, EventosIcon, AdminIcon, FrequenciaIcon, CalendarIcon, NewVolunteersIcon, AddEventsIcon, NotificationIcon, HistoryIcon, InstallAppIcon, LogoNovaIcon, ProfileIcon, LogoutIcon } from '@/assets/icons';
 
 interface NavItemProps {
   icon: React.ReactElement<any>;
@@ -62,7 +62,7 @@ interface NavItemData {
 const allNavItems: NavItemData[] = [
     { page: 'dashboard', label: 'Dashboard', icon: <img src={DashboardIcon} alt="Dashboard" />, roles: ['admin', 'leader', 'volunteer'] },
     { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIcon} alt="Notificações" />, roles: ['leader', 'volunteer'] },  
-    { page: 'history', label: 'Histórico', icon: <img src="/assets/icons/history.svg" alt="Histórico" />, roles: ['volunteer'] },
+    { page: 'history', label: 'Histórico', icon: <img src={HistoryIcon} alt="Histórico" />, roles: ['volunteer'] },
     { page: 'volunteers', label: 'Voluntários', icon: <img src={VolunteerIcon} alt="Voluntários" />, roles: ['admin', 'leader'] },
     { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIcon} alt="Departamentos" />, roles: ['admin'] },
     { page: 'events', label: 'Eventos', icon: <img src={EventosIcon} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },

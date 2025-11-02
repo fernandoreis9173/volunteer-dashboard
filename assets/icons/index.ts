@@ -12,7 +12,8 @@ import DepartamentsIcon from './departaments.svg';
  import CalendarIcon from './calendar.svg';
  import NewVolunteersIcon from './newVolunteers.svg';
  import AddEventsIcon from './addEvents.svg';
- import NotificationIcon from './notification.svg';
+import NotificationIcon from './notification.svg';
+import HistoryIcon from './history.svg';
  import InstallAppIcon from './installAPP.svg';
  import LogoNovaIcon from './logonova.svg';
  import ProfileIcon from './profile.svg';
@@ -43,6 +44,7 @@ export const icons = {
    'add-events': AddEventsIcon,
    notification: NotificationIcon,
    notifications: NotificationIcon,
+   history: HistoryIcon,
    'install-app': InstallAppIcon,
    installapp: InstallAppIcon,
    logo: LogoNovaIcon,
@@ -77,6 +79,7 @@ export {
   NewVolunteersIcon,
   AddEventsIcon,
   NotificationIcon,
+  HistoryIcon,
   InstallAppIcon,
    LogoNovaIcon,
    ProfileIcon,
