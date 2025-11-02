@@ -306,29 +306,46 @@ const App: React.FC = () => {
         }
     
         try {
-            // Use the existing, working RPC function that fetches all events for the user.
-            // This is RLS-safe and avoids the "function not found" error.
-            const { data: allUserEvents, error } = await supabase.rpc('get_events_for_user');
+            // FIX: Reverted from `get_active_event` RPC to client-side filtering to resolve the "function not found" database error.
+            // This fetches all user-related events and finds the currently active one.
+            const { data: eventsData, error } = await supabase.rpc('get_events_for_user');
             
             if (error) throw error;
+            
+            const allEvents = (eventsData as AppEvent[]) || [];
+            if (allEvents.length === 0) {
+                setActiveEvent(null);
+                return;
+            }
     
-            // Now, filter these events on the client to find the one that is currently "live".
             const now = new Date();
-            const liveEvent = (allUserEvents as unknown as AppEvent[] || []).find((event: AppEvent) => {
-                if (event.status !== 'Confirmado') return false;
+            const liveEvent = allEvents.find(event => {
+                if (event.status !== 'Confirmado') {
+                    return false;
+                }
     
-                // Use the existing utility to handle timezone conversion
-                const { dateTime: startDateTime } = convertUTCToLocal(event.date, event.start_time);
-                const { dateTime: endDateTime } = convertUTCToLocal(event.date, event.end_time);
+                // Use the utility to convert stored UTC date/time to local Date objects for comparison
+                const { dateTime: startDateTime, isValid: startIsValid } = convertUTCToLocal(event.date, event.start_time);
+                const { dateTime: endDateTime, isValid: endIsValid } = convertUTCToLocal(event.date, event.end_time);
     
-                return startDateTime && endDateTime && now >= startDateTime && now < endDateTime;
+                if (!startIsValid || !endIsValid || !startDateTime || !endDateTime) {
+                    console.warn(`Skipping event ID ${event.id} due to invalid date/time.`);
+                    return false;
+                }
+                
+                // Handle events that cross midnight (e.g., 22:00 to 02:00)
+                if (endDateTime < startDateTime) {
+                    endDateTime.setDate(endDateTime.getDate() + 1);
+                }
+    
+                return now >= startDateTime && now <= endDateTime;
             });
     
             setActiveEvent(liveEvent || null);
     
         } catch (err) {
             const errorMessage = getErrorMessage(err);
-            console.error("Error fetching active event:", errorMessage);
+            console.error("Error checking for active event:", errorMessage);
             setActiveEvent(null); // Clear on error
         }
     }, [session]);

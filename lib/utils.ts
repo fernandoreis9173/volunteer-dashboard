@@ -8,102 +8,73 @@ export const getErrorMessage = (error: any): string => {
         return error.context.json.error;
     }
     // Supabase Edge Function error structure
-    if (typeof error.context?.error?.error === 'string') {
-        return error.context.error.error;
-    }
     if (typeof error.context?.error === 'string') {
         return error.context.error;
     }
-    if (typeof error.context?.error?.message === 'string') {
-        return error.context.error.message;
-    }
-    // PostgREST error structure
-    if (typeof error.details === 'string' && error.details.length > 0) {
-        return `${error.message} (${error.details})`;
-    }
-    // Generic JS error
-    if (typeof error.message === 'string') {
+    if (error.message) {
+        // Handle Supabase client errors (e.g., from RPC calls)
+        if (error.message.includes('failed to run function')) {
+            return 'A função do servidor falhou. Verifique a implementação da função Edge/DB.';
+        }
         return error.message;
     }
-    // Fallback for unknown error shapes
-    try {
-        const stringified = JSON.stringify(error);
-        if (stringified !== '{}' && stringified !== '[]') return stringified;
-    } catch (e) {
-        // ignore stringify errors
+    if (typeof error === 'string') {
+        return error;
     }
-    return 'Ocorreu um erro desconhecido. Tente novamente.';
+    try {
+        return JSON.stringify(error);
+    } catch {
+        return 'Ocorreu um erro não serializável.';
+    }
 };
 
-
-export const parseArrayFromString = (data: string[] | string | null | undefined): string[] => {
-    let items: string[] = [];
+export const parseArrayFromString = (data: any): string[] => {
     if (!data) return [];
-
-    if (Array.isArray(data)) {
-        items = data;
-    } else if (typeof data === 'string') {
+    if (Array.isArray(data)) return data;
+    if (typeof data === 'string') {
         if (data.startsWith('[') && data.endsWith(']')) {
             try {
                 const parsed = JSON.parse(data);
-                if (Array.isArray(parsed)) items = parsed;
-            } catch (e) { /* ignore */ }
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) { return []; }
         }
-        else if (data.startsWith('{') && data.endsWith('}')) {
-             items = data.substring(1, data.length - 1).split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+        if (data.startsWith('{') && data.endsWith('}')) {
+             return data.substring(1, data.length - 1).split(',').map(s => s.trim().replace(/^"|"$/g, ''));
         }
-        else if (data.trim()) {
-            items = data.split(',').map(s => s.trim());
-        }
+        return data.split(',').map(s => s.trim()).filter(s => s);
     }
-    return items.filter(item => item && item.trim() !== '');
+    return [];
 };
 
-// FIX: Add and export the 'formatPhoneNumber' utility function.
-export const formatPhoneNumber = (value: string) => {
-    if (!value) return '';
-    const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
-    const { length } = phoneNumber;
-    if (length <= 2) return `(${phoneNumber}`;
-    if (length <= 6) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
-    if (length <= 10) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
-    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
-};
 
-export const convertUTCToLocal = (utcDateStr: string, utcTimeStr: string) => {
-    if (!utcDateStr || !utcTimeStr) {
-      return {
-        date: '',
-        time: '',
-        fullDate: '',
-        dateTime: null,
-        isValid: false,
-      };
+export const convertUTCToLocal = (date: string, time: string): { dateTime: Date | null; fullDate: string; time: string; isValid: boolean } => {
+    if (!date || !time) {
+        return { dateTime: null, fullDate: '', time: '', isValid: false };
     }
-    const date = new Date(`${utcDateStr}T${utcTimeStr}Z`);
-    if (isNaN(date.getTime())) {
-      return {
-        date: 'Data inválida',
-        time: 'Hora inválida',
-        fullDate: 'Data/Hora inválida',
-        dateTime: null,
-        isValid: false,
-      };
+    // The Supabase `time` or `timetz` column returns a time string.
+    // The previous logic incorrectly appended 'Z', forcing a UTC interpretation.
+    // The correct interpretation is to treat the stored date/time as being in the user's local timezone.
+    // By removing the 'Z', the Date constructor will parse it in the browser's local timezone.
+    const timeOnly = time.substring(0, 8);
+    const localDateTime = new Date(`${date}T${timeOnly}`);
+
+    if (isNaN(localDateTime.getTime())) {
+        // Fallback for potential invalid date strings.
+        console.warn(`Invalid date created from: ${date}T${timeOnly}`);
+        return { dateTime: null, fullDate: 'Data Inválida', time: 'Hora Inválida', isValid: false };
     }
-  
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  
-    return {
-      date: date.toLocaleDateString('pt-BR', { timeZone }),
-      time: date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone }),
-      fullDate: date.toLocaleDateString('pt-BR', {
-        weekday: 'long',
-        year: 'numeric',
+
+    const fullDate = new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
         month: 'long',
-        day: 'numeric',
-        timeZone,
-      }),
-      dateTime: date,
-      isValid: true,
-    };
-  };
+        year: 'numeric',
+    }).format(localDateTime);
+
+    const formattedTime = new Intl.DateTimeFormat('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).format(localDateTime);
+
+    return { dateTime: localDateTime, fullDate, time: formattedTime, isValid: true };
+};

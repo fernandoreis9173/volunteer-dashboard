@@ -10,6 +10,7 @@ interface PastEvent {
     name: string;
     date: string;
     present: boolean | null;
+    start_time: string;
     end_time: string;
     departmentName: string;
 }
@@ -41,7 +42,7 @@ const EventHistoryCard: React.FC<{ event: PastEvent, onGeneratePDF: (event: Past
                     className="p-2 text-slate-500 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
                     title="Baixar comprovante"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                 </button>
@@ -198,7 +199,7 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
                 const todayStr = new Date().toISOString().split('T')[0];
                 const { data: eventsData, error: eventsError } = await supabase
                     .from('event_volunteers')
-                    .select('present, events(id, name, date, end_time), departments(name)')
+                    .select('present, events(id, name, date, start_time, end_time), departments(name)')
                     .eq('volunteer_id', volunteerId)
                     .lte('events.date', todayStr)
                     .order('date', { foreignTable: 'events', ascending: false });
@@ -212,11 +213,18 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
                         name: item.events.name,
                         date: item.events.date,
                         present: item.present,
+                        start_time: item.events.start_time,
                         end_time: item.events.end_time,
                         departmentName: item.departments?.name || 'N/A'
                     }))
                     .filter(e => { // Ensure we only count events that have truly ended
+                        const { dateTime: startDateTime } = convertUTCToLocal(e.date, e.start_time);
                         const { dateTime: endDateTime } = convertUTCToLocal(e.date, e.end_time);
+                
+                        if (startDateTime && endDateTime && endDateTime < startDateTime) {
+                            endDateTime.setDate(endDateTime.getDate() + 1);
+                        }
+                        
                         return endDateTime ? new Date() > endDateTime : false;
                     });
 

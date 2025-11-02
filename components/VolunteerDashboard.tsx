@@ -59,7 +59,7 @@ const getShortName = (fullName?: string | null): string => {
 };
 
 const GenericDepartmentIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5">
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" />
     </svg>
@@ -533,25 +533,35 @@ const EventCard: React.FC<{
     pendingSwaps: Set<number>;
 }> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onScanEventQrCode, pendingSwaps }) => {
     
-    const { dateTime: startDateTime, time: startTime } = convertUTCToLocal(event.date, event.start_time);
+    const { fullDate: formattedDate, dateTime: startDateTime, time: startTime } = convertUTCToLocal(event.date, event.start_time);
     const { dateTime: endDateTime, time: endTime } = convertUTCToLocal(event.date, event.end_time);
     const isSwapPending = pendingSwaps.has(event.id);
+
+    // FIX: Handle events that cross midnight in UTC timezone.
+    if (startDateTime && endDateTime && endDateTime < startDateTime) {
+        endDateTime.setDate(endDateTime.getDate() + 1);
+    }
 
     const now = new Date();
     const isFinished = endDateTime ? now > endDateTime : false;
     const isLive = startDateTime && endDateTime ? now >= startDateTime && now < endDateTime : false;
 
-    const myDepartmentsInEvent = useMemo(() => {
+    const myScheduleDetails = useMemo(() => {
         const myDeptIds = new Set<number>();
         (event.event_volunteers || []).forEach(ev => {
             if (ev.volunteer_id === volunteerId) {
                 myDeptIds.add(ev.department_id);
             }
         });
-        return (event.event_departments || [])
+    
+        const departments = (event.event_departments || [])
             .filter(ed => myDeptIds.has(ed.departments.id))
-            .map(ed => ed.departments.name)
-            .join(', ');
+            .map(ed => ed.departments);
+    
+        return {
+            departmentNames: departments.map(d => d.name).join(', '),
+            leaderNames: [...new Set(departments.map(d => d.leader).filter(Boolean))].join(', ')
+        };
     }, [event, volunteerId]);
 
     const myAttendance = useMemo(() => {
@@ -566,26 +576,39 @@ const EventCard: React.FC<{
                     <p className="font-bold text-slate-800 truncate" title={event.name}>{event.name}</p>
                     <div className="mt-2 space-y-1.5 text-sm text-slate-600">
                         <div className="flex items-center gap-2">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
+                            </svg>
+                           <span>{formattedDate}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                            <span>{startTime} - {endTime}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            {getDepartmentIcon(myDepartmentsInEvent)}
-                           <span className="font-medium">{myDepartmentsInEvent}</span>
+                            {getDepartmentIcon(myScheduleDetails.departmentNames)}
+                           <span className="font-medium">{myScheduleDetails.departmentNames}</span>
                         </div>
+                        {myScheduleDetails.leaderNames && (
+                            <div className="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+                               <span className="font-medium">Líder: {myScheduleDetails.leaderNames}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="flex-shrink-0 ml-4">
                     {myAttendance === true ? (
                         <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">Presente</span>
-                    ) : myAttendance === false ? (
+                    ) : isFinished ? (
                         <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">Faltou</span>
                     ) : (
                         <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">Não Marcado</span>
                     )}
                 </div>
             </div>
-             {isToday && (
+             {/* Show buttons container if event is not finished, or if it is today (to show the "Encerrado" state) */}
+            {(isToday || !isFinished) && (
                 <div className="mt-4 pt-4 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
                     {isFinished ? (
                         <div className="flex-1 text-center px-4 py-2 text-sm font-semibold rounded-lg bg-slate-100 text-slate-500">
@@ -612,7 +635,7 @@ const EventCard: React.FC<{
                             disabled={isSwapPending}
                             className="flex-1 text-center px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 shadow-sm disabled:bg-orange-300 disabled:cursor-not-allowed"
                         >
-                            {isSwapPending ? 'Troca Pendente' : 'Solicitar Troca'}
+                            {isSwapPending ? 'Troca Pendente' : 'Preciso Trocar'}
                         </button>
                     )}
                 </div>

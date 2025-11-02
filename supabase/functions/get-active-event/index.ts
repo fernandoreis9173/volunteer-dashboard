@@ -22,8 +22,8 @@ Deno.serve(async (req) => {
     }
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Get current time details, assuming a UTC-3 (Brasilia) timezone for comparison
-    const now = new Date();
+    // Get current time in Brasilia timezone (UTC-3)
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');

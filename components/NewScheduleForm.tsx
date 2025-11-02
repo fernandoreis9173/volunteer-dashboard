@@ -348,8 +348,56 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     }, [volunteerSearch, unselectedVolunteers]);
 
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // 1. Get start and end dates from form (these are in local time)
+        const { date, start_time, end_time } = formData;
+        const newStart = new Date(`${date}T${start_time}`);
+        let newEnd = new Date(`${date}T${end_time}`);
+
+        // Handle overnight events for the new event
+        if (newEnd < newStart) {
+            newEnd.setDate(newEnd.getDate() + 1);
+        }
+
+        // 2. Fetch existing events
+        const { data: existingEvents, error } = await supabase.from('events').select('id, date, start_time, end_time');
+
+        if (error) {
+            console.error('Error fetching existing events:', error);
+            // It's better to set an error state and display it in the UI
+            // For now, just logging it.
+            return;
+        }
+
+        // 3. Check for conflicts
+        for (const event of existingEvents) {
+            // Skip self-comparison in edit mode
+            if (isEditing && event.id === initialData?.id) {
+                continue;
+            }
+
+            const { dateTime: existingStart } = convertUTCToLocal(event.date, event.start_time);
+            const { dateTime: initialExistingEnd } = convertUTCToLocal(event.date, event.end_time);
+
+            if (!existingStart || !initialExistingEnd) continue;
+
+            let existingEnd = initialExistingEnd;
+            // Handle overnight events for existing events
+            if (initialExistingEnd < existingStart) {
+                existingEnd = new Date(initialExistingEnd);
+                existingEnd.setDate(existingEnd.getDate() + 1);
+            }
+
+            // Check for overlap
+            if (newStart < existingEnd && newEnd > existingStart) {
+                alert('Conflito de horário com um evento existente!');
+                return; // Stop the submission
+            }
+        }
+
+        // 4. No conflicts, proceed to save
         const payload: any = { ...formData };
         if (isEditing) {
             payload.id = initialData?.id;

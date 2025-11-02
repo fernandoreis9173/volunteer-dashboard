@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -198,8 +196,13 @@ const FrequencyPage: React.FC = () => {
         let totalScheduled = 0;
 
         filteredEvents.forEach(event => {
+            const { dateTime: startDateTime } = convertUTCToLocal(event.date, event.start_time);
             const { dateTime: endDateTime } = convertUTCToLocal(event.date, event.end_time);
+            if (startDateTime && endDateTime && endDateTime < startDateTime) {
+                endDateTime.setDate(endDateTime.getDate() + 1);
+            }
             const hasEventEnded = endDateTime ? new Date() > endDateTime : false;
+
             totalScheduled += (event.event_volunteers || []).length;
             (event.event_volunteers || []).forEach(v => {
                 if (v.present === true) {
@@ -242,8 +245,13 @@ const FrequencyPage: React.FC = () => {
 
 
         filteredEvents.forEach((event) => {
+            const { dateTime: startDateTime } = convertUTCToLocal(event.date, event.start_time);
             const { dateTime: endDateTime } = convertUTCToLocal(event.date, event.end_time);
+            if (startDateTime && endDateTime && endDateTime < startDateTime) {
+                endDateTime.setDate(endDateTime.getDate() + 1);
+            }
             const hasEventEnded = endDateTime ? new Date() > endDateTime : false;
+            
             const totalVolunteers = (event.event_volunteers || []).length;
             const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
             
@@ -260,8 +268,8 @@ const FrequencyPage: React.FC = () => {
             doc.text(event.name, 14, y);
             y += 8;
 
-            const { date: eventDate, time: startTime } = convertUTCToLocal(event.date, event.start_time);
-            const { time: endTime } = convertUTCToLocal(event.date, event.end_time);
+            // FIX: Destructure `fullDate` as `eventDate` to match the return type of `convertUTCToLocal`.
+            const { fullDate: eventDate } = convertUTCToLocal(event.date, event.start_time);
             const details = `Data: ${eventDate} | Presença Total: ${presentVolunteers}/${totalVolunteers}`;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
@@ -345,8 +353,14 @@ const FrequencyPage: React.FC = () => {
             <div className="space-y-4">
                 {paginatedEvents.map(event => {
                     const isExpanded = expandedEvents.has(event.id!);
+                    const { dateTime: startDateTime } = convertUTCToLocal(event.date, event.start_time);
                     const { dateTime: endDateTime } = convertUTCToLocal(event.date, event.end_time);
+
+                    if (startDateTime && endDateTime && endDateTime < startDateTime) {
+                        endDateTime.setDate(endDateTime.getDate() + 1);
+                    }
                     const hasEventEnded = endDateTime ? new Date() > endDateTime : false;
+                    
                     const totalVolunteers = (event.event_volunteers || []).length;
                     const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
                     
