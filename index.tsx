@@ -4,14 +4,18 @@ import App from './App';
 
 // --- Service Worker Registration ---
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
-    try {
-      // Revert to a simpler, more robust path for registration.
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('Service Worker registered successfully with scope:', registration.scope);
-    } catch (error) {
-      console.error('Service Worker registration failed:', error);
-    }
+  // Defer registration until after the page has loaded to avoid race conditions
+  // and ensure the document is in a valid state.
+  window.addEventListener('load', () => {
+    (async () => {
+      try {
+        const swUrl = `${window.location.origin}/sw.js`;
+        const registration = await navigator.serviceWorker.register(swUrl);
+        console.log('Service Worker registered successfully with scope:', registration.scope);
+      } catch (error) {
+        console.error('Service Worker registration failed:', error);
+      }
+    })();
   });
 } else {
     console.warn('Service Workers are not supported by this browser.');

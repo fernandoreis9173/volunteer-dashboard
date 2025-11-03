@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { DashboardEvent } from '../types';
+import { convertUTCToLocal } from '../lib/utils';
 
 interface UpcomingShiftsListProps {
   todaySchedules: DashboardEvent[] | undefined;
@@ -12,13 +13,14 @@ interface UpcomingShiftsListProps {
 type EventFilter = 'today' | 'upcoming';
 
 const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: DashboardEvent) => void; userRole: string | null; onMarkAttendance: (event: DashboardEvent) => void; isToday: boolean; }> = ({ schedule, onViewDetails, userRole, onMarkAttendance, isToday }) => {
-  const formattedDate = new Date(schedule.date + 'T00:00:00').toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const { fullDate: formattedDate, time: startTime, dateTime: startDateTime } = convertUTCToLocal(schedule.date, schedule.start_time);
+  const { time: endTime, dateTime: endDateTime } = convertUTCToLocal(schedule.date, schedule.end_time);
   
+  // FIX: Handle events that cross midnight in UTC timezone.
+  if (startDateTime && endDateTime && endDateTime < startDateTime) {
+      endDateTime.setDate(endDateTime.getDate() + 1);
+  }
+
   const volunteerNames = schedule.event_volunteers?.map(v => v.volunteers?.name).filter(Boolean) as string[] ?? [];
   const departmentNames = schedule.event_departments?.map(d => d.departments?.name).filter(Boolean) as string[] ?? [];
 
@@ -33,12 +35,15 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
   const isLeader = userRole === 'leader' || userRole === 'lider';
   
   const cardContainerClasses = isToday ? 'w-full' : 'w-80 flex-shrink-0';
+  
+  const now = new Date();
+  const isFinished = endDateTime ? now > endDateTime : false;
 
   return (
     <div className={`bg-white p-5 rounded-xl border border-slate-200 relative flex flex-col h-full ${cardContainerClasses}`}>
       <span className={`absolute top-4 right-4 text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'Confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
        <div className="absolute bottom-4 right-4 flex items-center space-x-1">
-        {isLeader && isToday && (
+        {isLeader && isToday && !isFinished && (
             <button
                 onClick={() => onMarkAttendance(schedule)}
                 className="p-1.5 text-slate-400 hover:text-teal-600 rounded-md hover:bg-teal-50 transition-colors"
@@ -75,7 +80,7 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
-            <span>{schedule.start_time} - {schedule.end_time}</span>
+            <span>{startTime} - {endTime}</span>
           </div>
            {schedule.local && (
             <div className="flex items-center space-x-2">

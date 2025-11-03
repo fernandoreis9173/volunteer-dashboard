@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import EventCard from './EventCard';
 import NewEventForm from './NewScheduleForm';
@@ -8,7 +10,7 @@ import CustomDatePicker from './CustomDatePicker'; // Import the new component
 import QRScannerModal from './QRScannerModal'; // Import the QR scanner modal
 import { Event, NotificationRecord, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
-import { getErrorMessage } from '../lib/utils';
+import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 import Pagination from './Pagination';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -428,8 +430,10 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
         doc.text(event.name, 20, y);
         y += 8;
 
-        const eventDate = new Date(event.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const eventTime = `${event.start_time.substring(0, 5)} - ${event.end_time.substring(0, 5)}`;
+        // FIX: Destructure `fullDate` as `eventDate` to match the return type of `convertUTCToLocal`.
+        const { fullDate: eventDate, time: startTime } = convertUTCToLocal(event.date, event.start_time);
+        const { time: endTime } = convertUTCToLocal(event.date, event.end_time);
+        const eventTime = `${startTime} - ${endTime}`;
         const details = `Data: ${eventDate} | Horário: ${eventTime} | Status: ${event.status}`;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
@@ -740,9 +744,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
                                 aria-expanded={isStatusDropdownOpen}
                             >
                                 <span className="text-slate-900">{selectedStatusLabel}</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-</svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
                             </button>
                             {isStatusDropdownOpen && (
                                 <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">

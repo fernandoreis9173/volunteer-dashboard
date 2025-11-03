@@ -1,10 +1,18 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Event } from '../types';
+import { convertUTCToLocal } from '../lib/utils';
 
 // New Countdown Timer Component
-const EventCountdownTimer: React.FC<{ date: string; endTime: string }> = ({ date, endTime }) => {
+const EventCountdownTimer: React.FC<{ date: string; startTime: string; endTime: string }> = ({ date, startTime, endTime }) => {
     const calculateTimeLeft = useCallback(() => {
-        const endDateTime = new Date(`${date}T${endTime}`);
+        const { dateTime: startDateTime } = convertUTCToLocal(date, startTime);
+        const { dateTime: endDateTime } = convertUTCToLocal(date, endTime);
+        if (!startDateTime || !endDateTime) return { timeLeft: { hours: 0, minutes: 0, seconds: 0 }, isOver: true };
+
+        if (endDateTime < startDateTime) {
+            endDateTime.setDate(endDateTime.getDate() + 1);
+        }
+        
         const now = new Date();
         const difference = endDateTime.getTime() - now.getTime();
 
@@ -19,7 +27,7 @@ const EventCountdownTimer: React.FC<{ date: string; endTime: string }> = ({ date
         }
 
         return { timeLeft, isOver: difference <= 0 };
-    }, [date, endTime]);
+    }, [date, startTime, endTime]);
 
     const [countdown, setCountdown] = useState(calculateTimeLeft());
 
@@ -81,15 +89,19 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
     const isDepartmentInvolved = isLeader && leaderDepartmentId ? event.event_departments.some(ed => ed.department_id === leaderDepartmentId) : false;
     const canLeaderSchedule = isLeader && event.status === 'Confirmado';
     
-    const d = new Date();
-    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const isToday = todayStr === event.date;
-    
+    const { dateTime: startDateTime, fullDate: localFullDate, time: localStartTime } = convertUTCToLocal(event.date, event.start_time);
+    const { dateTime: endDateTime, time: localEndTime } = convertUTCToLocal(event.date, event.end_time);
+
+    // FIX: Handle events that cross midnight in UTC timezone.
+    // If the end time is before the start time, it means the event ends on the next day in UTC.
+    if (startDateTime && endDateTime && endDateTime < startDateTime) {
+        endDateTime.setDate(endDateTime.getDate() + 1);
+    }
+
     const now = new Date();
-    const startDateTime = new Date(`${event.date}T${event.start_time}`);
-    const endDateTime = new Date(`${event.date}T${event.end_time}`);
-    const isLive = isToday && now >= startDateTime && now <= endDateTime;
-    const isFinished = now > endDateTime;
+    const isToday = startDateTime ? startDateTime.toLocaleDateString() === now.toLocaleDateString() : false;
+    const isLive = startDateTime && endDateTime ? now >= startDateTime && now < endDateTime : false;
+    const isFinished = endDateTime ? now > endDateTime : false;
 
 
     const departmentsToDisplay = useMemo(() => {
@@ -133,23 +145,23 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
             <div className="pr-16 sm:pr-24">
                 {isLive ? (
                     <div className="mb-2">
-                        <EventCountdownTimer date={event.date} endTime={event.end_time} />
+                        <EventCountdownTimer date={event.date} startTime={event.start_time} endTime={event.end_time} />
                     </div>
                 ) : (
                     <span className={`text-xs font-semibold px-3 py-1 rounded-full capitalize mb-2 inline-block ${event.status === 'Confirmado' ? 'bg-green-100 text-green-800' : event.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{event.status}</span>
                 )}
                 <h3 className="font-bold text-slate-800 text-lg">{event.name}</h3>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-x-4 gap-y-1 text-sm text-slate-500 mt-1">
-                    <span className="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" /></svg>{new Date(event.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-                    <span className="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>{event.start_time} - {event.end_time}</span>
+                    <span className="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" /></svg>{localFullDate}</span>
+                    <span className="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>{localStartTime} - {localEndTime}</span>
                 </div>
             </div>
 
             {/* --- Leader Action Buttons --- */}
             <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 {isFinished ? (
-                    <div className="flex items-center space-x-2 text-sm text-red-500 font-medium bg-red-100 px-4 py-2 rounded-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div className="flex items-center space-x-2 text-sm text-slate-500 font-medium bg-slate-100 px-4 py-2 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span>Este evento já foi encerrado.</span>

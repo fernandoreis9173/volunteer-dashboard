@@ -118,13 +118,13 @@ const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onChange, na
                 <div className="absolute top-full mt-2 w-full sm:w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-20 p-4">
                     <div className="flex justify-between items-center mb-4">
                         <button type="button" onClick={() => changeMonth(-1)} className="p-1 text-slate-500 hover:text-blue-600 rounded-full hover:bg-slate-100">
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24 " stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                         </button>
                         <p className="font-semibold text-slate-800 capitalize">
                             {displayDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                         </p>
                         <button type="button" onClick={() => changeMonth(1)} className="p-1 text-slate-500 hover:text-blue-600 rounded-full hover:bg-slate-100">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24 " stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                         </button>
                     </div>
                     <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-500 mb-2">
