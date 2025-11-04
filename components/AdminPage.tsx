@@ -288,7 +288,7 @@ const AdminPage: React.FC = () => {
                         {broadcastError && <p className="text-sm text-red-500">{broadcastError}</p>}
                         {broadcastSuccess && <p className="text-sm text-green-500">{broadcastSuccess}</p>}
                         <div className="text-right mt-auto">
-                            <button type="submit" disabled={broadcastLoading} className="px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg disabled:bg-amber-300">
+                            <button type="submit" disabled={broadcastLoading} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-blue-400">
                                 {broadcastLoading ? 'Enviando...' : 'Enviar para Todos'}
                             </button>
                         </div>

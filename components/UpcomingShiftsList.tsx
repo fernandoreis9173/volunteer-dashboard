@@ -8,11 +8,12 @@ interface UpcomingShiftsListProps {
   onViewDetails: (event: DashboardEvent) => void;
   userRole: string | null;
   onMarkAttendance: (event: DashboardEvent) => void;
+  onViewTimeline: (event: DashboardEvent) => void;
 }
 
 type EventFilter = 'today' | 'upcoming';
 
-const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: DashboardEvent) => void; userRole: string | null; onMarkAttendance: (event: DashboardEvent) => void; isToday: boolean; }> = ({ schedule, onViewDetails, userRole, onMarkAttendance, isToday }) => {
+const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: DashboardEvent) => void; userRole: string | null; onMarkAttendance: (event: DashboardEvent) => void; onViewTimeline: (event: DashboardEvent) => void; isToday: boolean; }> = ({ schedule, onViewDetails, userRole, onMarkAttendance, onViewTimeline, isToday }) => {
   const { fullDate: formattedDate, time: startTime, dateTime: startDateTime } = convertUTCToLocal(schedule.date, schedule.start_time);
   const { time: endTime, dateTime: endDateTime } = convertUTCToLocal(schedule.date, schedule.end_time);
   
@@ -42,31 +43,7 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
   return (
     <div className={`bg-white p-5 rounded-xl border border-slate-200 relative flex flex-col h-full ${cardContainerClasses}`}>
       <span className={`absolute top-4 right-4 text-xs font-semibold px-3 py-1 rounded-full capitalize ${schedule.status === 'Confirmado' ? 'bg-green-100 text-green-800' : schedule.status === 'Cancelado' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{schedule.status}</span>
-       <div className="absolute bottom-4 right-4 flex items-center space-x-1">
-        {isLeader && isToday && !isFinished && (
-            <button
-                onClick={() => onMarkAttendance(schedule)}
-                className="p-1.5 text-slate-400 hover:text-teal-600 rounded-md hover:bg-teal-50 transition-colors"
-                aria-label="Marcar presença"
-                title="Marcar Presença"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
-                </svg>
-            </button>
-        )}
-        <button 
-            onClick={() => onViewDetails(schedule)} 
-            className="p-1.5 text-slate-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
-            aria-label="Ver detalhes do evento"
-            title="Ver detalhes"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-        </button>
-      </div>
-
+      
       <div>
         <h3 className="font-bold text-slate-800 mb-2 pr-24">{schedule.name}</h3>
         <div className="space-y-2 text-sm text-slate-500">
@@ -101,37 +78,76 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
         </div>
       )}
 
+      {(schedule.cronograma_principal_id || schedule.cronograma_kids_id) && (
+        <div className="mt-3">
+            <button
+                onClick={() => onViewTimeline(schedule)}
+                className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                aria-label="Ver cronograma"
+                title="Ver Cronograma"
+            >
+                Ver cronograma
+            </button>
+        </div>
+      )}
+
       <div className="flex-grow"></div>
 
       <div>
         <div className="w-full h-px bg-slate-200 my-4"></div>
-        <div className="text-sm text-slate-600 space-y-2 pr-10">
-          <p>
-            <span className="font-semibold text-slate-500">Voluntários:</span>
-            {volunteerNames.length > 0 ? (
-              <>
-                <span className="ml-2 text-slate-700">{visibleVolunteers}</span>
-                {remainingVolunteers > 0 && (
-                  <span className="ml-2 text-blue-600 text-sm font-semibold">
-                    e mais {remainingVolunteers}
-                  </span>
-                )}
-              </>
-            ) : <span className="ml-2 text-slate-500 italic">Nenhum</span>}
-          </p>
-          <p>
-            <span className="font-semibold text-slate-500">Departamentos:</span>
-            {departmentNames.length > 0 ? (
-              <>
-                <span className="ml-2 text-blue-600 font-medium">{visibleDepartments}</span>
-                {remainingDepartments > 0 && (
-                  <span className="ml-2 text-blue-600 text-sm font-semibold">
-                    e mais {remainingDepartments}
-                  </span>
-                )}
-              </>
-            ) : <span className="ml-2 text-slate-500 italic">Nenhum</span>}
-          </p>
+        <div className="flex justify-between items-end gap-4">
+          <div className="text-sm text-slate-600 space-y-2 min-w-0">
+            <p>
+              <span className="font-semibold text-slate-500">Voluntários:</span>
+              {volunteerNames.length > 0 ? (
+                <>
+                  <span className="ml-2 text-slate-700">{visibleVolunteers}</span>
+                  {remainingVolunteers > 0 && (
+                    <span className="ml-2 text-blue-600 text-sm font-semibold">
+                      e mais {remainingVolunteers}
+                    </span>
+                  )}
+                </>
+              ) : <span className="ml-2 text-slate-500 italic">Nenhum</span>}
+            </p>
+            <p>
+              <span className="font-semibold text-slate-500">Departamentos:</span>
+              {departmentNames.length > 0 ? (
+                <>
+                  <span className="ml-2 text-blue-600 font-medium">{visibleDepartments}</span>
+                  {remainingDepartments > 0 && (
+                    <span className="ml-2 text-blue-600 text-sm font-semibold">
+                      e mais {remainingDepartments}
+                    </span>
+                  )}
+                </>
+              ) : <span className="ml-2 text-slate-500 italic">Nenhum</span>}
+            </p>
+          </div>
+          <div className="flex items-center space-x-1 flex-shrink-0">
+            {isLeader && isToday && !isFinished && (
+                <button
+                    onClick={() => onMarkAttendance(schedule)}
+                    className="p-1.5 text-slate-400 hover:text-teal-600 rounded-md hover:bg-teal-50 transition-colors"
+                    aria-label="Marcar presença"
+                    title="Marcar Presença"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
+                    </svg>
+                </button>
+            )}
+            <button 
+                onClick={() => onViewDetails(schedule)} 
+                className="p-1.5 text-slate-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+                aria-label="Ver detalhes do evento"
+                title="Ver detalhes"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -150,7 +166,7 @@ const FilterButton: React.FC<{ label: string; value: EventFilter; activeValue: E
 );
 
 
-const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules, upcomingSchedules, onViewDetails, userRole, onMarkAttendance }) => {
+const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules, upcomingSchedules, onViewDetails, userRole, onMarkAttendance, onViewTimeline }) => {
   const [activeFilter, setActiveFilter] = useState<EventFilter>('today');
   
   const loading = useMemo(() => {
@@ -209,6 +225,7 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
               onViewDetails={onViewDetails} 
               userRole={userRole}
               onMarkAttendance={onMarkAttendance}
+              onViewTimeline={onViewTimeline}
               isToday={isToday}
             />
           ))

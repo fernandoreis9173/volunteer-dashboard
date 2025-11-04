@@ -35,6 +35,8 @@ export interface Event {
   local?: string;
   observations?: string;
   color?: string;
+  cronograma_principal_id?: string | null;
+  cronograma_kids_id?: string | null;
 }
 
 // Added for Dashboard performance and type safety
@@ -49,6 +51,8 @@ export interface DashboardEvent {
   observations?: string;
   event_departments: { departments: { id: number; name: string; leader?: string; } }[] | null;
   event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } }[] | null;
+  cronograma_principal_id?: string | null;
+  cronograma_kids_id?: string | null;
 }
 
 export interface DashboardData {
@@ -66,7 +70,7 @@ export interface DashboardData {
     activeLeaders?: EnrichedUser[];
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin' | 'history';
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin' | 'history' | 'timelines';
 
 export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 
@@ -148,3 +152,21 @@ export interface Invitation {
       name: string | null;
     } | null;
   }
+  
+export interface TimelineItem {
+  id?: string;
+  modelo_id?: string;
+  ordem: number;
+  titulo_item: string;
+  duracao_minutos: number;
+  detalhes: string;
+  links?: { id: string; url: string; title: string; }[];
+}
+
+export interface TimelineTemplate {
+  id?: string;
+  nome_modelo: string;
+  admin_id?: string;
+  cronograma_itens: TimelineItem[];
+  created_at?: string;
+}

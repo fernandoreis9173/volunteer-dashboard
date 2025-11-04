@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
@@ -15,6 +16,7 @@ import { getErrorMessage } from '../lib/utils';
 import QRScannerModal from './QRScannerModal';
 import QRCodeDisplayModal from './QRCodeDisplayModal';
 import AttendanceFlashCards from './AttendanceFlashCards';
+import EventTimelineViewerModal from './EventTimelineViewerModal';
 
 interface LiveEventTimerProps {
   event: Event;
@@ -53,7 +55,7 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) =>
                     className="p-2 text-red-600 hover:text-red-800 bg-red-100 hover:bg-red-200 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 flex-shrink-0"
                     aria-label="Ver detalhes do evento"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5" >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </button>
@@ -86,6 +88,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [isQrDisplayOpen, setIsQrDisplayOpen] = useState(false);
   const [scannedQrData, setScannedQrData] = useState<string | null>(null);
+  const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
 
   const fetchDashboardData = useCallback(async () => {
       if (!userProfile?.department_id) return;
@@ -344,6 +347,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
             onViewDetails={handleViewDetails}
             userRole={userProfile?.role ?? null}
             onMarkAttendance={handleMarkAttendance}
+            onViewTimeline={setViewingTimelineFor}
           />
         </div>
         <div className="lg:col-span-1 space-y-8">
@@ -386,6 +390,11 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
                 onConfirm={handleConfirmAttendance}
             />
         )}
+      <EventTimelineViewerModal 
+        isOpen={!!viewingTimelineFor}
+        onClose={() => setViewingTimelineFor(null)}
+        event={viewingTimelineFor}
+      />
     </div>
   );
 };

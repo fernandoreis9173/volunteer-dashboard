@@ -5,7 +5,7 @@ import LeaderDashboard from './components/Dashboard';
 import VolunteersPage from './components/VolunteersPage';
 import DepartmentsPage from './components/DepartmentsPage';
 // FIX: Corrected import name from SchedulesPage to EventsPage to match the component.
-import SchedulesPage from './components/SchedulesPage';
+import EventsPage from './components/SchedulesPage';
 import CalendarPage from './components/CalendarPage';
 import AdminPage from './components/AdminPage';
 import AdminDashboard from './components/AdminDashboard';
@@ -24,21 +24,19 @@ import PushNotificationModal from './components/PushNotificationModal';
 import IOSInstallPromptModal from './components/IOSInstallPromptModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
 import ApiConfigPage from './components/ApiConfigPage'; // Import the config page
-import TimelinesPage from './components/TimelinesPage';
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
-// FIX: Import EnrichedUser type to correctly type users from `list-users` function.
-import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer, type EnrichedUser } from './types';
+import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer } from './types';
 import { supabase } from './lib/supabaseClient';
-// FIX: Restored Supabase v2 types to ensure type safety.
-import { type Session, type User } from '@supabase/supabase-js';
-import { getErrorMessage, convertUTCToLocal } from './lib/utils';
+import { type Session } from '@supabase/supabase-js';
+import { getErrorMessage } from './lib/utils';
 
+// CORREÇÃO 1: Usar import.meta.env para variáveis de ambiente no Vite.
+// Check for required environment variables for the frontend
 const areApiKeysConfigured = 
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
-// FIX: Reverted UserProfileState to use `department_id` (singular) to enforce the business rule of one leader per department.
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -54,7 +52,6 @@ const pagePermissions: Record<Page, string[]> = {
     'volunteers': ['admin', 'leader'],
     'departments': ['admin'],
     'events': ['admin', 'leader'],
-    'timelines': ['admin'],
     'calendar': ['admin', 'leader'],
     'frequency': ['admin'],
     'admin': ['admin'],
@@ -69,7 +66,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2); 
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -86,7 +83,6 @@ const urlBase64ToUint8Array = (base64String: string) => {
 };
 
 const App: React.FC = () => {
-  // FIX: Use 'any' for Session type due to import errors.
   const [session, setSession] = useState<Session | null>(null);
   const [activePage, setActivePage] = useState<Page>(getPageFromHash());
   const [isLoading, setIsLoading] = useState(true);
@@ -104,8 +100,6 @@ const App: React.FC = () => {
   // FIX: Use `any` for `installPromptEvent` state to accommodate the non-standard `BeforeInstallPromptEvent` properties like `prompt()`.
   const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null);
   const [isIOSInstallPromptOpen, setIsIOSInstallPromptOpen] = useState(false);
-  // FIX: Use 'any' for User type due to import errors.
-  const [leaders, setLeaders] = useState<User[]>([]);
   const lastUserId = useRef<string | null>(null);
   const hasLoginRedirected = useRef(false);
   
@@ -125,14 +119,12 @@ const App: React.FC = () => {
     return allowedRolesForPage && allowedRolesForPage.includes(normalizedRole);
   }, [userProfile, activePage]);
 
-  // FIX: Use 'any' for Session type due to import errors.
   const fetchCoreData = useCallback(async (currentSession: Session) => {
     try {
         const userStatus = currentSession.user.user_metadata?.status;
         const userRole = currentSession.user.user_metadata?.role;
 
         if (userStatus === 'Inativo') {
-            // FIX: Initialize with a single null department_id for inactive users.
             setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
             setIsLoading(false); // Stop loading, render disabled page.
             return;
@@ -147,7 +139,6 @@ const App: React.FC = () => {
         // If the user status is pending, we don't need to fetch detailed profiles yet.
         // The registration page will handle the profile creation.
         if (userStatus === 'Pendente') {
-             // FIX: Initialize with a single null department_id for pending users.
              setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null });
              return;
         }
@@ -164,28 +155,23 @@ const App: React.FC = () => {
             
             profile = {
                 role: userRole,
-                // FIX: Initialize with a single null department_id for volunteers.
                 department_id: null,
                 volunteer_id: volunteerData?.id ?? null,
                 status: userStatus,
             };
 
         } else { // Admin/Leader
-             // FIX: Fetch only a single department ID for a leader, enforcing the business rule.
-             const { data: leaderDept, error: leaderDeptError } = await supabase
-                .from('department_leaders')
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
                 .select('department_id')
-                .eq('leader_id', currentSession.user.id)
-                .maybeSingle(); // Use maybeSingle to handle admins with no departments.
-
-            if (leaderDeptError) {
-                 console.error("Error fetching admin/leader department:", getErrorMessage(leaderDeptError));
-            }
+                .eq('id', currentSession.user.id)
+                .single();
             
+            if (profileError) console.error("Error fetching admin/leader profile:", getErrorMessage(profileError));
+
             profile = {
                 role: userRole,
-                // FIX: Assign the single department ID to `department_id`.
-                department_id: leaderDept?.department_id || null,
+                department_id: profileData?.department_id ?? null,
                 volunteer_id: null,
                 status: userStatus,
             };
@@ -279,103 +265,64 @@ const App: React.FC = () => {
         }
     }, []);
 
-    const fetchLeaders = useCallback(async () => {
-        if(!session) return;
-        try {
-            const { data, error: invokeError } = await supabase.functions.invoke('list-users');
-            if (invokeError) throw invokeError;
-            if (data.users) {
-                 // FIX: Use EnrichedUser type which includes the `app_status` property from the `list-users` function.
-                 const potentialLeaders = data.users.filter((user: EnrichedUser) => {
-                    const role = user.user_metadata?.role;
-                    return (role === 'leader' || role === 'lider' || role === 'admin') && user.app_status === 'Ativo';
-                });
-                setLeaders(potentialLeaders);
-            }
-        } catch (err) {
-            console.error("Error fetching leaders in App:", getErrorMessage(err));
-        }
-    }, [session]);
-
-    useEffect(() => {
-        fetchLeaders();
-    }, [fetchLeaders]);
-
     const checkForActiveEvent = useCallback(async () => {
         if (!session?.user) {
             setActiveEvent(null);
             return;
         }
     
-        try {
-            // FIX: Reverted from `get_active_event` RPC to client-side filtering to resolve the "function not found" database error.
-            // This fetches all user-related events and finds the currently active one.
-            const { data: eventsData, error } = await supabase.rpc('get_events_for_user');
-            
-            if (error) throw error;
-            
-            const allEvents = (eventsData as AppEvent[]) || [];
-            if (allEvents.length === 0) {
-                setActiveEvent(null);
-                return;
-            }
+        const now = new Date();
+        
+        // Timezone-safe method to get local date and time strings
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const today = `${year}-${month}-${day}`;
+        
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const currentTime = `${hours}:${minutes}:${seconds}`;
     
-            const now = new Date();
-            const liveEvent = allEvents.find(event => {
-                if (event.status !== 'Confirmado') {
-                    return false;
-                }
+        const { data, error } = await supabase
+            .from('events')
+            .select('*, event_departments(department_id, departments(id, name, leader)), event_volunteers(volunteer_id, department_id, present, volunteers(id, name, initials))')
+            .eq('date', today)
+            .lte('start_time', currentTime)
+            .gt('end_time', currentTime)
+            .eq('status', 'Confirmado')
+            .limit(1)
+            .maybeSingle(); // Use maybeSingle to prevent errors when no event is found.
     
-                // Use the utility to convert stored UTC date/time to local Date objects for comparison
-                const { dateTime: startDateTime, isValid: startIsValid } = convertUTCToLocal(event.date, event.start_time);
-                const { dateTime: endDateTime, isValid: endIsValid } = convertUTCToLocal(event.date, event.end_time);
-    
-                if (!startIsValid || !endIsValid || !startDateTime || !endDateTime) {
-                    console.warn(`Skipping event ID ${event.id} due to invalid date/time.`);
-                    return false;
-                }
-                
-                // Handle events that cross midnight (e.g., 22:00 to 02:00)
-                if (endDateTime < startDateTime) {
-                    endDateTime.setDate(endDateTime.getDate() + 1);
-                }
-    
-                return now >= startDateTime && now <= endDateTime;
-            });
-    
-            setActiveEvent(liveEvent || null);
-    
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            console.error("Error checking for active event:", errorMessage);
-            setActiveEvent(null); // Clear on error
+        if (error) { 
+            console.error("Error checking for active event:", getErrorMessage(error));
         }
+    
+        // FIX: Use the `AppEvent` alias when casting the fetched data.
+        setActiveEvent(data as AppEvent | null);
     }, [session]);
     
     useEffect(() => {
         checkForActiveEvent(); // Check immediately on session change/load
-        const interval = setInterval(checkForActiveEvent, 10000); // And then check every 10 seconds
+        const interval = setInterval(checkForActiveEvent, 60000); // And then check every minute
         return () => clearInterval(interval);
     }, [checkForActiveEvent]);
 
     const eventForSidebar = useMemo(() => {
         if (!activeEvent || !userProfile) return null;
 
-        // FIX: Use `department_id` (singular) to check if the leader's department is involved.
         const { role, volunteer_id, department_id } = userProfile;
 
         if (role === 'admin') {
             return activeEvent;
         }
 
-        if (role === 'volunteer' && (activeEvent.event_volunteers || []).some(v => v.volunteer_id === volunteer_id)) {
+        if (role === 'volunteer' && activeEvent.event_volunteers.some(v => v.volunteer_id === volunteer_id)) {
             return activeEvent;
         }
 
-        if ((role === 'leader' || role === 'lider') && department_id) {
-            if ((activeEvent.event_departments || []).some(d => d.department_id === department_id)) {
-                return activeEvent;
-            }
+        if ((role === 'leader' || role === 'lider') && activeEvent.event_departments.some(d => d.department_id === department_id)) {
+            return activeEvent;
         }
 
         return null;
@@ -383,7 +330,6 @@ const App: React.FC = () => {
 
     useEffect(() => {
         // This is the primary listener for auth changes (login, logout, token refresh).
-        // FIX: Supabase v2 onAuthStateChange returns a subscription object inside a data object.
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
             setSession(newSession);
              // If session becomes null (logout), we're not loading anymore.
@@ -528,34 +474,6 @@ const App: React.FC = () => {
         };
     }, [session, userProfile, refetchUserData]);
 
-    // Real-time leader department assignment subscription
-    useEffect(() => {
-        if (!session?.user?.id || (userProfile?.role !== 'leader' && userProfile?.role !== 'lider')) {
-            return;
-        }
-
-        const channel = supabase
-            .channel(`realtime-leader-departments:${session.user.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*', // Listen for INSERT, UPDATE, DELETE
-                    schema: 'public',
-                    table: 'department_leaders',
-                    filter: `leader_id=eq.${session.user.id}`,
-                },
-                () => {
-                    console.log('Detected a change in leader department assignments. Refetching user data...');
-                    refetchUserData();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [session, userProfile, refetchUserData]);
-
     const subscribeToPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {
             try {
@@ -605,29 +523,24 @@ const App: React.FC = () => {
                 case 'history':
                     return <AttendanceHistoryPage session={session} />;
                 case 'my-profile':
-                    return <VolunteerProfile session={session} onUpdate={refetchNotificationCount} leaders={leaders} />;
+                    return <VolunteerProfile session={session} onUpdate={refetchNotificationCount} />;
                 case 'notifications':
                     return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
                 case 'dashboard':
                 default:
-                    return <VolunteerDashboard session={session} onDataChange={refetchUserData} activeEvent={activeEvent} onNavigate={handleNavigate} leaders={leaders} />;
+                    return <VolunteerDashboard session={session} onDataChange={refetchUserData} activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
             }
         }
 
         // Admin and Leader pages
         switch (activePage) {
             case 'volunteers':
-                // FIX: Pass the single leaderDepartmentId to VolunteersPage.
-                return <VolunteersPage isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} activeEvent={eventForSidebar} onDataChange={refetchUserData} />;
+                return <VolunteersPage isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} />;
             case 'departments':
-                // FIX: Pass the single leaderDepartmentId to DepartmentsPage.
-                return <DepartmentsPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} leaders={leaders} onLeadersChange={fetchLeaders} />;
+                return <DepartmentsPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} />;
             case 'events':
-                 return <SchedulesPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} />;
-            case 'timelines':
-                return <TimelinesPage />;
+                 return <EventsPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} />;
             case 'calendar':
-                // FIX: Pass the single leaderDepartmentId to CalendarPage.
                 return <CalendarPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} setIsSidebarOpen={setIsSidebarOpen} />;
             case 'admin':
                 return <AdminPage />;
@@ -636,15 +549,13 @@ const App: React.FC = () => {
             case 'notifications':
                 return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
             case 'my-profile':
-                // FIX: Pass the 'leaders' prop to UserProfilePage to satisfy its prop requirements.
-                return <UserProfilePage session={session} onUpdate={refetchUserData} leaders={leaders} />;
+                return <UserProfilePage session={session} onUpdate={refetchUserData} />;
             case 'dashboard':
             default:
                 if (userProfile.role === 'admin') {
-                    return <AdminDashboard onDataChange={refetchNotificationCount} activeEvent={activeEvent} onNavigate={handleNavigate} />;
+                    return <AdminDashboard onDataChange={refetchNotificationCount} activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
                 }
-                // FIX: Pass the updated userProfile (with single department_id) to LeaderDashboard.
-                return <LeaderDashboard userProfile={userProfile} activeEvent={activeEvent} onNavigate={handleNavigate} />;
+                return <LeaderDashboard activeEvent={eventForSidebar} onNavigate={handleNavigate} />;
         }
     };
 

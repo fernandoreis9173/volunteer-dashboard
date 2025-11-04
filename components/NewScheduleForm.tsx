@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Event, Department } from '../types';
+import { Event, Department, TimelineTemplate } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import ConfirmationModal from './ConfirmationModal';
 import CustomDatePicker from './CustomDatePicker';
 import CustomTimePicker from './CustomTimePicker';
 import SmartSearch, { type SearchItem } from './SmartSearch';
-import { convertUTCToLocal } from '../lib/utils';
+import { convertUTCToLocal, getErrorMessage } from '../lib/utils';
 
 interface NewEventFormProps {
     initialData?: Event | null;
@@ -135,8 +135,8 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
 };
 
 
-const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, userRole, leaderDepartmentId, allDepartments }) => {
-    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
+const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError: initialSaveError, userRole, leaderDepartmentId, allDepartments }) => {
+    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '', cronograma_principal_id: '', cronograma_kids_id: '' });
     const [selectedVolunteers, setSelectedVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [allVolunteers, setAllVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [volunteerSearch, setVolunteerSearch] = useState('');
@@ -145,6 +145,11 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const [isCustomStatusDropdownOpen, setIsCustomStatusDropdownOpen] = useState(false);
     const statusDropdownRef = useRef<HTMLDivElement>(null);
     const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
+    const [saveError, setSaveError] = useState<string | null>(initialSaveError);
+    // FIX: The state for timeline templates only needs `id` and `nome_modelo` for the dropdown.
+    // The type has been adjusted to match the data fetched from Supabase, resolving the type error.
+    const [timelineTemplates, setTimelineTemplates] = useState<{ id?: string, nome_modelo: string }[]>([]);
+
 
     const isEditing = !!initialData;
     const isSchedulingMode = isEditing && (userRole === 'leader' || userRole === 'lider' || userRole === 'líder');
@@ -156,6 +161,27 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     
     const isSchedulingAllowed = isSchedulingMode && formData.status === 'Confirmado' && isDepartmentInvolved;
     
+    useEffect(() => {
+        const fetchTimelineTemplates = async () => {
+            if (isAdminMode) {
+                const { data, error } = await supabase
+                    .from('cronograma_modelos')
+                    .select('id, nome_modelo')
+                    .order('nome_modelo');
+                if (error) {
+                    console.error("Failed to fetch timeline templates:", getErrorMessage(error));
+                } else {
+                    setTimelineTemplates(data || []);
+                }
+            }
+        };
+        fetchTimelineTemplates();
+    }, [isAdminMode]);
+
+    useEffect(() => {
+        setSaveError(initialSaveError);
+    }, [initialSaveError]);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
@@ -233,7 +259,9 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 local: initialData.local || '',
                 status: initialData.status,
                 observations: initialData.observations || '',
-                color: initialData.color || ''
+                color: initialData.color || '',
+                cronograma_principal_id: initialData.cronograma_principal_id || '',
+                cronograma_kids_id: initialData.cronograma_kids_id || '',
             });
 
             if (isSchedulingMode && leaderDepartmentId) {
@@ -263,7 +291,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 setSelectedDepartments(initialSelectedDepts);
             }
         } else {
-            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
+            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '', cronograma_principal_id: '', cronograma_kids_id: '' });
             setSelectedVolunteers([]);
             setSelectedDepartments([]);
         }
@@ -350,68 +378,82 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        // 1. Get start and end dates from form (these are in local time)
-        const { date, start_time, end_time } = formData;
-        const newStart = new Date(`${date}T${start_time}`);
-        let newEnd = new Date(`${date}T${end_time}`);
-
-        // Handle overnight events for the new event
-        if (newEnd < newStart) {
-            newEnd.setDate(newEnd.getDate() + 1);
-        }
-
-        // 2. Fetch existing events
-        const { data: existingEvents, error } = await supabase.from('events').select('id, date, start_time, end_time');
-
-        if (error) {
-            console.error('Error fetching existing events:', error);
-            // It's better to set an error state and display it in the UI
-            // For now, just logging it.
+        setSaveError(null);
+        
+        if (!formData.name || !formData.date || !formData.start_time || !formData.end_time) {
+            setSaveError('Por favor, preencha todos os campos obrigatórios (Título, Data, Início, Fim).');
             return;
         }
-
-        // 3. Check for conflicts
-        for (const event of existingEvents) {
-            // Skip self-comparison in edit mode
-            if (isEditing && event.id === initialData?.id) {
-                continue;
+    
+        try {
+            const { data: rpcData, error: fetchError } = await supabase.rpc('get_events_for_user');
+            if (fetchError) {
+                throw new Error(`Não foi possível verificar conflitos: ${fetchError.message}`);
             }
-
-            const { dateTime: existingStart } = convertUTCToLocal(event.date, event.start_time);
-            const { dateTime: initialExistingEnd } = convertUTCToLocal(event.date, event.end_time);
-
-            if (!existingStart || !initialExistingEnd) continue;
-
-            let existingEnd = initialExistingEnd;
-            // Handle overnight events for existing events
-            if (initialExistingEnd < existingStart) {
-                existingEnd = new Date(initialExistingEnd);
-                existingEnd.setDate(existingEnd.getDate() + 1);
+            const allEvents = (rpcData as unknown as Event[]) || [];
+    
+            const newEventStartLocal = new Date(`${formData.date}T${formData.start_time}`);
+            let newEventEndLocal = new Date(`${formData.date}T${formData.end_time}`);
+    
+            if (newEventEndLocal < newEventStartLocal) {
+                newEventEndLocal.setDate(newEventEndLocal.getDate() + 1);
             }
-
-            // Check for overlap
-            if (newStart < existingEnd && newEnd > existingStart) {
-                alert('Conflito de horário com um evento existente!');
-                return; // Stop the submission
+            
+            const newStartTimestamp = newEventStartLocal.getTime();
+            const newEndTimestamp = newEventEndLocal.getTime();
+    
+            const conflictingEvent = allEvents.find(existingEvent => {
+                if (isEditing && existingEvent.id === initialData?.id) {
+                    return false;
+                }
+    
+                const { dateTime: existingStartLocal, isValid: startIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.start_time);
+                let { dateTime: existingEndLocal, isValid: endIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.end_time);
+    
+                if (!startIsValid || !endIsValid || !existingStartLocal || !existingEndLocal) {
+                    console.warn(`Could not parse dates for existing event ID ${existingEvent.id}. Skipping conflict check.`);
+                    return false;
+                }
+    
+                if (existingEndLocal < existingStartLocal) {
+                    existingEndLocal.setDate(existingEndLocal.getDate() + 1);
+                }
+    
+                const existingStartTimestamp = existingStartLocal.getTime();
+                const existingEndTimestamp = existingEndLocal.getTime();
+    
+                return (newStartTimestamp < existingEndTimestamp) && (newEndTimestamp > existingStartTimestamp);
+            });
+    
+            if (conflictingEvent) {
+                const { time: conflictStartTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.start_time);
+                const { time: conflictEndTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.end_time);
+                throw new Error(`Não é possível agendar. O horário conflita com o evento "${conflictingEvent.name}" (das ${conflictStartTime} às ${conflictEndTime}).`);
             }
-        }
+    
+            const payload: any = { 
+                ...formData,
+                cronograma_principal_id: formData.cronograma_principal_id || null,
+                cronograma_kids_id: formData.cronograma_kids_id || null,
+            };
 
-        // 4. No conflicts, proceed to save
-        const payload: any = { ...formData };
-        if (isEditing) {
-            payload.id = initialData?.id;
+            if (isEditing) {
+                payload.id = initialData?.id;
+            }
+    
+            if (isSchedulingMode) {
+                payload.volunteer_ids = selectedVolunteers.map(v => v.id);
+                payload.scheduling_department_id = leaderDepartmentId;
+            }
+    
+            if (isAdminMode) {
+                payload.department_ids = selectedDepartments.map(d => d.id);
+            }
+            onSave(payload);
+    
+        } catch (err) {
+            setSaveError(getErrorMessage(err));
         }
-
-        if (isSchedulingMode) {
-            payload.volunteer_ids = selectedVolunteers.map(v => v.id);
-            payload.scheduling_department_id = leaderDepartmentId;
-        }
-
-        if (isAdminMode) {
-            payload.department_ids = selectedDepartments.map(d => d.id);
-        }
-        onSave(payload);
     };
 
     let title = isEditing ? "Editar Evento" : "Novo Evento";
@@ -545,6 +587,29 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                         </div>
                     )}
                     <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"></textarea></div>
+                
+                    {isAdminMode && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-200">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Principal</label>
+                                <select name="cronograma_principal_id" value={formData.cronograma_principal_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
+                                    <option value="">Nenhum</option>
+                                    {timelineTemplates.map(template => (
+                                        <option key={template.id} value={template.id}>{template.nome_modelo}</option>
+                                    ))}
+                                </select>
+                            </div>
+                             <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Kids</label>
+                                <select name="cronograma_kids_id" value={formData.cronograma_kids_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
+                                    <option value="">Nenhum</option>
+                                    {timelineTemplates.map(template => (
+                                        <option key={template.id} value={template.id}>{template.nome_modelo}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
 
