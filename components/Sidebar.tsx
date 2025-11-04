@@ -67,6 +67,7 @@ const allNavItems: NavItemData[] = [
     { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIcon} alt="Departamentos" />, roles: ['admin'] },
     { page: 'events', label: 'Eventos', icon: <img src={EventosIcon} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },
     { page: 'calendar', label: 'Calendário', icon: <img src={CalendarIcon} alt="Calendário" />, roles: ['admin', 'leader'] },
+    { page: 'timelines', label: 'Cronogramas', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" /></svg>, roles: ['admin'] },
     { page: 'frequency', label: 'Frequência', icon: <img src={FrequenciaIcon} alt="Frequência" />, roles: ['admin'] },
     { page: 'admin', label: 'Admin', icon: <img src={AdminIcon} alt="Admin" />, roles: ['admin'] },
 ];

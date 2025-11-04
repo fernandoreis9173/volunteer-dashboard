@@ -110,7 +110,7 @@ const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onChange, na
                     placeholder="dd/mm/aaaa"
                 />
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <img src={CalendarIcon} alt="Calendar" className="h-5 w-5 text-slate-400" style={{ filter: 'brightness(0) saturate(100%)' }} />
+                    <img src={CalendarIcon} alt="Calendar" className="h-5 w-5 text-slate-50" style={{ filter: 'invert(1) grayscale(1) brightness(0.6)' }} />
                 </div>
             </div>
 

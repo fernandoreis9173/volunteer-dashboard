@@ -9,6 +9,7 @@ import ActivityFeed from './ActivityFeed';
 import EventDetailsModal from './EventDetailsModal';
 import ActiveVolunteersList from './ActiveVolunteersList';
 import QRCodeDisplayModal from './QRCodeDisplayModal';
+import EventTimelineViewerModal from './EventTimelineViewerModal';
 
 interface LiveEventTimerProps {
   event: Event;
@@ -68,90 +69,74 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
     const [dashboardData, setDashboardData] = useState<Partial<DashboardData>>({});
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [isQrDisplayOpen, setIsQrDisplayOpen] = useState(false);
+    const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
 
     const fetchDashboardData = useCallback(async () => {
         setDashboardData({}); 
         setDashboardError(null);
-
-        // --- STAGE 1: Fetch fast stats and today's data first ---
+    
         try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayStr = today.toISOString().split('T')[0];
-            
-            const next7DaysInitial = new Date(today);
-            next7DaysInitial.setDate(today.getDate() + 7);
-            const next7DaysStrInitial = next7DaysInitial.toISOString().split('T')[0];
-
+            // --- Fetch non-event data and all events in parallel ---
             const [
                 activeVolunteersCountRes,
                 departmentsCountRes,
-                todaySchedulesRes,
-                upcomingSchedulesCountRes,
+                eventsRpcRes,
+                activeLeadersRes,
             ] = await Promise.all([
                 supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
                 supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').eq('date', todayStr).order('start_time'),
-                supabase.from('events').select('id', { count: 'exact', head: true }).gt('date', todayStr).lte('date', next7DaysStrInitial),
+                supabase.rpc('get_events_for_user'), // This is the key change to use a server-side function
+                supabase.functions.invoke('list-users', { body: { context: 'dashboard' } }),
             ]);
-
-            const todaySchedules = (todaySchedulesRes.data as unknown as DashboardEvent[]) || [];
-            const initialStats: DashboardData['stats'] = {
-                activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
-                departments: { value: String(departmentsCountRes.count ?? 0), change: 0 },
-                schedulesToday: { value: String(todaySchedules.length), change: 0 },
-                upcomingSchedules: { value: String(upcomingSchedulesCountRes.count ?? 0), change: 0 },
-            };
     
-            setDashboardData(prev => ({
-                ...prev,
-                stats: initialStats,
-                todaySchedules: todaySchedules,
-            }));
+            // --- Error Handling ---
+            if (activeVolunteersCountRes.error) throw activeVolunteersCountRes.error;
+            if (departmentsCountRes.error) throw departmentsCountRes.error;
+            if (eventsRpcRes.error) throw eventsRpcRes.error;
+            if (activeLeadersRes.error) throw activeLeadersRes.error;
+    
+            // --- Process Data ---
+            const allEvents = (eventsRpcRes.data as unknown as DashboardEvent[]) || [];
             
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            setDashboardError(`Falha ao carregar dados essenciais: ${errorMessage}`);
-        }
-
-        // --- STAGE 2: Fetch remaining heavier content in the background ---
-        try {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const todayStr = today.toISOString().split('T')[0];
+            
             const next7Days = new Date(today);
             next7Days.setDate(today.getDate() + 7);
             const next7DaysStr = next7Days.toISOString().split('T')[0];
-
+    
             const last30Days = new Date(today);
             last30Days.setDate(today.getDate() - 29);
             const last30DaysStr = last30Days.toISOString().split('T')[0];
     
-            const [
-                upcomingSchedulesRes,
-                activeLeadersRes,
-                chartEventsRes
-            ] = await Promise.all([
-                supabase.from('events').select('id, name, date, start_time, end_time, status, local, observations, event_departments(departments(id, name)), event_volunteers(department_id, volunteer_id, present, volunteers(name))').gt('date', todayStr).lte('date', next7DaysStr).order('date').order('start_time').limit(10),
-                supabase.functions.invoke('list-users', { body: { context: 'dashboard' } }),
-                supabase.from('events').select('date, name, event_volunteers(count), event_departments(department_id)').gte('date', last30DaysStr).lte('date', todayStr)
-            ]);
+            const todaySchedules = allEvents.filter(e => e.date === todayStr);
+            const upcomingSchedules = allEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr);
+            const chartEvents = allEvents.filter(e => e.date >= last30DaysStr && e.date <= todayStr);
     
-            // Process chart data
+            // --- Set Stats ---
+            const stats: DashboardData['stats'] = {
+                activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
+                departments: { value: String(departmentsCountRes.count ?? 0), change: 0 },
+                schedulesToday: { value: String(todaySchedules.length), change: 0 },
+                upcomingSchedules: { value: String(upcomingSchedules.length), change: 0 },
+            };
+            
+            // --- Process Chart Data ---
             const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
-            if (chartEventsRes.data) {
-                for (const event of chartEventsRes.data) {
-                    const date = event.date;
-                    if (!chartDataMap.has(date)) {
-                        chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
-                    }
-                    const entry = chartDataMap.get(date)!;
-                    entry.scheduledVolunteers += (event.event_volunteers[0] as any)?.count ?? 0;
-                    (event.event_departments as any[]).forEach((ed: any) => entry.involvedDepartments.add(ed.department_id));
-                    entry.eventNames.push(event.name);
+            for (const event of chartEvents) {
+                const date = event.date;
+                if (!chartDataMap.has(date)) {
+                    chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
                 }
+                const entry = chartDataMap.get(date)!;
+                entry.scheduledVolunteers += (event.event_volunteers || []).length;
+                (event.event_departments || []).forEach(ed => {
+                    if (ed.departments?.id) entry.involvedDepartments.add(ed.departments.id)
+                });
+                entry.eventNames.push(event.name);
             }
-
+    
             const chartData: ChartDataPoint[] = Array.from({ length: 30 }, (_, i) => {
                 const day = new Date(last30Days);
                 day.setDate(last30Days.getDate() + i);
@@ -165,14 +150,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
                 };
             });
     
-            setDashboardData(prev => ({
-                ...prev,
-                upcomingSchedules: (upcomingSchedulesRes.data as unknown as DashboardEvent[]) || [],
+            // --- Set Final State ---
+            setDashboardData({
+                stats,
+                todaySchedules,
+                upcomingSchedules: upcomingSchedules.slice(0, 10),
                 activeLeaders: activeLeadersRes.data?.users || [],
-                chartData: chartData,
-            }));
+                chartData,
+            });
+            
         } catch (err) {
-            console.error("Failed to fetch secondary dashboard data:", getErrorMessage(err));
+            const errorMessage = getErrorMessage(err);
+            console.error("Error fetching admin dashboard data:", errorMessage);
+            setDashboardError(`Falha ao carregar dados do dashboard: ${errorMessage}`);
         }
     }, []);
 
@@ -224,6 +214,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
                         onViewDetails={setSelectedEvent}
                         userRole={'admin'}
                         onMarkAttendance={() => {}} // No-op for admin
+                        onViewTimeline={setViewingTimelineFor}
                     />
                 </div>
                 <div className="lg:col-span-1">
@@ -237,6 +228,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
                 data={activeEvent ? { eventId: activeEvent.id } : null}
                 title={`QR Code de Presença`}
                 description={`Peça para os voluntários escanearem este código para confirmar a presença no evento "${activeEvent?.name}".`}
+            />
+            <EventTimelineViewerModal 
+                isOpen={!!viewingTimelineFor}
+                onClose={() => setViewingTimelineFor(null)}
+                event={viewingTimelineFor}
             />
         </div>
     );

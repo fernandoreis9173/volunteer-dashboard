@@ -11,67 +11,68 @@ interface QRScannerModalProps {
 
 const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScanSuccess, scanningEventName }) => {
   const qrcodeRegionId = "qr-reader-region";
-  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  // Use a ref to persist the scanner instance across re-renders
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
     
-    const cleanup = () => {
-      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        html5QrCodeRef.current.stop().catch(err => {
-          console.error("Failed to stop QR scanner.", err);
-        });
-        html5QrCodeRef.current = null;
-      }
+    // Initialize the scanner instance if it doesn't exist
+    if (!scannerRef.current) {
+        scannerRef.current = new Html5Qrcode(qrcodeRegionId, { verbose: false });
+    }
+    const html5QrCode = scannerRef.current;
+
+    // Configuration for the scanner view and behavior
+    const config = {
+      fps: 10,
+      qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+        const qrboxSize = Math.floor(minEdge * 0.8);
+        return { width: qrboxSize, height: qrboxSize };
+      },
+      // This forces a square video feed, fixing the black bars issue on mobile.
+      aspectRatio: 1.0,
     };
 
     const startScanner = async () => {
       try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length) {
-          let cameraId = devices[0].id;
-          const rearCamera = devices.find(device => 
-            device.label.toLowerCase().includes('back') || 
-            device.label.toLowerCase().includes('trás') ||
-            device.label.toLowerCase().includes('environment')
-          );
-          if (rearCamera) {
-            cameraId = rearCamera.id;
-          }
-
-          html5QrCodeRef.current = new Html5Qrcode(qrcodeRegionId, false);
-          await html5QrCodeRef.current.start(
-            cameraId,
-            {
-              fps: 10,
-              qrbox: (viewfinderWidth, viewfinderHeight) => {
-                const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                const qrboxSize = Math.floor(minEdge * 0.8);
-                return { width: qrboxSize, height: qrboxSize };
-              },
-            },
-            (decodedText, decodedResult) => {
-              onScanSuccess(decodedText);
-              cleanup();
-            },
-            (errorMessage) => {
-              // parse error, not a valid QR code
-            }
-          );
-        } else {
-          console.error("No cameras found.");
-        }
+        // First, try to start the scanner with the rear camera ("environment").
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          onScanSuccess,
+          (errorMessage) => { /* ignore errors */ }
+        );
       } catch (err) {
-        console.error("Error starting QR scanner:", err);
+        console.warn("QR Scanner: Failed to start with rear camera, trying any available camera.", err);
+        try {
+          // If the rear camera fails (e.g., on a laptop), try starting with any available camera.
+          await html5QrCode.start(
+            undefined, // Let the library choose the camera
+            config,
+            onScanSuccess,
+            (errorMessage) => { /* ignore errors */ }
+          );
+        } catch (finalErr) {
+          console.error("QR Scanner: Fatal error - could not start with any camera.", finalErr);
+          // Optional: Display an error to the user within the modal.
+        }
       }
     };
 
     startScanner();
 
+    // Cleanup function: this will be called when the component unmounts
+    // or when `isOpen` becomes false.
     return () => {
-      cleanup();
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(err => {
+          console.error("QR Scanner: Failed to stop scanner cleanly.", err);
+        });
+      }
     };
   }, [isOpen, onScanSuccess]);
 

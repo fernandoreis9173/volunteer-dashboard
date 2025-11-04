@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import EventCard from './EventCard';
 import NewEventForm from './NewScheduleForm';
@@ -219,18 +215,8 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
   const filteredEvents = useMemo(() => {
     let events = [...masterEvents];
 
-    if (!dateFilters.start && !dateFilters.end) {
-        const now = new Date();
-        const firstDayOfYear = new Date(now.getFullYear(), 0, 1);
-        const lastDayOfYear = new Date(now.getFullYear(), 11, 31);
-        events = events.filter(event => {
-            const eventDate = new Date(event.date + 'T00:00:00');
-            return eventDate >= firstDayOfYear && eventDate <= lastDayOfYear;
-        });
-    } else {
-        if (dateFilters.start) events = events.filter(event => event.date >= dateFilters.start);
-        if (dateFilters.end) events = events.filter(event => event.date <= dateFilters.end);
-    }
+    if (dateFilters.start) events = events.filter(event => event.date >= dateFilters.start);
+    if (dateFilters.end) events = events.filter(event => event.date <= dateFilters.end);
     
     if (statusFilter !== 'all') {
         events = events.filter(event => event.status === statusFilter);
@@ -241,7 +227,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
         events = events.filter(e => e.name.toLowerCase().includes(lowercasedQuery));
     }
 
-    return events;
+    return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.start_time.localeCompare(a.start_time));
   }, [masterEvents, dateFilters, statusFilter, searchQuery]);
 
   const paginatedEvents = useMemo(() => {
@@ -255,12 +241,13 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
     setCurrentPage(1);
   }, [searchQuery, dateFilters, statusFilter]);
   
-  const handleStartDateChange = (value: string) => {
-    setDateFilters(prev => ({ ...prev, start: value }));
-  };
-
-  const handleEndDateChange = (value: string) => {
-      setDateFilters(prev => ({ ...prev, end: value }));
+  const handleSetToday = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    setDateFilters({ start: todayStr, end: todayStr });
   };
 
   const handleClearFilters = () => {
@@ -768,7 +755,13 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
                             )}
                         </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 items-center">
+                        <button 
+                            onClick={handleSetToday}
+                            className="px-4 py-2 md:px-5 md:py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm w-full sm:w-auto"
+                        >
+                            Hoje
+                        </button>
                         <button onClick={handleClearFilters} className="text-sm text-blue-600 font-semibold hover:underline">Limpar Filtros</button>
                     </div>
                 </div>
@@ -817,26 +810,28 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                 <h1 className="text-3xl font-bold text-slate-800">Eventos</h1>
-                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas</p>
+                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas.</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={handleExportPDF}
-                        className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span>Exportar PDF</span>
-                    </button>
-                    {isAdmin && (
+                {!isFormOpen && (
+                    <div className="flex items-center gap-2">
                         <button 
-                        onClick={() => { setEditingEvent(null); showForm(); }}
-                        className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
+                            onClick={handleExportPDF}
+                            className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span>Novo Evento</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span>Exportar PDF</span>
                         </button>
-                    )}
-                </div>
+                        {isAdmin && (
+                            <button 
+                            onClick={() => { setEditingEvent(null); showForm(); }}
+                            className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <span>Novo Evento</span>
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
 
             {isFormOpen ? (

@@ -9,6 +9,7 @@ import QRCodeDisplayModal from './QRCodeDisplayModal';
 import RequestSwapModal from './RequestSwapModal';
 import QRScannerModal from './QRScannerModal';
 import VolunteerStatCard from './VolunteerStatCard';
+import EventTimelineViewerModal from './EventTimelineViewerModal';
 
 interface LiveEventTimerProps {
   event: VolunteerEvent;
@@ -94,6 +95,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
     const [isSubmittingSwap, setIsSubmittingSwap] = useState(false);
     const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
 
     const userId = session?.user?.id;
     
@@ -152,34 +154,68 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
             const completeProfile = { ...volProfile, departments: transformedDepartments };
             setVolunteerProfile(completeProfile as unknown as DetailedVolunteer);
     
-            const eventsMap = new Map<number, DashboardEvent>();
-            for (const item of (scheduleRes.data || [])) {
-                if (!eventsMap.has(item.id)) {
-                    eventsMap.set(item.id, { id: item.id, name: item.name, date: item.date, start_time: item.start_time, end_time: item.end_time, status: item.status, local: item.local, observations: item.observations, event_departments: [], event_volunteers: [] });
+            const scheduleData = scheduleRes.data || [];
+            if (scheduleData.length > 0) {
+                const eventIds = [...new Set(scheduleData.map((item: any) => item.id))];
+
+                const { data: timelineData, error: timelineError } = await supabase
+                    .from('events')
+                    .select('id, cronograma_principal_id, cronograma_kids_id')
+                    .in('id', eventIds);
+                
+                if (timelineError) throw timelineError;
+                
+                const timelineMap = new Map((timelineData || []).map((e: any) => [e.id, { cronograma_principal_id: e.cronograma_principal_id, cronograma_kids_id: e.cronograma_kids_id }]));
+
+                const eventsMap = new Map<number, DashboardEvent>();
+                for (const item of scheduleData as any[]) {
+                    const timelineInfo = timelineMap.get(item.id) || { cronograma_principal_id: null, cronograma_kids_id: null };
+                    if (!eventsMap.has(item.id)) {
+                        eventsMap.set(item.id, { 
+                            id: item.id, 
+                            name: item.name, 
+                            date: item.date, 
+                            start_time: item.start_time, 
+                            end_time: item.end_time, 
+                            status: item.status, 
+                            local: item.local, 
+                            observations: item.observations, 
+// FIX: Cast `timelineInfo` to `any` to resolve `unknown` type errors when accessing properties. This addresses an issue where the type of `timelineMap.get()` was not being correctly inferred, causing `timelineInfo` to be treated as `unknown`.
+                            cronograma_principal_id: (timelineInfo as any).cronograma_principal_id, 
+// FIX: Cast `timelineInfo` to `any` to resolve `unknown` type errors when accessing properties. This addresses an issue where the type of `timelineMap.get()` was not being correctly inferred, causing `timelineInfo` to be treated as `unknown`.
+                            cronograma_kids_id: (timelineInfo as any).cronograma_kids_id, 
+                            event_departments: [], 
+                            event_volunteers: [] 
+                        });
+                    }
+                    const event = eventsMap.get(item.id)!;
+                    if (!event.event_departments?.some(d => d.departments.id === item.department_id)) {
+                        event.event_departments?.push({ departments: { id: item.department_id, name: item.department_name, leader: item.leader_name } });
+                    }
+                    event.event_volunteers?.push({ department_id: item.department_id, volunteer_id: volunteerId, present: item.present, volunteers: { name: volProfile.name } });
                 }
-                const event = eventsMap.get(item.id)!;
-                if (!event.event_departments?.some(d => d.departments.id === item.department_id)) {
-                    event.event_departments?.push({ departments: { id: item.department_id, name: item.department_name, leader: item.leader_name } });
-                }
-                event.event_volunteers?.push({ department_id: item.department_id, volunteer_id: volunteerId, present: item.present, volunteers: { name: volProfile.name } });
+                const allMyEvents = Array.from(eventsMap.values());
+                
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const todayStr = today.toISOString().split('T')[0];
+        
+                setTodayEvents(allMyEvents.filter(e => e.date === todayStr));
+                setUpcomingEvents(allMyEvents.filter(e => e.date > todayStr));
+                
+                const attended = allMyEvents.filter(e => e.event_volunteers?.some(ev => ev.present === true)).length;
+        
+                setStats({
+                    upcoming: allMyEvents.filter(e => e.date > todayStr).length,
+                    attended: attended,
+                    totalScheduled: allMyEvents.length,
+                    eventsToday: allMyEvents.filter(e => e.date === todayStr).length,
+                });
+            } else {
+                setTodayEvents([]);
+                setUpcomingEvents([]);
+                setStats({ upcoming: 0, attended: 0, totalScheduled: 0, eventsToday: 0 });
             }
-            const allMyEvents = Array.from(eventsMap.values());
-    
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayStr = today.toISOString().split('T')[0];
-    
-            setTodayEvents(allMyEvents.filter(e => e.date === todayStr));
-            setUpcomingEvents(allMyEvents.filter(e => e.date > todayStr));
-            
-            const attended = allMyEvents.filter(e => e.event_volunteers?.some(ev => ev.present === true)).length;
-    
-            setStats({
-                upcoming: allMyEvents.filter(e => e.date > todayStr).length,
-                attended: attended,
-                totalScheduled: allMyEvents.length,
-                eventsToday: allMyEvents.filter(e => e.date === todayStr).length,
-            });
     
         } catch (err) {
             const errorMessage = getErrorMessage(err);
@@ -375,6 +411,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                             onGenerateQrCode={handleGenerateQrCode}
                             onRequestSwap={handleRequestSwap}
                             onScanEventQrCode={() => setIsScannerOpen(true)}
+                            onViewTimeline={setViewingTimelineFor}
                             pendingSwaps={pendingSwaps}
                             isToday
                             loading={loading}
@@ -388,6 +425,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                             onGenerateQrCode={handleGenerateQrCode}
                             onRequestSwap={handleRequestSwap}
                             onScanEventQrCode={() => setIsScannerOpen(true)}
+                            onViewTimeline={setViewingTimelineFor}
                             pendingSwaps={pendingSwaps}
                             isToday={false}
                             loading={loading}
@@ -452,6 +490,11 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                     scanningEventName={activeEvent?.name}
                 />
             )}
+             <EventTimelineViewerModal 
+                isOpen={!!viewingTimelineFor}
+                onClose={() => setViewingTimelineFor(null)}
+                event={viewingTimelineFor}
+            />
         </div>
     );
 };
@@ -460,14 +503,14 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
 const InvitationCard: React.FC<{ invitation: Invitation; onRespond: (id: number, response: 'aceito' | 'recusado') => void }> = ({ invitation, onRespond }) => {
     return (
         <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex-1">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="min-w-0 flex-grow">
                     <p className="font-semibold text-blue-800">Você foi convidado!</p>
                     <p className="text-sm text-blue-700 mt-1">
                         {invitation.profiles?.name || 'Um líder'} convidou você para o departamento <strong>{invitation.departments?.name || 'desconhecido'}</strong>.
                     </p>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-3 flex-shrink-0 self-end sm:self-center">
                     <button onClick={() => onRespond(invitation.id, 'recusado')} className="px-4 py-2 text-sm font-semibold text-red-700 bg-red-100 rounded-lg hover:bg-red-200">Recusar</button>
                     <button onClick={() => onRespond(invitation.id, 'aceito')} className="px-4 py-2 text-sm font-semibold text-white bg-green-500 rounded-lg hover:bg-green-600">Aceitar</button>
                 </div>
@@ -485,10 +528,11 @@ const EventList: React.FC<{
     onGenerateQrCode: (event: DashboardEvent) => void;
     onRequestSwap: (event: DashboardEvent) => void;
     onScanEventQrCode: () => void;
+    onViewTimeline: (event: DashboardEvent) => void;
     pendingSwaps: Set<number>;
     isToday: boolean;
     loading: boolean;
-}> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onScanEventQrCode, pendingSwaps, isToday, loading }) => {
+}> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onScanEventQrCode, onViewTimeline, pendingSwaps, isToday, loading }) => {
     
     if (loading) {
         return (
@@ -515,6 +559,7 @@ const EventList: React.FC<{
                         onGenerateQrCode={onGenerateQrCode}
                         onRequestSwap={onRequestSwap}
                         onScanEventQrCode={onScanEventQrCode}
+                        onViewTimeline={onViewTimeline}
                         pendingSwaps={pendingSwaps}
                     />
                 ))}
@@ -530,8 +575,9 @@ const EventCard: React.FC<{
     onGenerateQrCode: (event: DashboardEvent) => void;
     onRequestSwap: (event: DashboardEvent) => void;
     onScanEventQrCode: () => void;
+    onViewTimeline: (event: DashboardEvent) => void;
     pendingSwaps: Set<number>;
-}> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onScanEventQrCode, pendingSwaps }) => {
+}> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onScanEventQrCode, onViewTimeline, pendingSwaps }) => {
     
     const { fullDate: formattedDate, dateTime: startDateTime, time: startTime } = convertUTCToLocal(event.date, event.start_time);
     const { dateTime: endDateTime, time: endTime } = convertUTCToLocal(event.date, event.end_time);
@@ -593,6 +639,19 @@ const EventCard: React.FC<{
                             <div className="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
                                <span className="font-medium">Líder: {myScheduleDetails.leaderNames}</span>
+                            </div>
+                        )}
+                        {(event.cronograma_principal_id || event.cronograma_kids_id) && !isFinished && (
+                            <div className="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+                                </svg>
+                                <button
+                                    onClick={() => onViewTimeline(event)}
+                                    className="font-medium text-blue-600 hover:underline"
+                                >
+                                    Ver Cronograma
+                                </button>
                             </div>
                         )}
                     </div>
