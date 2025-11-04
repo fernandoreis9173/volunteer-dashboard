@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -39,8 +33,10 @@ import { supabase } from './lib/supabaseClient';
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
 
-// Since keys are hardcoded for production, this check is now always true.
-const areApiKeysConfigured = true;
+const areApiKeysConfigured = 
+    import.meta.env.VITE_SUPABASE_URL &&
+    import.meta.env.VITE_SUPABASE_ANON_KEY &&
+    import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
 // FIX: Reverted UserProfileState to use `department_id` (singular) to enforce the business rule of one leader per department.
 interface UserProfileState {

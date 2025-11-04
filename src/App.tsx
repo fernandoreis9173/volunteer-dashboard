@@ -24,6 +24,7 @@ import PushNotificationModal from './components/PushNotificationModal';
 import IOSInstallPromptModal from './components/IOSInstallPromptModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
 import ApiConfigPage from './components/ApiConfigPage'; // Import the config page
+import TimelinesPage from './components/TimelinesPage';
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
 // FIX: Import EnrichedUser type to correctly type users from `list-users` function.
 import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer, type EnrichedUser } from './types';
@@ -53,6 +54,7 @@ const pagePermissions: Record<Page, string[]> = {
     'volunteers': ['admin', 'leader'],
     'departments': ['admin'],
     'events': ['admin', 'leader'],
+    'timelines': ['admin'],
     'calendar': ['admin', 'leader'],
     'frequency': ['admin'],
     'admin': ['admin'],
@@ -67,7 +69,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2); 
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -622,6 +624,8 @@ const App: React.FC = () => {
                 return <DepartmentsPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} leaders={leaders} onLeadersChange={fetchLeaders} />;
             case 'events':
                  return <SchedulesPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} />;
+            case 'timelines':
+                return <TimelinesPage />;
             case 'calendar':
                 // FIX: Pass the single leaderDepartmentId to CalendarPage.
                 return <CalendarPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} setIsSidebarOpen={setIsSidebarOpen} />;
