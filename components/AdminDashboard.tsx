@@ -10,6 +10,7 @@ import EventDetailsModal from './EventDetailsModal';
 import ActiveVolunteersList from './ActiveVolunteersList';
 import QRCodeDisplayModal from './QRCodeDisplayModal';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
+import QRScannerModal from './QRScannerModal';
 
 interface LiveEventTimerProps {
   event: Event;
@@ -70,6 +71,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [isQrDisplayOpen, setIsQrDisplayOpen] = useState(false);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
+    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+    const [scannedQrData, setScannedQrData] = useState<string | null>(null);
 
     const fetchDashboardData = useCallback(async () => {
         setDashboardData({}); 
@@ -170,9 +175,100 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
         fetchDashboardData();
     }, [fetchDashboardData]);
 
+    const showNotification = useCallback((message: string, type: 'success' | 'error') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 5000);
+    }, []);
+
+    const handleMarkAttendance = (event: DashboardEvent | null) => {
+        if (!event) {
+            showNotification('Nenhum evento ativo para escanear.', 'error');
+            return;
+        }
+        setScanningEvent(event);
+        setIsScannerOpen(true);
+    };
+
+    const handleScanSuccess = useCallback((decodedText: string) => {
+        setIsScannerOpen(false);
+        setScannedQrData(decodedText);
+        setIsQrDisplayOpen(true);
+    }, []);
+
+    const handleConfirmAttendance = useCallback(async () => {
+        if (!scannedQrData || !scanningEvent) {
+            showNotification("Dados insuficientes para confirmar presença.", 'error');
+            return;
+        }
+        
+        try {
+            const data = JSON.parse(scannedQrData);
+            if (!data.vId || !data.eId || !data.dId) {
+                throw new Error("QR Code inválido: Faltando dados essenciais.");
+            }
+            if (data.eId !== scanningEvent?.id) {
+                throw new Error("Este QR Code é para um evento diferente.");
+            }
+            
+            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !sessionData.session) {
+                throw new Error("Sessão de usuário não encontrada. Por favor, faça login novamente.");
+            }
+
+            const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
+                headers: {
+                    Authorization: `Bearer ${sessionData.session.access_token}`,
+                },
+                body: { volunteerId: data.vId, eventId: data.eId, departmentId: data.dId },
+            });
+
+            if (invokeError) throw invokeError;
+            
+            const volunteerName = scanningEvent?.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
+            showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
+            
+            fetchDashboardData();
+
+        } catch (err: any) {
+            if (err.context && typeof err.context.json === 'function') {
+                try {
+                    const errorJson = await err.context.json();
+                    if (errorJson && errorJson.error) {
+                        showNotification(errorJson.error, 'error');
+                    } else {
+                        showNotification(getErrorMessage(err), 'error');
+                    }
+                } catch (parseError) {
+                    showNotification(getErrorMessage(err), 'error');
+                }
+            } else {
+                showNotification(getErrorMessage(err), 'error');
+            }
+        } finally {
+            setScannedQrData(null);
+            setIsQrDisplayOpen(false);
+            setScanningEvent(null);
+        }
+      }, [scannedQrData, scanningEvent, showNotification, fetchDashboardData]);
+
+    const scannedVolunteerName = useMemo(() => {
+        if (!scannedQrData || !scanningEvent) return 'Voluntário';
+        try {
+            const data = JSON.parse(scannedQrData);
+            return scanningEvent.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário Desconhecido';
+        } catch {
+            return 'Dados Inválidos';
+        }
+    }, [scannedQrData, scanningEvent]);
+
 
     return (
         <div className="space-y-8">
+             {notification && (
+                <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                    {notification.message}
+                </div>
+            )}
             <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
@@ -182,15 +278,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
                     {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
                     {activeEvent && (
                         <button 
-                            onClick={() => setIsQrDisplayOpen(true)}
+                            onClick={() => handleMarkAttendance(activeEvent as DashboardEvent)}
                             className="p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors flex flex-row items-center justify-center gap-3 w-full md:w-auto md:px-6"
-                            aria-label="Gerar QR Code para Presença"
+                            aria-label="Marcar Presença"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="h-7 w-7 md:h-6 md:w-6">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-1.036.84-1.875 1.875-1.875h4.5c1.036 0 1.875.84 1.875 1.875v4.5c0 1.036-.84 1.875-1.875 1.875h-4.5A1.875 1.875 0 0 1 3.75 9.375v-4.5zM3.75 14.625c0-1.036.84-1.875 1.875-1.875h4.5c1.036 0 1.875.84 1.875 1.875v4.5c0 1.036-.84 1.875-1.875 1.875h-4.5a1.875 1.875 0 0 1-1.875-1.875v-4.5zM13.5 4.875c0-1.036.84-1.875 1.875-1.875h4.5c1.036 0 1.875.84 1.875 1.875v4.5c0 1.036-.84 1.875-1.875 1.875h-4.5a1.875 1.875 0 0 1-1.875-1.875v-4.5z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 12.75h.008v.008h-.008v-.008zM17.25 16.5h.008v.008h-.008v-.008zM17.25 20.25h.008v.008h-.008v-.008zM13.5 20.25h.008v.008h-.008v-.008zM13.5 16.5h.008v.008h-.008v-.008zM13.5 12.75h.008v.008h-.008v-.008z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
                             </svg>
-                            <span className="text-lg md:text-base font-semibold">QR Presença</span>
+                            <span className="text-lg md:text-base font-semibold">Marcar Presença</span>
                         </button>
                     )}
                 </div>
@@ -222,13 +317,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
                 </div>
             </div>
             <EventDetailsModal isOpen={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} />
-            <QRCodeDisplayModal
-                isOpen={isQrDisplayOpen}
-                onClose={() => setIsQrDisplayOpen(false)}
-                data={activeEvent ? { eventId: activeEvent.id } : null}
-                title={`QR Code de Presença`}
-                description={`Peça para os voluntários escanearem este código para confirmar a presença no evento "${activeEvent?.name}".`}
-            />
+            {isScannerOpen && (
+                <QRScannerModal
+                    isOpen={isScannerOpen}
+                    onClose={() => {setIsScannerOpen(false); setScanningEvent(null);}}
+                    onScanSuccess={handleScanSuccess}
+                    scanningEventName={scanningEvent?.name}
+                />
+            )}
+            {isQrDisplayOpen && (
+                <QRCodeDisplayModal
+                    isOpen={isQrDisplayOpen}
+                    onClose={() => {
+                        setIsQrDisplayOpen(false);
+                        setScannedQrData(null);
+                    }}
+                    data={scannedQrData ? JSON.parse(scannedQrData) : null}
+                    title={`Confirmar Presença`}
+                    volunteerName={scannedVolunteerName}
+                    description="Verifique os dados do voluntário e confirme a presença."
+                    onConfirm={handleConfirmAttendance}
+                />
+            )}
             <EventTimelineViewerModal 
                 isOpen={!!viewingTimelineFor}
                 onClose={() => setViewingTimelineFor(null)}

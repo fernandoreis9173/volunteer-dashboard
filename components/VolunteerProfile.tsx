@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Restored Supabase v2 types for type safety.
 import { type Session, type User } from '@supabase/supabase-js';
-import { DetailedVolunteer } from '../types';
+import { DetailedVolunteer, DepartmentJoinRequest } from '../types';
 import { getErrorMessage, parseArrayFromString } from '../lib/utils';
 
 interface VolunteerProfileProps {
@@ -22,7 +22,7 @@ const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = (
 
 const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, leaders }) => {
     const [volunteerData, setVolunteerData] = useState<DetailedVolunteer | null>(null);
-    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null }[]>([]);
+    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null; status: 'aprovado' | 'pendente' }[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -44,41 +44,53 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                 .select('*, volunteer_departments(departments(id, name))')
                 .eq('user_id', session.user.id)
                 .single();
-
+    
             if (fetchError) throw fetchError;
-
+    
             const transformedProfile = {
                 ...volunteerProfile,
                 departments: (volunteerProfile.volunteer_departments || []).map((vd: any) => vd.departments).filter(Boolean)
             };
             setVolunteerData(transformedProfile as DetailedVolunteer);
-
-            const departmentIds = transformedProfile.departments.map((d: any) => d.id);
-
-            if (departmentIds.length > 0) {
+    
+            // Combine approved departments with pending requests
+            const approvedDeptIds = transformedProfile.departments.map((d: any) => d.id);
+            const { data: pendingRequests, error: requestError } = await supabase
+                .from('department_join_requests')
+                .select('*, departments(id, name)')
+                .eq('volunteer_id', transformedProfile.id)
+                .eq('status', 'pendente');
+    
+            if (requestError) throw requestError;
+    
+            const allDepartmentIds = [...new Set([...approvedDeptIds, ...pendingRequests.map(r => r.department_id)])];
+            
+            let finalDepartmentDetails: { name: string; leader: string | null; status: 'aprovado' | 'pendente' }[] = [];
+    
+            if (allDepartmentIds.length > 0) {
                 const { data: leadersData, error: leadersError } = await supabase
                     .from('department_leaders')
                     .select('department_id, leader_id')
-                    .in('department_id', departmentIds);
+                    .in('department_id', allDepartmentIds);
                 if (leadersError) throw leadersError;
-
+    
                 const leaderMap = new Map(leaders.map(l => [l.id, l.user_metadata?.name]));
-
-                const enrichedDepts = transformedProfile.departments.map((dept: any) => {
-                    const deptLeaders = leadersData
-                        .filter(rel => rel.department_id === dept.id)
-                        .map(rel => leaderMap.get(rel.leader_id))
-                        .filter(Boolean);
-                    
-                    return {
-                        name: dept.name,
-                        leader: deptLeaders.join(', ') || 'Não atribuído'
-                    };
+                
+                transformedProfile.departments.forEach((dept: any) => {
+                    const deptLeaders = leadersData.filter(rel => rel.department_id === dept.id).map(rel => leaderMap.get(rel.leader_id)).filter(Boolean);
+                    finalDepartmentDetails.push({ name: dept.name, leader: deptLeaders.join(', ') || 'Não atribuído', status: 'aprovado' });
                 });
-                setDepartmentDetails(enrichedDepts);
-            } else {
-                setDepartmentDetails([]);
+    
+                pendingRequests.forEach(req => {
+                    const dept = req.departments as {id: number, name: string};
+                    if (dept) {
+                         const deptLeaders = leadersData.filter(rel => rel.department_id === dept.id).map(rel => leaderMap.get(rel.leader_id)).filter(Boolean);
+                         finalDepartmentDetails.push({ name: dept.name, leader: deptLeaders.join(', ') || 'Não atribuído', status: 'pendente' });
+                    }
+                });
             }
+            setDepartmentDetails(finalDepartmentDetails);
+    
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
@@ -208,15 +220,20 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                             {departmentDetails.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {departmentDetails.map(dept => (
-                                        <div key={dept.name} className="p-4 rounded-xl bg-yellow-50 border border-yellow-200">
-                                            <p className="font-bold text-yellow-900">{dept.name}</p>
+                                        <div key={dept.name} className={`p-4 rounded-xl border ${dept.status === 'aprovado' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}`}>
+                                            <div className="flex items-center justify-between">
+                                                <p className={`font-bold ${dept.status === 'aprovado' ? 'text-yellow-900' : 'text-gray-800'}`}>{dept.name}</p>
+                                                {dept.status === 'pendente' && (
+                                                    <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Pendente</span>
+                                                )}
+                                            </div>
                                             {dept.leader ? (
-                                                <p className="text-xs text-yellow-700 mt-1 flex items-center gap-1.5">
+                                                <p className={`text-xs mt-1 flex items-center gap-1.5 ${dept.status === 'aprovado' ? 'text-yellow-700' : 'text-gray-600'}`}>
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
                                                     {dept.leader}
                                                 </p>
                                             ) : (
-                                                <p className="text-xs text-yellow-600 mt-1 italic">Líder não definido</p>
+                                                <p className={`text-xs mt-1 italic ${dept.status === 'aprovado' ? 'text-yellow-600' : 'text-gray-500'}`}>Líder não definido</p>
                                             )}
                                         </div>
                                     ))}

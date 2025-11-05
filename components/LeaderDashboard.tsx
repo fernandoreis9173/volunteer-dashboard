@@ -1,12 +1,15 @@
 
 
 
+
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
 import ActiveVolunteersList from './ActiveVolunteersList';
 // FIX: Moved ChartDataPoint to types.ts and updated import path.
-import type { DashboardEvent, Stat, EnrichedUser, ChartDataPoint, Event, Page, DashboardData, DetailedVolunteer } from '../types';
+import type { DashboardEvent, Stat, EnrichedUser, ChartDataPoint, Event, Page, DashboardData, DetailedVolunteer, DepartmentJoinRequest } from '../types';
 import EventDetailsModal from './EventDetailsModal';
 // FIX: Changed import to be a named import to match the export from TrafficChart.tsx
 import { AnalysisChart } from './TrafficChart';
@@ -82,6 +85,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
   const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
   const [allDepartmentEvents, setAllDepartmentEvents] = useState<DashboardEvent[]>([]);
   const [departmentVolunteers, setDepartmentVolunteers] = useState<DetailedVolunteer[]>([]);
+  const [joinRequests, setJoinRequests] = useState<DepartmentJoinRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
@@ -97,35 +101,24 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
       const leaderDepartmentId = userProfile.department_id;
 
       try {
-          // Use RPC to fetch events, which is RLS-safe and correctly filtered for the leader.
-          const { data: eventsRpcData, error: eventsError } = await supabase.rpc('get_events_for_user');
-          if (eventsError) throw eventsError;
-          const eventsData = (eventsRpcData || []).map(item => item as unknown as DashboardEvent);
-          setAllDepartmentEvents(eventsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+          const [eventsRpcRes, volunteerDepartmentsRes, joinRequestsRes] = await Promise.all([
+              supabase.rpc('get_events_for_user'),
+              supabase.from('volunteer_departments').select(`volunteers:volunteers!inner(*, volunteer_departments(departments(id, name)))`).eq('department_id', leaderDepartmentId).eq('volunteers.status', 'Ativo'),
+              supabase.from('department_join_requests').select('*, volunteers(*), departments(*)').eq('department_id', leaderDepartmentId).eq('status', 'pendente')
+          ]);
 
-          // Robust query for leader's volunteers, starting from the junction table to work better with RLS.
-          const { data: volunteerDepartments, error: vdError } = await supabase
-            .from('volunteer_departments')
-            .select(`
-                volunteers:volunteers!inner(
-                    *,
-                    volunteer_departments(departments(id, name))
-                )
-            `)
-            .eq('department_id', leaderDepartmentId)
-            .eq('volunteers.status', 'Ativo');
-
-          if (vdError) throw vdError;
-
-          const leaderVolunteers = volunteerDepartments
-            ? volunteerDepartments.map((vd: any) => vd.volunteers).filter(Boolean)
-            : [];
+          if (eventsRpcRes.error) throw eventsRpcRes.error;
+          if (volunteerDepartmentsRes.error) throw volunteerDepartmentsRes.error;
+          if (joinRequestsRes.error) throw joinRequestsRes.error;
           
-          const transformedVols = (leaderVolunteers || []).map((v: any) => ({
-              ...v,
-              departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean)
-          }));
+          const eventsData = (eventsRpcRes.data || []).map(item => item as unknown as DashboardEvent);
+          setAllDepartmentEvents(eventsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+          
+          const leaderVolunteers = (volunteerDepartmentsRes.data || []).map((vd: any) => vd.volunteers).filter(Boolean);
+          const transformedVols = (leaderVolunteers || []).map((v: any) => ({ ...v, departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean) }));
           setDepartmentVolunteers(transformedVols);
+
+          setJoinRequests((joinRequestsRes.data as DepartmentJoinRequest[]) || []);
 
       } catch (err) {
           const errorMessage = getErrorMessage(err);
@@ -252,7 +245,15 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
             throw new Error("Este voluntário não pertence ao seu departamento para este evento.");
         }
 
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !sessionData.session) {
+            throw new Error("Sessão de usuário não encontrada. Por favor, faça login novamente.");
+        }
+
         const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
+            headers: {
+                Authorization: `Bearer ${sessionData.session.access_token}`,
+            },
             body: { volunteerId: data.vId, eventId: data.eId, departmentId: data.dId },
         });
 
@@ -284,6 +285,20 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
         setScanningEvent(null);
     }
   }, [scannedQrData, scanningEvent, userProfile, showNotification, fetchDashboardData]);
+
+  const handleRequestAction = async (requestId: number, action: 'approve' | 'deny') => {
+    try {
+      const { error } = await supabase.functions.invoke(`${action}-join-request`, {
+        body: { requestId },
+      });
+      if (error) throw error;
+      showNotification(`Solicitação ${action === 'approve' ? 'aprovada' : 'recusada'} com sucesso.`, 'success');
+      fetchDashboardData(); // Refresh data
+    } catch (err) {
+      showNotification(`Erro ao processar solicitação: ${getErrorMessage(err)}`, 'error');
+    }
+  };
+
 
   const scannedVolunteerName = useMemo(() => {
     if (!scannedQrData || !scanningEvent) return 'Voluntário';
@@ -322,6 +337,31 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
       {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{error}</div>}
 
       <StatsRow stats={dashboardData.stats} userRole={userProfile?.role} />
+      
+      {joinRequests.length > 0 && (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Solicitações de Entrada</h2>
+            <div className="space-y-3">
+                {joinRequests.map(req => (
+                    <div key={req.id} className="bg-slate-50 p-3 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm">
+                                {req.volunteers.initials}
+                            </div>
+                            <div>
+                                <p className="font-semibold text-slate-800">{req.volunteers.name}</p>
+                                <p className="text-sm text-slate-500">{req.volunteers.email}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 self-end sm:self-center">
+                            <button onClick={() => handleRequestAction(req.id, 'deny')} className="px-3 py-1.5 text-sm font-semibold text-red-700 bg-red-100 rounded-md hover:bg-red-200">Recusar</button>
+                            <button onClick={() => handleRequestAction(req.id, 'approve')} className="px-3 py-1.5 text-sm font-semibold text-green-700 bg-green-100 rounded-md hover:bg-green-200">Aprovar</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
         <div className="lg:col-span-2">

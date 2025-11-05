@@ -7,7 +7,6 @@ import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 import LiveEventDetailsModal from './LiveEventDetailsModal';
 import QRCodeDisplayModal from './QRCodeDisplayModal';
 import RequestSwapModal from './RequestSwapModal';
-import QRScannerModal from './QRScannerModal';
 import VolunteerStatCard from './VolunteerStatCard';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
 
@@ -94,7 +93,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
     const [swapRequestEvent, setSwapRequestEvent] = useState<DashboardEvent | null>(null);
     const [isSubmittingSwap, setIsSubmittingSwap] = useState(false);
     const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-    const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
 
     const userId = session?.user?.id;
@@ -254,64 +252,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
         return volunteerProfile.departments.map(d => d.name).filter(Boolean);
     }, [loading, volunteerProfile]);
 
-    const handleScanSuccess = useCallback(async (decodedText: string) => {
-        setIsScannerOpen(false);
-        if (!volunteerProfile || !activeEvent) {
-            showNotification('Não foi possível confirmar a presença. Perfil ou evento ativo não encontrado.', 'error');
-            return;
-        }
-
-        try {
-            const data = JSON.parse(decodedText);
-            if (!data.eventId) {
-                throw new Error("QR Code inválido. 'eventId' não encontrado.");
-            }
-            if (data.eventId !== activeEvent.id) {
-                throw new Error("Este QR Code é para um evento diferente.");
-            }
-
-            const volunteerScheduleInfo = activeEvent.event_volunteers.find(
-                v => v.volunteer_id === volunteerProfile.id
-            );
-
-            if (!volunteerScheduleInfo) {
-                throw new Error("Você não está escalado para este evento.");
-            }
-
-            const departmentId = volunteerScheduleInfo.department_id;
-
-            const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
-                body: { 
-                    volunteerId: volunteerProfile.id, 
-                    eventId: activeEvent.id, 
-                    departmentId: departmentId,
-                },
-            });
-
-            if (invokeError) throw invokeError;
-            
-            showNotification(`Sua presença em "${activeEvent.name}" foi confirmada!`, 'success');
-            
-            fetchDashboardData();
-
-        } catch (err: any) {
-             if (err.context && typeof err.context.json === 'function') {
-                try {
-                    const errorJson = await err.context.json();
-                    if (errorJson && errorJson.error) {
-                        showNotification(errorJson.error, 'error');
-                    } else {
-                        showNotification(getErrorMessage(err), 'error');
-                    }
-                } catch (parseError) {
-                    showNotification(getErrorMessage(err), 'error');
-                }
-            } else {
-                showNotification(getErrorMessage(err), 'error');
-            }
-        }
-    }, [activeEvent, volunteerProfile, fetchDashboardData, showNotification]);
-
     const handleLiveEventNavigate = () => {
         if (activeEvent) setIsLiveEventModalOpen(true);
     };
@@ -410,7 +350,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                             volunteerId={volunteerProfile?.id}
                             onGenerateQrCode={handleGenerateQrCode}
                             onRequestSwap={handleRequestSwap}
-                            onScanEventQrCode={() => setIsScannerOpen(true)}
                             onViewTimeline={setViewingTimelineFor}
                             pendingSwaps={pendingSwaps}
                             isToday
@@ -424,7 +363,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                             volunteerId={volunteerProfile?.id}
                             onGenerateQrCode={handleGenerateQrCode}
                             onRequestSwap={handleRequestSwap}
-                            onScanEventQrCode={() => setIsScannerOpen(true)}
                             onViewTimeline={setViewingTimelineFor}
                             pendingSwaps={pendingSwaps}
                             isToday={false}
@@ -482,14 +420,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                 event={swapRequestEvent}
                 isSubmitting={isSubmittingSwap}
             />
-            {isScannerOpen && (
-                <QRScannerModal
-                    isOpen={isScannerOpen}
-                    onClose={() => setIsScannerOpen(false)}
-                    onScanSuccess={handleScanSuccess}
-                    scanningEventName={activeEvent?.name}
-                />
-            )}
              <EventTimelineViewerModal 
                 isOpen={!!viewingTimelineFor}
                 onClose={() => setViewingTimelineFor(null)}
@@ -527,12 +457,11 @@ const EventList: React.FC<{
     volunteerId: number | null | undefined;
     onGenerateQrCode: (event: DashboardEvent) => void;
     onRequestSwap: (event: DashboardEvent) => void;
-    onScanEventQrCode: () => void;
     onViewTimeline: (event: DashboardEvent) => void;
     pendingSwaps: Set<number>;
     isToday: boolean;
     loading: boolean;
-}> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onScanEventQrCode, onViewTimeline, pendingSwaps, isToday, loading }) => {
+}> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline, pendingSwaps, isToday, loading }) => {
     
     if (loading) {
         return (
@@ -558,7 +487,6 @@ const EventList: React.FC<{
                         volunteerId={volunteerId}
                         onGenerateQrCode={onGenerateQrCode}
                         onRequestSwap={onRequestSwap}
-                        onScanEventQrCode={onScanEventQrCode}
                         onViewTimeline={onViewTimeline}
                         pendingSwaps={pendingSwaps}
                     />
@@ -574,10 +502,9 @@ const EventCard: React.FC<{
     volunteerId: number | null | undefined;
     onGenerateQrCode: (event: DashboardEvent) => void;
     onRequestSwap: (event: DashboardEvent) => void;
-    onScanEventQrCode: () => void;
     onViewTimeline: (event: DashboardEvent) => void;
     pendingSwaps: Set<number>;
-}> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onScanEventQrCode, onViewTimeline, pendingSwaps }) => {
+}> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline, pendingSwaps }) => {
     
     const { fullDate: formattedDate, dateTime: startDateTime, time: startTime } = convertUTCToLocal(event.date, event.start_time);
     const { dateTime: endDateTime, time: endTime } = convertUTCToLocal(event.date, event.end_time);
@@ -674,20 +601,12 @@ const EventCard: React.FC<{
                             Encerrado
                         </div>
                     ) : isLive ? (
-                        <>
-                            <button
-                                onClick={() => onGenerateQrCode(event)}
-                                className="flex-1 text-center px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-sm"
-                            >
-                                Gerar QR Code
-                            </button>
-                            <button
-                                onClick={() => onScanEventQrCode()}
-                                className="flex-1 text-center px-4 py-2 text-sm bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50"
-                            >
-                                Ler QR do Evento
-                            </button>
-                        </>
+                        <button
+                            onClick={() => onGenerateQrCode(event)}
+                            className="flex-1 text-center px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-sm"
+                        >
+                            Gerar QR Code
+                        </button>
                     ) : (
                         <button
                             onClick={() => onRequestSwap(event)}

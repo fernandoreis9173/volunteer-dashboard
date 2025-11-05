@@ -170,3 +170,21 @@ export interface TimelineTemplate {
   cronograma_itens: TimelineItem[];
   created_at?: string;
 }
+export interface DepartmentJoinRequest {
+    id: number;
+    created_at: string;
+    volunteer_id: number;
+    department_id: number;
+    status: 'pendente' | 'aprovado' | 'recusado';
+    volunteers: {
+      id: number;
+      name: string;
+      initials: string;
+      email: string;
+      phone: string;
+    };
+    departments: {
+      id: number;
+      name: string;
+    };
+  }
