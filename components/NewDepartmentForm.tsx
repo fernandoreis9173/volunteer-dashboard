@@ -166,9 +166,10 @@ interface NewDepartmentFormProps {
     isSaving: boolean;
     saveError: string | null;
     leaders: User[];
+    leaderAssignments: { leader_id: string; department_id: number; }[];
 }
 
-const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
+const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, leaders, leaderAssignments }) => {
     const [formData, setFormData] = useState({ name: '', description: '' });
     const [skills, setSkills] = useState<string[]>([]);
     const [meetingDays, setMeetingDays] = useState({
@@ -218,10 +219,25 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
     
     const availableLeaders = useMemo(() => {
         const selectedIds = new Set(selectedLeaders.map(l => l.id));
+        
+        // Create a set of leader IDs who are already assigned to *other* departments
+        const assignedToOtherDepts = new Set<string>();
+        if (leaderAssignments) {
+            leaderAssignments.forEach(assignment => {
+                // If we are editing this department, its current leaders should not be considered "assigned elsewhere"
+                if (isEditing && assignment.department_id === initialData?.id) {
+                    return;
+                }
+                assignedToOtherDepts.add(assignment.leader_id);
+            });
+        }
+
         return leaders
-            .filter(l => (l.user_metadata?.role === 'leader' || l.user_metadata?.role === 'lider'))
-            .filter(l => !selectedIds.has(l.id));
-    }, [leaders, selectedLeaders]);
+            .filter(l => (l.user_metadata?.role === 'leader' || l.user_metadata?.role === 'lider')) // Exclude Admins
+            .filter(l => !selectedIds.has(l.id)) // Exclude leaders already selected in the form
+            .filter(l => !assignedToOtherDepts.has(l.id)); // Exclude leaders assigned to other departments
+            
+    }, [leaders, selectedLeaders, leaderAssignments, isEditing, initialData]);
 
     const filteredLeaders = useMemo(() => {
         if (!leaderSearch) return availableLeaders;
@@ -310,7 +326,7 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
                                             {leader.user_metadata?.name}
                                         </li>
                                     ))}
-                                    {filteredLeaders.length === 0 && <li className="px-4 py-2 text-sm text-slate-500">Nenhum líder disponível.</li>}
+                                    {filteredLeaders.length === 0 && <li className="px-4 py-2 text-sm text-slate-500">Nenhum líder disponível ou todos já atribuídos.</li>}
                                 </ul>
                             </div>
                         )}

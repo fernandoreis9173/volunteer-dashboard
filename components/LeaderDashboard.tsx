@@ -328,7 +328,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários</p>
+          <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
         </div>
 
         {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}

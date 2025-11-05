@@ -672,7 +672,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 <button 
                     type="submit" 
                     disabled={isSaving || (isSchedulingMode && !isSchedulingAllowed)} 
-                    className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg disabled:bg-green-300 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-green-300 disabled:cursor-not-allowed"
                 >
                     {isSaving ? 'Salvando...' : `Salvar ${isSchedulingMode ? 'Escala' : 'Evento'}`}
                 </button>

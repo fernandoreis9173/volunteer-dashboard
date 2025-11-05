@@ -21,6 +21,7 @@ const ITEMS_PER_PAGE = 9;
 const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepartmentId, leaders, onLeadersChange }) => {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [masterDepartments, setMasterDepartments] = useState<Department[]>([]);
+  const [leaderAssignments, setLeaderAssignments] = useState<{ leader_id: string; department_id: number; }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -63,6 +64,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
         .select('department_id, leader_id');
       
       if (leadersError) throw leadersError;
+      setLeaderAssignments(leadersData || []);
 
       // Step 3: Join them in the client
       const leadersByDept = new Map<number, { id: string; name: string }[]>();
@@ -285,14 +287,14 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">Departamentos</h1>
-          <p className="text-slate-500 mt-1">Gerencie os departamentos da organização.</p>
+          <p className="text-slate-500 mt-1">Gerencie os departamentos da igreja</p>
         </div>
         {userRole === 'admin' && !isFormVisible && (
           <button 
             onClick={() => { setEditingDepartment(null); showForm(); }}
             className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto justify-center"
           >
-            
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
             <span>Novo Departamento</span>
           </button>
         )}
@@ -323,6 +325,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
           isSaving={isSaving}
           saveError={saveError}
           leaders={leaders}
+          leaderAssignments={leaderAssignments}
         />
       ) : (
         renderContent()

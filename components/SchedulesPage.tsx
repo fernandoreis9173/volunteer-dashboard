@@ -817,8 +817,8 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
             )}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                <h1 className="text-3xl font-bold text-slate-800">Eventos (Lista)</h1>
-                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas da igreja</p>
+                <h1 className="text-3xl font-bold text-slate-800">Eventos</h1>
+                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas da organização.</p>
                 </div>
                 {!isFormOpen && (
                     <div className="flex items-center gap-2">
@@ -826,7 +826,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
                             onClick={handleExportPDF}
                             className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l3 3m0 0l3-3m-3 3v-7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
                             <span>Exportar PDF</span>
                         </button>
                         {isAdmin && (
@@ -834,7 +834,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
                             onClick={() => { setEditingEvent(null); showForm(); }}
                             className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" ><path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                                 <span>Novo Evento</span>
                             </button>
                         )}
