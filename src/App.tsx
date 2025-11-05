@@ -112,6 +112,9 @@ const App: React.FC = () => {
   // VAPID key is now hardcoded for production
   const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
 
+  // Optimization: Derive userId to stabilize dependencies and prevent re-fetches on token refresh
+  const userId = session?.user?.id;
+
   const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
   const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
   const isUserDisabled = useMemo(() => userProfile?.status === 'Inativo', [userProfile]);
@@ -280,7 +283,10 @@ const App: React.FC = () => {
     }, []);
 
     const fetchLeaders = useCallback(async () => {
-        if(!session) return;
+        if(!userId) {
+            setLeaders([]);
+            return;
+        }
         try {
             const { data, error: invokeError } = await supabase.functions.invoke('list-users');
             if (invokeError) throw invokeError;
@@ -295,14 +301,14 @@ const App: React.FC = () => {
         } catch (err) {
             console.error("Error fetching leaders in App:", getErrorMessage(err));
         }
-    }, [session]);
+    }, [userId]);
 
     useEffect(() => {
         fetchLeaders();
     }, [fetchLeaders]);
 
     const checkForActiveEvent = useCallback(async () => {
-        if (!session?.user) {
+        if (!userId) {
             setActiveEvent(null);
             return;
         }
@@ -350,7 +356,7 @@ const App: React.FC = () => {
             console.error("Error checking for active event:", errorMessage);
             setActiveEvent(null); // Clear on error
         }
-    }, [session]);
+    }, [userId]);
     
     useEffect(() => {
         checkForActiveEvent(); // Check immediately on session change/load

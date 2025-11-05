@@ -255,7 +255,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                                 <button onClick={() => { setIsEditingProfile(false); setName(user?.user_metadata?.name || ''); setPhone(user?.user_metadata?.phone || ''); }} className="px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg text-sm">Cancelar</button>
                             </>
                         ) : (
-                            <button onClick={() => setIsEditingProfile(true)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 text-sm">
+                            <button onClick={() => setIsEditingProfile(true)} disabled={isChangingPassword} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                                 Editar Perfil
                             </button>
                         )}
@@ -291,7 +291,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                     ) : (
                         <div className="mt-4 flex items-center justify-between">
                             <p className="text-slate-600">Altere sua senha de acesso ao sistema.</p>
-                            <button onClick={() => setIsChangingPassword(true)} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 text-sm">
+                            <button onClick={() => setIsChangingPassword(true)} disabled={isEditingProfile} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                                 Alterar Senha
                             </button>
                         </div>
