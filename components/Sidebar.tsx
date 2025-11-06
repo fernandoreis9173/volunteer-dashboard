@@ -28,7 +28,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, page, activePage, onNavi
         <span style={{ color: activePage === page ? '#FFFFFF' : '#000000' }}>{label}</span>
     </div>
     {badgeCount > 0 && (
-        <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+        <span className="bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
             {badgeCount}
         </span>
     )}

@@ -62,15 +62,18 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
     const [error, setError] = useState<string | null>(null);
     const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
     
+    // Optimization: Derive userId to stabilize dependencies
+    const userId = session?.user?.id;
+
     const fetchNotifications = useCallback(async () => {
-        if (!session) return;
+        if (!userId) return;
         setLoading(true);
         setError(null);
         try {
             const { data, error: fetchError } = await supabase
                 .from('notifications')
                 .select('*')
-                .eq('user_id', session.user.id)
+                .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(NOTIFICATIONS_PER_PAGE);
             
@@ -83,20 +86,20 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
         } finally {
             setLoading(false);
         }
-    }, [session]);
+    }, [userId]);
 
     useEffect(() => {
         fetchNotifications();
     }, [fetchNotifications]);
 
     const handleLoadMore = async () => {
-        if (!session || loadingMore || !hasMore) return;
+        if (!userId || loadingMore || !hasMore) return;
         setLoadingMore(true);
         try {
             const { data, error: fetchError } = await supabase
                 .from('notifications')
                 .select('*')
-                .eq('user_id', session.user.id)
+                .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .range(notifications.length, notifications.length + NOTIFICATIONS_PER_PAGE - 1);
             
@@ -130,10 +133,10 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
     };
 
     const markAllAsRead = async () => {
-        if (!session) return;
+        if (!userId) return;
         const originalNotifications = [...notifications];
         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-        const { error: updateError } = await supabase.from('notifications').update({ is_read: true }).eq('user_id', session.user.id);
+        const { error: updateError } = await supabase.from('notifications').update({ is_read: true }).eq('user_id', userId);
         if (updateError) {
             console.error("Failed to mark all as read:", updateError);
             setNotifications(originalNotifications);

@@ -616,7 +616,8 @@ const App: React.FC = () => {
                     return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
                 case 'dashboard':
                 default:
-                    return <VolunteerDashboard session={session} onDataChange={refetchUserData} activeEvent={activeEvent} onNavigate={handleNavigate} leaders={leaders} />;
+                    // FIX: Removed `onDataChange` prop from VolunteerDashboard call. The error indicates it's not an expected prop.
+                    return <VolunteerDashboard session={session} activeEvent={activeEvent} onNavigate={handleNavigate} leaders={leaders} />;
             }
         }
 
@@ -647,7 +648,8 @@ const App: React.FC = () => {
             case 'dashboard':
             default:
                 if (userProfile.role === 'admin') {
-                    return <AdminDashboard onDataChange={refetchNotificationCount} activeEvent={activeEvent} onNavigate={handleNavigate} />;
+                    // FIX: Removed `onDataChange` prop from AdminDashboard call as it's unused and causes an error.
+                    return <AdminDashboard activeEvent={activeEvent} onNavigate={handleNavigate} />;
                 }
                 // FIX: Pass the updated userProfile (with single department_id) to LeaderDashboard.
                 return <LeaderDashboard userProfile={userProfile} activeEvent={activeEvent} onNavigate={handleNavigate} />;

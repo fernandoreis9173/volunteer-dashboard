@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { type Session } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 import jsPDF from 'jspdf';
+import Pagination from './Pagination';
 
 // Define types for this component
 interface PastEvent {
@@ -16,10 +17,23 @@ interface PastEvent {
 }
 
 type FilterPeriod = '30d' | '90d' | 'all';
+type StatusFilter = 'Presente' | 'Faltou' | 'Não Marcado';
+
+const ITEMS_PER_PAGE = 6;
 
 const EventHistoryCard: React.FC<{ event: PastEvent, onGeneratePDF: (event: PastEvent) => void }> = ({ event, onGeneratePDF }) => {
-    const isAbsent = event.present === false || event.present === null;
     const { fullDate: localFullDate } = convertUTCToLocal(event.date, event.end_time);
+
+    const getStatus = () => {
+        if (event.present === true) {
+            return { text: 'Presente', classes: 'bg-green-100 text-green-700' };
+        }
+        if (event.present === false) {
+            return { text: 'Faltou', classes: 'bg-red-100 text-red-700' };
+        }
+        return { text: 'Não Marcado', classes: 'bg-yellow-100 text-yellow-700' };
+    };
+    const status = getStatus();
 
     return (
         <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-slate-100 hover:shadow-md transition-shadow">
@@ -30,12 +44,8 @@ const EventHistoryCard: React.FC<{ event: PastEvent, onGeneratePDF: (event: Past
                 </p>
             </div>
             <div className="flex items-center gap-3 w-full sm:w-auto mt-3 sm:mt-0">
-                <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full w-24 justify-center ${
-                    isAbsent 
-                    ? 'bg-red-100 text-red-700' 
-                    : 'bg-green-100 text-green-700'
-                }`}>
-                    {isAbsent ? 'Faltou' : 'Presente'}
+                <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full w-24 justify-center ${status.classes}`}>
+                    {status.text}
                 </span>
                 <button
                     onClick={() => onGeneratePDF(event)}
@@ -57,6 +67,11 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeFilter, setActiveFilter] = useState<FilterPeriod>('all');
+    const [statusFilters, setStatusFilters] = useState<StatusFilter[]>(['Presente', 'Faltou', 'Não Marcado']);
+    const [currentPage, setCurrentPage] = useState(1);
+    
+    // FIX: Stabilize dependency by extracting the user ID. This prevents re-fetches on token refresh.
+    const userId = session?.user?.id;
 
     const generateAttendanceCertificate = (event: PastEvent) => {
         if (!session?.user) {
@@ -179,100 +194,113 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
         doc.save(`Comprovante_${safeEventName}_${safeVolunteerName}.pdf`);
     };
 
-    useEffect(() => {
-        const fetchHistory = async () => {
-            if (!session?.user) return;
-            setLoading(true);
-            setError(null);
-            try {
-                // 1. Get volunteer ID
-                const { data: volProfile, error: volError } = await supabase
-                    .from('volunteers')
-                    .select('id')
-                    .eq('user_id', session.user.id)
-                    .single();
+    const fetchHistory = useCallback(async () => {
+        if (!userId) return;
+        setLoading(true);
+        setError(null);
+        try {
+            // 1. Get volunteer ID
+            const { data: volProfile, error: volError } = await supabase
+                .from('volunteers')
+                .select('id')
+                .eq('user_id', userId)
+                .single();
 
-                if (volError) throw volError;
-                const volunteerId = volProfile.id;
+            if (volError) throw volError;
+            const volunteerId = volProfile.id;
 
-                // 2. Get past events for this volunteer including department name
-                const todayStr = new Date().toISOString().split('T')[0];
-                const { data: eventsData, error: eventsError } = await supabase
-                    .from('event_volunteers')
-                    .select('present, events(id, name, date, start_time, end_time), departments(name)')
-                    .eq('volunteer_id', volunteerId)
-                    .lte('events.date', todayStr)
-                    .order('date', { foreignTable: 'events', ascending: false });
+            // 2. Get past events for this volunteer including department name
+            const todayStr = new Date().toISOString().split('T')[0];
+            const { data: eventsData, error: eventsError } = await supabase
+                .from('event_volunteers')
+                .select('present, events(id, name, date, start_time, end_time), departments(name)')
+                .eq('volunteer_id', volunteerId)
+                .lte('events.date', todayStr)
+                .order('date', { foreignTable: 'events', ascending: false });
 
-                if (eventsError) throw eventsError;
-                
-                const formattedEvents: PastEvent[] = (eventsData || [])
-                    .filter((item: any) => item.events) // Ensure nested event is not null
-                    .map((item: any) => ({
-                        id: item.events.id,
-                        name: item.events.name,
-                        date: item.events.date,
-                        present: item.present,
-                        start_time: item.events.start_time,
-                        end_time: item.events.end_time,
-                        departmentName: item.departments?.name || 'N/A'
-                    }))
-                    .filter(e => { // Ensure we only count events that have truly ended
-                        const { dateTime: startDateTime } = convertUTCToLocal(e.date, e.start_time);
-                        const { dateTime: endDateTime } = convertUTCToLocal(e.date, e.end_time);
-                
-                        if (startDateTime && endDateTime && endDateTime < startDateTime) {
-                            endDateTime.setDate(endDateTime.getDate() + 1);
-                        }
-                        
-                        return endDateTime ? new Date() > endDateTime : false;
-                    });
+            if (eventsError) throw eventsError;
+            
+            const formattedEvents: PastEvent[] = (eventsData || [])
+                .filter((item: any) => item.events) // Ensure nested event is not null
+                .map((item: any) => ({
+                    id: item.events.id,
+                    name: item.events.name,
+                    date: item.events.date,
+                    present: item.present,
+                    start_time: item.events.start_time,
+                    end_time: item.events.end_time,
+                    departmentName: item.departments?.name || 'N/A'
+                }))
+                .filter(e => { // Ensure we only count events that have truly ended
+                    const { dateTime: startDateTime } = convertUTCToLocal(e.date, e.start_time);
+                    const { dateTime: endDateTime } = convertUTCToLocal(e.date, e.end_time);
+            
+                    if (startDateTime && endDateTime && endDateTime < startDateTime) {
+                        endDateTime.setDate(endDateTime.getDate() + 1);
+                    }
+                    
+                    return endDateTime ? new Date() > endDateTime : false;
+                });
 
-                setAllPastEvents(formattedEvents);
-            } catch (err) {
-                setError(getErrorMessage(err));
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchHistory();
-    }, [session]);
-
-    const { filteredEvents, stats } = useMemo(() => {
-        if (allPastEvents.length === 0) {
-            return { filteredEvents: [], stats: { present: 0, absent: 0, total: 0 } };
+            setAllPastEvents(formattedEvents);
+        } catch (err) {
+            setError(getErrorMessage(err));
+        } finally {
+            setLoading(false);
         }
+    }, [userId]);
 
-        const now = new Date();
-        let eventsToFilter = allPastEvents;
+    useEffect(() => {
+        fetchHistory();
+    }, [fetchHistory]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeFilter, statusFilters]);
+
+    const handleStatusFilterChange = (status: StatusFilter) => {
+        setStatusFilters(prev => 
+            prev.includes(status) 
+                ? prev.filter(s => s !== status) 
+                : [...prev, status]
+        );
+    };
+
+    const { dateFilteredEvents, stats } = useMemo(() => {
+        let events = allPastEvents;
         if (activeFilter !== 'all') {
+            const now = new Date();
             const daysToSubtract = activeFilter === '30d' ? 30 : 90;
             const filterDate = new Date();
             filterDate.setDate(now.getDate() - daysToSubtract);
-            eventsToFilter = allPastEvents.filter(e => new Date(e.date) >= filterDate);
+            events = allPastEvents.filter(e => new Date(e.date) >= filterDate);
         }
-
-        let presentCount = 0;
-        let absentCount = 0;
-        
-        eventsToFilter.forEach(event => {
-            if (event.present === true) {
-                presentCount++;
-            } else {
-                absentCount++;
-            }
-        });
-
+        const presentCount = events.filter(e => e.present === true).length;
+        const absentCount = events.length - presentCount;
         const newStats = {
             present: presentCount,
             absent: absentCount,
-            total: eventsToFilter.length
+            total: events.length,
         };
-
-        return { filteredEvents: eventsToFilter, stats: newStats };
+        return { dateFilteredEvents: events, stats: newStats };
     }, [allPastEvents, activeFilter]);
+    
+    const fullyFilteredEvents = useMemo(() => {
+        return dateFilteredEvents.filter(event => {
+            if (statusFilters.length === 0) return false;
+            if (statusFilters.includes('Presente') && event.present === true) return true;
+            if (statusFilters.includes('Faltou') && event.present === false) return true;
+            if (statusFilters.includes('Não Marcado') && event.present === null) return true;
+            return false;
+        });
+    }, [dateFilteredEvents, statusFilters]);
+
+    const totalPages = Math.ceil(fullyFilteredEvents.length / ITEMS_PER_PAGE);
+
+    const paginatedEvents = useMemo(() => {
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        return fullyFilteredEvents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [currentPage, fullyFilteredEvents]);
     
     const FilterButton: React.FC<{ label: string; value: FilterPeriod }> = ({ label, value }) => (
         <button
@@ -284,7 +312,6 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
             {label}
         </button>
     );
-
     
     if (loading) {
         return <div className="text-center p-8">Carregando histórico...</div>;
@@ -306,10 +333,29 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
                 <p className="text-slate-500 mt-1">Veja seu desempenho e participação nos eventos passados.</p>
             </div>
 
-            <div className="flex items-center gap-2">
-                <FilterButton label="Últimos 30 dias" value="30d" />
-                <FilterButton label="Últimos 90 dias" value="90d" />
-                <FilterButton label="Todo o período" value="all" />
+            <div className="space-y-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <FilterButton label="Últimos 30 dias" value="30d" />
+                    <FilterButton label="Últimos 90 dias" value="90d" />
+                    <FilterButton label="Todo o período" value="all" />
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-2">
+                    <h3 className="text-sm font-semibold text-slate-600 flex-shrink-0">Filtrar por status:</h3>
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <label htmlFor="filter-presente" className="flex items-center cursor-pointer">
+                            <input type="checkbox" id="filter-presente" checked={statusFilters.includes('Presente')} onChange={() => handleStatusFilterChange('Presente')} className="h-4 w-4 rounded border-slate-300 text-green-600 focus:ring-green-500" />
+                            <span className="ml-2 text-sm text-slate-700">Presente</span>
+                        </label>
+                        <label htmlFor="filter-faltou" className="flex items-center cursor-pointer">
+                            <input type="checkbox" id="filter-faltou" checked={statusFilters.includes('Faltou')} onChange={() => handleStatusFilterChange('Faltou')} className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500" />
+                            <span className="ml-2 text-sm text-slate-700">Faltou</span>
+                        </label>
+                        <label htmlFor="filter-nao-marcado" className="flex items-center cursor-pointer">
+                            <input type="checkbox" id="filter-nao-marcado" checked={statusFilters.includes('Não Marcado')} onChange={() => handleStatusFilterChange('Não Marcado')} className="h-4 w-4 rounded border-slate-300 text-yellow-500 focus:ring-yellow-400" />
+                            <span className="ml-2 text-sm text-slate-700">Não Marcado</span>
+                        </label>
+                    </div>
+                </div>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -370,15 +416,22 @@ const AttendanceHistoryPage: React.FC<{ session: Session | null }> = ({ session 
 
                 {/* Events List */}
                 <div className="lg:col-span-2 space-y-4">
-                    <h2 className="text-xl font-semibold text-slate-800">Meus Eventos Anteriores ({filteredEvents.length})</h2>
-                    {filteredEvents.length > 0 ? (
+                    <h2 className="text-xl font-semibold text-slate-800">Meus Eventos Anteriores ({fullyFilteredEvents.length})</h2>
+                    {paginatedEvents.length > 0 ? (
                         <div className="space-y-3">
-                            {filteredEvents.map(event => <EventHistoryCard key={event.id} event={event} onGeneratePDF={generateAttendanceCertificate} />)}
+                            {paginatedEvents.map(event => <EventHistoryCard key={event.id} event={event} onGeneratePDF={generateAttendanceCertificate} />)}
                         </div>
                     ) : (
                         <div className="text-center py-12 px-6 bg-white rounded-lg shadow-sm border border-slate-200">
-                            <p className="text-slate-500">Nenhum evento encontrado para o período selecionado.</p>
+                            <p className="text-slate-500">Nenhum evento encontrado para os filtros selecionados.</p>
                         </div>
+                    )}
+                     {totalPages > 1 && (
+                        <Pagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            onPageChange={setCurrentPage}
+                        />
                     )}
                 </div>
             </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Removed problematic Supabase type imports and used 'any' as a workaround.
@@ -38,6 +39,10 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     const [newPassword, setNewPassword] = useState('');
     const [confirmNewPassword, setConfirmNewPassword] = useState('');
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    
+    // FIX: Stabilize dependency by extracting the user ID. This prevents the fetch effect
+    // from re-running on every session token refresh, which caused the page to loop/refresh.
+    const userId = session?.user?.id;
 
     const showSuccess = (message: string) => {
         setSuccessMessage(message);
@@ -45,14 +50,14 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     };
     
     const fetchProfileData = useCallback(async () => {
-        if (!session?.user) return;
+        if (!userId) return; // Use the stable userId
         setLoading(true);
         setError(null);
         try {
             const { data: volunteerProfile, error: fetchError } = await supabase
                 .from('volunteers')
                 .select('*, volunteer_departments(departments(id, name))')
-                .eq('user_id', session.user.id)
+                .eq('user_id', userId) // Use the stable userId
                 .single();
     
             if (fetchError) throw fetchError;
@@ -65,6 +70,8 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     
             // Combine approved departments with pending requests
             const approvedDeptIds = transformedProfile.departments.map((d: any) => d.id);
+            
+            let pendingRequests: DepartmentJoinRequest[] = [];
             const { data: pendingRequestsData, error: requestError } = await supabase
                 .from('department_join_requests')
                 .select('*, departments(id, name)')
@@ -72,14 +79,14 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                 .eq('status', 'pendente');
     
             if (requestError) {
-                const errorMessage = getErrorMessage(requestError);
-                // Only log a warning if the error is not the expected "table not found" issue.
-                if (!errorMessage.includes('Could not find the table')) {
-                    console.warn("Could not fetch department join requests, proceeding without them. Error:", errorMessage);
+                // Gracefully handle if the table doesn't exist by checking for PostgREST's "Not Found" error code.
+                if ((requestError as any).code !== 'PGRST205') {
+                    console.warn("Could not fetch department join requests, proceeding without them. Error:", getErrorMessage(requestError));
                 }
+                // In either case (table not found or other error), we proceed with an empty requests array.
+            } else {
+                pendingRequests = (pendingRequestsData as DepartmentJoinRequest[]) || [];
             }
-
-            const pendingRequests = (pendingRequestsData as DepartmentJoinRequest[]) || [];
     
             const allDepartmentIds = [...new Set([...approvedDeptIds, ...pendingRequests.map(r => r.department_id)])];
             
@@ -114,7 +121,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
         } finally {
             setLoading(false);
         }
-    }, [session, leaders]);
+    }, [userId, leaders]); // Use the stable userId as a dependency
 
 
     useEffect(() => {
