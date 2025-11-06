@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-// FIX: Restored Supabase v2 types for type safety.
-import { type Session, type User } from '@supabase/supabase-js';
-import { DetailedVolunteer } from '../types';
+// FIX: Removed Supabase v2 type imports to resolve errors.
+// import { type Session, type User } from '@supabase/supabase-js';
+import { DetailedVolunteer, DepartmentJoinRequest } from '../types';
 import { getErrorMessage, parseArrayFromString } from '../lib/utils';
 
 interface UserProfilePageProps {
-    session: Session | null;
+    session: any | null;
     onUpdate: () => void;
-    leaders: User[];
+    leaders: any[];
 }
 
 const formatPhoneNumber = (value: string) => {
@@ -30,7 +30,8 @@ const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = (
   return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
 };
 
-const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, leaders }) => {
+// FIX: Changed to a named export to resolve module import error in App.tsx.
+export const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, leaders }) => {
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -46,58 +47,67 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isChangingPassword, setIsChangingPassword] = useState(false);
     
+    const userId = session?.user?.id; // Use stable userId for dependency
     const user = session?.user;
     const userRole = user?.user_metadata?.role;
     const roleDisplay = userRole === 'admin' ? 'Administrador' : 'Líder';
 
-    const fetchProfileData = useCallback(async () => {
-        if (!user) return;
-        setLoading(true);
-        setError(null);
-        setName(user.user_metadata?.name || '');
-        setPhone(user.user_metadata?.phone || '');
-        
-        try {
-            if (userRole === 'leader' || userRole === 'lider') {
-                const { data: leaderDeptRel, error: leaderDeptRelError } = await supabase
-                    .from('department_leaders')
-                    .select('department_id')
-                    .eq('leader_id', user.id)
-                    .single();
-    
-                if (leaderDeptRelError) throw leaderDeptRelError;
-                
-                const departmentId = leaderDeptRel.department_id;
-    
-                if (departmentId) {
-                    const { data: departmentData, error: departmentError } = await supabase
-                        .from('departments')
-                        .select('id, name')
-                        .eq('id', departmentId)
-                        .single();
-                    
-                    if (departmentError) throw departmentError;
-    
-                    const leaderForDept = leaders.find(l => l.id === user.id);
-                    
-                    setDepartmentDetails([{
-                        name: departmentData.name,
-                        leader: leaderForDept?.user_metadata?.name || 'Não atribuído'
-                    }]);
-                } else {
-                    setDepartmentDetails([]);
-                }
-            }
-        } catch (err) {
-            setError(getErrorMessage(err));
-        } finally {
-            setLoading(false);
-        }
-    }, [user, userRole, leaders]);
-
     useEffect(() => {
-        fetchProfileData();
-    }, [fetchProfileData]);
+        const fetchProfileData = async () => {
+            if (!session?.user) return;
+            const currentUser = session.user;
+            const currentUserRole = currentUser.user_metadata?.role;
+    
+            setLoading(true);
+            setError(null);
+            setName(currentUser.user_metadata?.name || '');
+            setPhone(currentUser.user_metadata?.phone || '');
+            
+            try {
+                if (currentUserRole === 'leader' || currentUserRole === 'lider') {
+                    const { data: leaderDeptRel, error: leaderDeptRelError } = await supabase
+                        .from('department_leaders')
+                        .select('department_id')
+                        .eq('leader_id', currentUser.id)
+                        .single();
+        
+                    if (leaderDeptRelError) throw leaderDeptRelError;
+                    
+                    const departmentId = leaderDeptRel.department_id;
+        
+                    if (departmentId) {
+                        const { data: departmentData, error: departmentError } = await supabase
+                            .from('departments')
+                            .select('id, name')
+                            .eq('id', departmentId)
+                            .single();
+                        
+                        if (departmentError) throw departmentError;
+        
+                        const leaderForDept = leaders.find(l => l.id === currentUser.id);
+                        
+                        setDepartmentDetails([{
+                            name: departmentData.name,
+                            leader: leaderForDept?.user_metadata?.name || 'Não atribuído'
+                        }]);
+                    } else {
+                        setDepartmentDetails([]);
+                    }
+                }
+            } catch (err) {
+                setError(getErrorMessage(err));
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        if (userId) {
+            fetchProfileData();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId, leaders]);
+
+
     
     const showSuccess = (message: string) => {
         setSuccessMessage(message);
@@ -110,7 +120,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
         setError(null);
         try {
             // Step 1: Update the user's auth metadata (name, phone)
-            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
+            // FIX: Updated to Supabase v2 API `updateUser` from v1 `update`.
             const { error: updateError } = await supabase.auth.updateUser({
                 data: { 
                     name: name.trim(),
@@ -145,39 +155,39 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
             setError('As novas senhas não coincidem.');
             return;
         }
-
+    
         setIsSaving(true);
         try {
             if (!user?.email) {
                 throw new Error("Email do usuário não encontrado para verificação.");
             }
-
+    
             // 1. Verify current password by attempting to sign in.
-            // FIX: Updated to Supabase v2 API `signInWithPassword` to match library version.
+            // FIX: Updated to Supabase v2 API `signInWithPassword` from v1 `signIn`.
             const { error: signInError } = await supabase.auth.signInWithPassword({
                 email: user.email,
                 password: currentPassword,
             });
-
+    
             if (signInError) {
                 if (signInError.message === 'Invalid login credentials') {
                     throw new Error('Sua senha atual está incorreta.');
                 }
                 throw signInError; // Throw other potential sign-in errors
             }
-
+    
             // 2. If verification is successful, update to the new password.
-            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
-            const { error: updateError } = await supabase.auth.updateUser({ password });
+            // FIX: Updated to Supabase v2 API `updateUser` from v1 `update`.
+            const { error: updateError } = await supabase.auth.updateUser({ password: password });
             if (updateError) throw updateError;
-
+    
             // Reset all fields and close the form on success
             setPassword('');
             setConfirmPassword('');
             setCurrentPassword('');
             setIsChangingPassword(false);
             showSuccess('Senha alterada com sucesso!');
-
+    
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
@@ -291,30 +301,19 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                     ) : (
                         <div className="mt-4 flex items-center justify-between">
                             <p className="text-slate-600">Altere sua senha de acesso ao sistema.</p>
+                            {/* FIX: Replaced `isEditing` with `isEditingProfile` to correctly disable the "Alterar Senha" button while the profile is being edited, resolving a "Cannot find name" error. */}
                             <button onClick={() => setIsChangingPassword(true)} disabled={isEditingProfile} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                                 Alterar Senha
                             </button>
                         </div>
                     )}
                 </div>
-
-                {successMessage && (
-                     <div className="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-scale">
-                        {successMessage}
-                     </div>
-                )}
             </div>
-            <style>{`
-                @keyframes fade-in-scale {
-                from { opacity: 0; transform: translateY(10px) scale(0.98); }
-                to { opacity: 1; transform: translateY(0) scale(1); }
-                }
-                .animate-fade-in-scale {
-                animation: fade-in-scale 0.3s ease-out forwards;
-                }
-            `}</style>
+            {successMessage && (
+                 <div className="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-scale">
+                    {successMessage}
+                 </div>
+            )}
         </div>
     );
 };
-
-export default UserProfilePage;

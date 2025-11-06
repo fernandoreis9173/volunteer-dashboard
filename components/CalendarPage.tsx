@@ -1,548 +1,780 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import EventCard from './EventCard';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin, { type EventResizeDoneArg } from '@fullcalendar/interaction';
+import { EventInput, EventClickArg, DayHeaderContentArg, EventContentArg, DatesSetArg, type EventDropArg } from '@fullcalendar/core';
+import ptBrBaseLocale from '@fullcalendar/core/locales/pt-br';
+
 import NewEventForm from './NewScheduleForm';
-import ConfirmationModal from './ConfirmationModal';
-import CustomDatePicker from './CustomDatePicker'; // Import the new component
-import QRScannerModal from './QRScannerModal'; // Import the QR scanner modal
 import { Event, NotificationRecord, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
-import Pagination from './Pagination';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { User } from '@supabase/supabase-js';
 
-interface SchedulesPageProps {
-  isFormOpen: boolean;
-  setIsFormOpen: (isOpen: boolean) => void;
+// --- Status Filter Component & Options ---
+const statusOptions = [
+    { value: 'Confirmado', label: 'Confirmado', color: 'bg-green-500', checkboxClass: 'text-green-600' },
+    { value: 'Pendente', label: 'Pendente', color: 'bg-yellow-500', checkboxClass: 'text-yellow-600' },
+    { value: 'Cancelado', label: 'Cancelado', color: 'bg-red-500', checkboxClass: 'text-red-600' }
+];
+
+interface StatusFilterProps {
+    statusFilters: string[];
+    onStatusFilterChange: (status: string) => void;
+    isMobile?: boolean;
+}
+
+const StatusFilter: React.FC<StatusFilterProps> = ({ statusFilters, onStatusFilterChange, isMobile = false }) => {
+    return (
+        <div className={`flex gap-4 ${isMobile ? 'flex-col items-start' : 'flex-row items-center'}`}>
+            {statusOptions.map(option => (
+                <label key={option.value} htmlFor={`filter-${option.value}-${isMobile}`} className="flex items-center cursor-pointer">
+                    <input
+                        type="checkbox"
+                        id={`filter-${option.value}-${isMobile}`}
+                        checked={statusFilters.includes(option.value)}
+                        onChange={() => onStatusFilterChange(option.value)}
+                        className={`h-4 w-4 rounded border-slate-300 focus:ring-2 focus:ring-offset-1 ${option.checkboxClass} ${option.checkboxClass.replace('text-', 'focus:ring-')}`}
+                    />
+                    <span className={`ml-2 h-2.5 w-2.5 rounded-full ${option.color}`}></span>
+                    <span className="ml-1.5 text-sm font-medium text-slate-700">{option.label}</span>
+                </label>
+            ))}
+        </div>
+    );
+};
+
+// --- Color & Style Logic ---
+
+const PREDEFINED_COLORS: { [key: string]: { bg: string, text: string, border: string } } = {
+    '#3b82f6': { bg: '#dbeafe', text: '#1e40af', border: '#93c5fd' }, // Blue
+    '#22c55e': { bg: '#dcfce7', text: '#166534', border: '#86efac' }, // Green
+    '#f59e0b': { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' }, // Amber (was transparent border)
+    '#ef4444': { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5' }, // Red
+    'purple': { bg: '#f5f3ff', text: '#5b21b6', border: '#ddd6fe' },
+    'orange': { bg: '#fff7ed', text: '#9a3412', border: '#fed7aa' },
+    'yellow': { bg: '#fefce8', text: '#854d0e', border: '#fef08a' }
+};
+
+const PASTEL_COLORS = Object.values(PREDEFINED_COLORS);
+const departmentColorMap = new Map<number, {bg: string, text: string, border: string}>();
+let lastColorIndex = 0;
+
+const getDepartmentColor = (departmentId?: number) => {
+    if (!departmentId) return PREDEFINED_COLORS['orange']; // Default to orange
+    if (!departmentColorMap.has(departmentId)) {
+        departmentColorMap.set(departmentId, PASTEL_COLORS[lastColorIndex % PASTEL_COLORS.length]);
+        lastColorIndex++;
+    }
+    return departmentColorMap.get(departmentId)!;
+};
+
+// --- Custom Header Renderers ---
+const dayNamesShort = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+const renderDayHeaderContent = (arg: DayHeaderContentArg) => {
+    const dayName = dayNamesShort[arg.date.getDay()];
+    const dayNumber = new Intl.DateTimeFormat('pt-BR', { day: 'numeric' }).format(arg.date);
+    return (
+        <div className="day-header-container">
+            <div className="day-name">{dayName}</div>
+            <div className="day-number">{String(dayNumber).padStart(2, '0')}</div>
+        </div>
+    );
+};
+
+
+// --- Mobile-Specific Components & Hooks ---
+const isSameDay = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+
+const useIsMobile = (breakpoint = 1024) => { // Using lg breakpoint
+    const [isMobile, setIsMobile] = useState(window.innerWidth < breakpoint);
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [breakpoint]);
+    return isMobile;
+};
+
+type MobileView = 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth';
+
+const MobileHeader: React.FC<{ 
+    title: string;
+    onMenuClick: () => void; 
+    currentView: MobileView;
+    onViewChange: (view: MobileView) => void;
+    onPrev: () => void;
+    onNext: () => void;
+    onToday: () => void;
+    statusFilters: string[];
+    onStatusFilterChange: (status: string) => void;
+}> = ({ title, onMenuClick, currentView, onViewChange, onPrev, onNext, onToday, statusFilters, onStatusFilterChange }) => {
+    const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
+    const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+    const viewDropdownRef = useRef<HTMLDivElement>(null);
+    const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+    const viewOptions: {key: MobileView, label: string, shortcut: string}[] = [
+        { key: 'dayGridMonth', label: 'Mês', shortcut: 'M' },
+        { key: 'timeGridWeek', label: 'Semana', shortcut: 'W' },
+        { key: 'timeGridDay', label: 'Dia', shortcut: 'D' }
+    ];
+    const currentViewLabel = viewOptions.find(v => v.key === currentView)?.label || 'Dia';
+
+    const handleViewSelect = (view: MobileView) => {
+        onViewChange(view);
+        setIsViewDropdownOpen(false);
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (viewDropdownRef.current && !viewDropdownRef.current.contains(event.target as Node)) {
+                setIsViewDropdownOpen(false);
+            }
+            if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+                setIsFilterDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className="px-4 py-3 bg-white border-b border-slate-200">
+            {/* Top row for navigation */}
+            <div className="flex justify-between items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                    <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Anterior">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.25 19.5 7.75 12l7.5-7.5" /></svg>
+                    </button>
+                    <h2 className="text-base font-bold text-slate-800 capitalize text-center truncate">{title}</h2>
+                    <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Próximo">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.75 4.5 7.5 7.5-7.5 7.5" /></svg>
+                    </button>
+                </div>
+                <button onClick={onMenuClick} className="p-2 text-slate-600 hover:text-slate-900 flex-shrink-0" aria-label="Open menu">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                </button>
+            </div>
+            
+            {/* Bottom row for controls and filters */}
+            <div className="mt-4 flex justify-between items-center">
+                <div className="flex items-center gap-1 sm:gap-2">
+                    <button onClick={onToday} className="bg-white border border-slate-300 text-slate-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-slate-50 text-sm">
+                        Hoje
+                    </button>
+                    <div className="relative" ref={viewDropdownRef}>
+                        <button
+                            onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors"
+                            aria-haspopup="true"
+                            aria-expanded={isViewDropdownOpen}
+                        >
+                            <span>{currentViewLabel}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-500 transition-transform ${isViewDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        {isViewDropdownOpen && (
+                            <div className="absolute left-0 mt-2 w-36 bg-white rounded-lg shadow-lg border border-slate-200 z-10" role="menu">
+                                <ul className="py-1">
+                                    {viewOptions.map((viewOption) => (
+                                        <li key={viewOption.key}>
+                                            <button onClick={() => handleViewSelect(viewOption.key)} className={`w-full text-left px-4 py-2 text-sm flex justify-between items-center transition-colors ${currentView === viewOption.key ? 'font-semibold text-blue-600 bg-blue-50' : 'text-slate-700 hover:bg-slate-100'}`} role="menuitem">
+                                                <span>{viewOption.label}</span>
+                                                <span className="text-xs text-slate-400">{viewOption.shortcut}</span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                
+                <div className="relative" ref={filterDropdownRef}>
+                    <button
+                        onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                        className="p-2 text-slate-600 hover:text-slate-900"
+                        aria-label="Filtrar eventos"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                        </svg>
+                    </button>
+                    {isFilterDropdownOpen && (
+                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-10 p-4">
+                            <h4 className="text-sm font-bold text-slate-800 mb-3">Filtrar por Status</h4>
+                            <StatusFilter statusFilters={statusFilters} onStatusFilterChange={onStatusFilterChange} isMobile={true} />
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const DateScroller: React.FC<{ selectedDate: Date; onDateSelect: (date: Date) => void; }> = ({ selectedDate, onDateSelect }) => {
+    const weekDates = useMemo(() => {
+        const startOfWeek = new Date(selectedDate);
+        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+        return Array.from({ length: 7 }, (_, i) => {
+            const date = new Date(startOfWeek);
+            date.setDate(date.getDate() + i);
+            return date;
+        });
+    }, [selectedDate]);
+
+    return (
+        <div className="px-4 py-3 bg-white border-b border-t border-slate-100">
+            <div className="flex justify-between items-center">
+                {weekDates.map(date => {
+                    const isSelected = isSameDay(date, selectedDate);
+                    const isToday = isSameDay(date, new Date());
+                    const dayName = date.toLocaleString('pt-BR', { weekday: 'narrow' });
+                    return (
+                        <button key={date.toISOString()} onClick={() => onDateSelect(date)} className="flex flex-col items-center space-y-2 w-10 focus:outline-none text-center">
+                            <span className="text-sm font-medium text-slate-400 uppercase">{dayName}</span>
+                            <span className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${isSelected ? 'bg-blue-600 text-white' : isToday ? 'bg-blue-100 text-blue-600' : 'bg-transparent text-slate-800'}`}>
+                                {date.getDate()}
+                            </span>
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    );
+};
+
+const renderMobileWeekDayHeader = (arg: DayHeaderContentArg) => {
+    const isToday = isSameDay(arg.date, new Date());
+    const dayName = arg.date.toLocaleDateString('pt-BR', { weekday: 'narrow' });
+    return (
+        <div className="flex flex-col items-center py-2">
+            <span className="text-sm uppercase font-medium text-slate-500">{dayName}</span>
+            <span className={`mt-1.5 text-base font-bold w-8 h-8 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-slate-800'}`}>
+                {arg.date.getDate()}
+            </span>
+        </div>
+    );
+};
+
+const MobileMonthEventList: React.FC<{ events: Event[], selectedDate: Date, onEventClick: (event: Event) => void }> = ({ events, selectedDate, onEventClick }) => {
+    const filteredEvents = useMemo(() => {
+        const selectedDateStr = selectedDate.toISOString().split('T')[0];
+        return events.filter(e => e.date === selectedDateStr).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    }, [events, selectedDate]);
+
+    const EventItemCard: React.FC<{event: Event}> = ({ event }) => {
+        const colorKey = event.color || ((event.event_departments || [])[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
+        const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor((event.event_departments || [])[0]?.department_id);
+        const initials = event.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase() || 'E';
+
+        return (
+            <div onClick={() => onEventClick(event)} className="bg-white p-4 rounded-xl shadow-sm flex items-start space-x-4 cursor-pointer border border-slate-100">
+                 <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg flex-shrink-0">
+                    {initials}
+                </div>
+                <div className="flex-grow">
+                    <p className="font-semibold text-slate-800">{event.name}</p>
+                    <p className="text-sm text-slate-500">{(event.event_departments || [])[0]?.departments?.name || 'Geral'}</p>
+                    <div className="mt-2 px-3 py-1 text-sm font-semibold rounded-full inline-block" style={{backgroundColor: colors.bg, color: colors.text}}>
+                        {event.start_time} - {event.end_time}
+                    </div>
+                </div>
+            </div>
+        )
+    };
+
+    return (
+        <div className="p-4 bg-slate-50">
+            <h3 className="font-bold text-slate-800 mb-4 text-lg capitalize">
+                {selectedDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </h3>
+            {filteredEvents.length > 0 ? (
+                <div className="space-y-3">
+                    {filteredEvents.map(event => <EventItemCard key={event.id} event={event} />)}
+                </div>
+            ) : (
+                <div className="text-center py-8">
+                    <p className="text-slate-500">Nenhum evento para este dia.</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- Desktop Custom Header ---
+
+const CalendarHeader: React.FC<{
+    title: string;
+    currentView: string;
+    onPrev: () => void;
+    onNext: () => void;
+    onToday: () => void;
+    onViewChange: (view: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => void;
+    onNewEvent: () => void;
+    isAdmin: boolean;
+    statusFilters: string[];
+    onStatusFilterChange: (status: string) => void;
+}> = ({ title, currentView, onPrev, onNext, onToday, onViewChange, onNewEvent, isAdmin, statusFilters, onStatusFilterChange }) => {
+    const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const viewOptions = [
+        { key: 'dayGridMonth', label: 'Mês', shortcut: 'M' },
+        { key: 'timeGridWeek', label: 'Semana', shortcut: 'W' },
+        { key: 'timeGridDay', label: 'Dia', shortcut: 'D' }
+    ];
+    const currentViewLabel = viewOptions.find(v => v.key === currentView)?.label || 'View';
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsViewDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+             <div className="flex items-center gap-4">
+                <button onClick={onToday} className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
+                    Hoje
+                </button>
+                <div className="flex items-center">
+                    <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors flex-shrink-0" aria-label="Anterior">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.25 19.5 7.75 12l7.5-7.5" /></svg>
+                    </button>
+                    <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors flex-shrink-0" aria-label="Próximo">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.75 4.5 7.5 7.5-7.5 7.5" /></svg>
+                    </button>
+                </div>
+                 <h2 className="text-3xl font-bold text-slate-800 capitalize">{title}</h2>
+            </div>
+            <div className="flex items-center flex-wrap justify-center gap-x-6 gap-y-2">
+                 <StatusFilter statusFilters={statusFilters} onStatusFilterChange={onStatusFilterChange} />
+                 <div className="h-6 w-px bg-slate-200 hidden lg:block"></div>
+                 <div className="relative" ref={dropdownRef}>
+                    <button 
+                        onClick={() => setIsViewDropdownOpen(prev => !prev)}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition-colors shadow-sm"
+                        aria-haspopup="true"
+                        aria-expanded={isViewDropdownOpen}
+                    >
+                        <span>{currentViewLabel}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-500 transition-transform ${isViewDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {isViewDropdownOpen && (
+                        <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                            <ul className="py-1">
+                                {viewOptions.map(view => (
+                                    <li key={view.key}>
+                                        <button
+                                            onClick={() => {
+                                                onViewChange(view.key as any);
+                                                setIsViewDropdownOpen(false);
+                                            }}
+                                            className="w-full text-left flex justify-between items-center px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                        >
+                                            <span>{view.label}</span>
+                                            <span className="text-xs text-slate-400">{view.shortcut}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+                {isAdmin && (
+                    <button onClick={onNewEvent} className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                       <span>Novo Evento</span>
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
+// --- Main Component ---
+
+interface CalendarPageProps {
   userRole: string | null;
   leaderDepartmentId: number | null;
   onDataChange: () => void;
+  setIsSidebarOpen: (isOpen: boolean) => void;
 }
 
-const ITEMS_PER_PAGE = 4;
+const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentId, onDataChange, setIsSidebarOpen }) => {
+    const [allEvents, setAllEvents] = useState<Event[]>([]);
+    const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [monthViewDate, setMonthViewDate] = useState(new Date());
+    const isMobile = useIsMobile();
+    const calendarRef = useRef<FullCalendar>(null);
+    const [mobileView, setMobileView] = useState<MobileView>('dayGridMonth');
+    const [desktopView, setDesktopView] = useState('dayGridMonth');
+    const [calendarTitle, setCalendarTitle] = useState('');
+    const [statusFilters, setStatusFilters] = useState<string[]>(['Confirmado', 'Pendente']);
+    const isAdmin = userRole === 'admin';
+    const isLeader = userRole === 'leader' || userRole === 'lider';
 
-const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen, userRole, leaderDepartmentId, onDataChange }) => {
-  const [masterEvents, setMasterEvents] = useState<Event[]>([]);
-  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
-  const [inputValue, setInputValue] = useState(''); // For immediate input
-  const [searchQuery, setSearchQuery] = useState(''); // For debounced filtering
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [eventToDeleteId, setEventToDeleteId] = useState<number | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [highlightedEventId, setHighlightedEventId] = useState<number | null>(null);
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [scanningEvent, setScanningEvent] = useState<Event | null>(null);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-
-
-  // Filters State
-  const [dateFilters, setDateFilters] = useState<{ start: string; end: string }>({ start: '', end: '' });
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
-  const statusDropdownRef = useRef<HTMLDivElement>(null);
-
-
-  const isLeader = userRole === 'leader' || userRole === 'lider';
-  const isAdmin = userRole === 'admin';
-
-  // Debounce search query
-  useEffect(() => {
-    const timer = setTimeout(() => {
-        setSearchQuery(inputValue);
-    }, 300); // 300ms delay
-
-    return () => {
-        clearTimeout(timer);
-    };
-  }, [inputValue]);
-
-  const showForm = useCallback(() => {
-    setSaveError(null);
-    setIsFormOpen(true);
-  }, [setIsFormOpen]);
-
-  const hideForm = useCallback(() => {
-    setIsFormOpen(false);
-    setEditingEvent(null);
-  }, [setIsFormOpen]);
-  
-  const handleEditEvent = useCallback((event: Event) => {
-    setEditingEvent(event);
-    showForm();
-  }, [showForm]);
-
-  const fetchEvents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-        // Use the secure RPC function to fetch events.
-        // This bypasses faulty RLS and securely filters data on the server.
-        const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
-
-        if (rpcError) throw rpcError;
-
-        // The data is returned as an array of JSON objects, cast it to the Event type.
-        // The data is already filtered and enriched by the database function.
-        const eventsData = data.map(item => item as unknown as Event);
-        setMasterEvents(eventsData);
-
-    } catch (err) {
-        const errorMessage = getErrorMessage(err);
-        console.error('Error fetching events via RPC:', errorMessage);
-        if (errorMessage.includes("failed to run function")) {
-            setError('Falha ao carregar eventos: A função do banco de dados (get_events_for_user) não foi encontrada ou falhou. Peça a um administrador para aplicar o script SQL.');
-        } else {
-            setError(`Falha ao carregar eventos: ${errorMessage}`);
-        }
-    } finally {
-        setLoading(false);
-    }
-  }, []);
-  
-  const fetchAllDepartments = useCallback(async () => {
-    const { data, error } = await supabase.from('departments').select('id, name');
-    if (error) {
-        console.error("Failed to fetch all departments for form:", getErrorMessage(error));
-    } else {
-        setAllDepartments(data as Department[] || []);
-    }
-  }, []);
-
-  const showNotification = useCallback((message: string, type: 'success' | 'error') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 5000);
-  }, []);
-
-  const handleScanSuccess = useCallback((decodedText: string) => {
-    setIsScannerOpen(false);
+    const ptBrLocale = useMemo(() => ({
+        ...ptBrBaseLocale,
+        week: { dow: 0, doy: 4, },
+    }), []);
     
-    const processScan = async () => {
-        try {
-            const data = JSON.parse(decodedText);
-            if (!data.vId || !data.eId || !data.dId) {
-                throw new Error("QR Code inválido: Faltando dados essenciais.");
-            }
-            if (data.eId !== scanningEvent?.id) {
-                throw new Error("Este QR Code é para um evento diferente.");
-            }
-            if (leaderDepartmentId !== data.dId) {
-                throw new Error("Este voluntário não pertence ao seu departamento para este evento.");
-            }
+    const handleStatusFilterChange = (status: string) => {
+        setStatusFilters(prev =>
+            prev.includes(status)
+                ? prev.filter(s => s !== status)
+                : [...prev, status]
+        );
+    };
 
-            const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError || !sessionData.session) {
-                throw new Error("Sessão de usuário não encontrada. Por favor, faça login novamente.");
-            }
+    const renderPillEventContent = (eventInfo: EventContentArg) => {
+        if (isMobile && mobileView === 'dayGridMonth') {
+            return <div className="fc-daygrid-day-dot" style={{ backgroundColor: eventInfo.borderColor }}></div>;
+        }
 
-            const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
-                headers: {
-                    Authorization: `Bearer ${sessionData.session.access_token}`,
-                },
-                body: { volunteerId: data.vId, eventId: data.eId, departmentId: data.dId },
+        if (!isMobile && (eventInfo.view.type === 'timeGridWeek' || eventInfo.view.type === 'timeGridDay')) {
+            const eventData = eventInfo.event.extendedProps as Event;
+            const volunteersByDept = new Map<number, any[]>();
+            
+            (eventData.event_volunteers || []).forEach(ev => {
+                if (ev.volunteers && ev.department_id) {
+                    if (!volunteersByDept.has(ev.department_id)) {
+                        volunteersByDept.set(ev.department_id, []);
+                    }
+                    volunteersByDept.get(ev.department_id)!.push(ev.volunteers);
+                }
             });
 
-            if (invokeError) throw invokeError;
-            
-            const volunteerName = scanningEvent?.event_volunteers.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
-            showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
-            
-            setMasterEvents(prevEvents => prevEvents.map(event => {
-                if (event.id === scanningEvent.id) {
-                    const updatedVolunteers = event.event_volunteers.map(v => {
-                        if (v.volunteer_id === data.vId && v.department_id === data.dId) {
-                            return { ...v, present: true };
-                        }
-                        return v;
-                    });
-                    return { ...event, event_volunteers: updatedVolunteers };
-                }
-                return event;
-            }));
+            return (
+                <div className="fc-event-main-frame w-full h-full p-1.5 text-xs flex flex-col items-start overflow-y-auto">
+                    <div>
+                        <p className="font-bold" style={{color: eventInfo.event.textColor}}>{eventInfo.timeText}</p>
+                        <p className="font-semibold whitespace-normal mt-1" style={{color: eventInfo.event.textColor}}>{eventInfo.event.title}</p>
+                    </div>
+                    
+                    {((eventData.event_departments || []).length > 0) && (
+                        <div className="mt-2 pt-2 border-t w-full space-y-2" style={{borderColor: eventInfo.event.textColor + '40'}}>
+                            {(eventData.event_departments || []).map(({ departments }) => {
+                                if (!departments) return null;
+                                const volunteers = volunteersByDept.get(departments.id) || [];
+                                return (
+                                    <div key={departments.id}>
+                                        <p className="font-bold mb-1" style={{color: eventInfo.event.textColor}}>{departments.name}</p>
+                                        {volunteers.length > 0 ? (
+                                            <ul className="space-y-1 pl-1">
+                                                {volunteers.map(v => (
+                                                    <li key={v.id} className="flex items-center space-x-1.5">
+                                                        <div className="w-5 h-5 rounded-full bg-black/20 text-white flex-shrink-0 flex items-center justify-center text-[10px] font-bold" style={{color: eventInfo.backgroundColor, backgroundColor: eventInfo.event.textColor}}>
+                                                            {v.initials || '??'}
+                                                        </div>
+                                                        <span style={{color: eventInfo.event.textColor}}>{v.name}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-xs italic pl-1" style={{color: eventInfo.event.textColor + '90'}}>Nenhum voluntário</p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            );
+        }
 
-        } catch (err: any) {
-            if (err.context && typeof err.context.json === 'function') {
-                try {
-                    const errorJson = await err.context.json();
-                    if (errorJson && errorJson.error) {
-                        showNotification(errorJson.error, 'error');
-                    } else {
-                        showNotification(getErrorMessage(err), 'error');
-                    }
-                } catch (parseError) {
-                    showNotification(getErrorMessage(err), 'error');
-                }
-            } else {
-                showNotification(getErrorMessage(err), 'error');
-            }
+        if (!isMobile && eventInfo.view.type === 'dayGridMonth') {
+            const startTime = eventInfo.event.extendedProps.start_time?.substring(0, 5);
+            const timeString = startTime ? `${startTime}` : '';
+            return (
+                <div className="fc-event-main-frame w-full px-1.5 py-0.5 text-xs overflow-hidden">
+                    <div className="flex items-start gap-1.5">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: eventInfo.borderColor }}></div>
+                        <div className="font-semibold whitespace-normal">
+                            {timeString && <span className="font-bold mr-1">{timeString}</span>}
+                            {eventInfo.event.title}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="fc-event-main-frame flex items-center gap-1.5 overflow-hidden w-full px-1.5 py-0.5 text-xs">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: eventInfo.borderColor }}></div>
+                <div className="font-semibold truncate">
+                    {eventInfo.timeText && <span className="font-bold mr-1">{eventInfo.timeText}</span>}
+                    {eventInfo.event.title}
+                </div>
+            </div>
+        );
+    };
+
+    const handleCloseForm = () => {
+        setIsFormOpen(false);
+        setEditingEvent(null);
+    };
+    const fetchAllDepartments = useCallback(async () => {
+        const { data, error } = await supabase.from('departments').select('id, name');
+        if (error) {
+            console.error("Failed to fetch all departments for form:", getErrorMessage(error));
+        } else {
+            setAllDepartments((data as Department[]) || []);
+        }
+    }, []);
+
+    const fetchAllEvents = useCallback(async (setLoadingState = true) => {
+        if (setLoadingState) setLoading(true);
+        setError(null);
+        try {
+            // Use the secure RPC function to fetch events for the current user (admin or leader).
+            // This bypasses potential RLS issues.
+            const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
+            
+            if (rpcError) throw rpcError;
+            
+            // The RPC function returns data already filtered and enriched.
+            setAllEvents((data as unknown as Event[]) || []);
+
+        } catch (err) {
+            setError(getErrorMessage(err));
         } finally {
-            setScanningEvent(null);
+            if (setLoadingState) setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { 
+        fetchAllEvents();
+        fetchAllDepartments();
+    }, [fetchAllEvents, fetchAllDepartments]);
+    
+    const handleDatesSet = (arg: DatesSetArg) => {
+        const view = arg.view;
+        let title = view.title;
+        if (isMobile) {
+            const monthMap: { [key: string]: string } = { 'janeiro': 'jan.', 'fevereiro': 'fev.', 'março': 'mar.', 'abril': 'abr.', 'maio': 'mai.', 'junho': 'jun.', 'julho': 'jul.', 'agosto': 'ago.', 'setembro': 'set.', 'outubro': 'out.', 'novembro': 'nov.', 'dezembro': 'dez.' };
+            const lowerCaseTitle = title.toLowerCase();
+            for (const month in monthMap) {
+                if (lowerCaseTitle.includes(month)) {
+                    title = title.replace(new RegExp(month, 'i'), monthMap[month]);
+                    break;
+                }
+            }
+        }
+        setCalendarTitle(title);
+        if (isMobile) {
+            const midDate = new Date(view.currentStart.getTime() + (view.currentEnd.getTime() - view.currentStart.getTime()) / 2);
+            if (mobileView === 'dayGridMonth') {
+                if (midDate.getMonth() !== monthViewDate.getMonth() || midDate.getFullYear() !== monthViewDate.getFullYear()) setMonthViewDate(midDate);
+            } else {
+                if (selectedDate < view.currentStart || selectedDate >= view.currentEnd) setSelectedDate(view.currentStart);
+            }
+        } else {
+            setDesktopView(view.type);
         }
     };
 
-    processScan();
-  }, [scanningEvent, leaderDepartmentId, showNotification]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-        if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
-            setIsStatusDropdownOpen(false);
-        }
+    const handleDateScrollerSelect = (date: Date) => {
+        setSelectedDate(date);
+        calendarRef.current?.getApi().gotoDate(date);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
-
-  useEffect(() => {
-    fetchEvents();
-    fetchAllDepartments();
-    const highlightId = sessionStorage.getItem('highlightEventId');
-    if (highlightId) {
-        setHighlightedEventId(parseInt(highlightId, 10));
-        sessionStorage.removeItem('highlightEventId');
-    }
-  }, [fetchEvents, fetchAllDepartments]);
-
-  useEffect(() => {
-    const editId = sessionStorage.getItem('editEventId');
-    if (editId && masterEvents.length > 0) {
-        sessionStorage.removeItem('editEventId');
-        const eventToEdit = masterEvents.find(e => e.id === parseInt(editId, 10));
-        if (eventToEdit) {
-            handleEditEvent(eventToEdit);
-        }
-    }
-  }, [masterEvents, handleEditEvent]);
-
-  const filteredEvents = useMemo(() => {
-    let events = [...masterEvents];
-
-    if (dateFilters.start) events = events.filter(event => event.date >= dateFilters.start);
-    if (dateFilters.end) events = events.filter(event => event.date <= dateFilters.end);
+    const calendarEvents = useMemo((): EventInput[] => {
+        return allEvents
+            .filter(event => statusFilters.includes(event.status))
+            .map(event => {
+                const colorKey = event.color || ((event.event_departments || [])[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
+                const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor((event.event_departments || [])[0]?.department_id);
+                
+                // FIX: Create local Date objects by removing the 'Z' suffix. This ensures FullCalendar interprets event times in the browser's local timezone.
+                const startDate = new Date(`${event.date}T${event.start_time}`);
+                const endDate = new Date(`${event.date}T${event.end_time}`);
     
-    if (statusFilter !== 'all') {
-        events = events.filter(event => event.status === statusFilter);
-    }
-    
-    if (searchQuery) {
-        const lowercasedQuery = searchQuery.toLowerCase();
-        events = events.filter(e => e.name.toLowerCase().includes(lowercasedQuery));
-    }
+                if (endDate < startDate) {
+                    endDate.setDate(endDate.getDate() + 1);
+                }
 
-    return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.start_time.localeCompare(a.start_time));
-  }, [masterEvents, dateFilters, statusFilter, searchQuery]);
+                return {
+                    id: String(event.id),
+                    title: event.name,
+                    start: startDate, // Pass local Date object
+                    end: endDate,     // Pass local Date object
+                    backgroundColor: colors.bg,
+                    borderColor: colors.border,
+                    textColor: colors.text,
+                    classNames: ['custom-event'],
+                    extendedProps: { ...event, color: colorKey, dotColor: colors.border }
+                };
+            });
+    }, [allEvents, statusFilters]);
 
-  const paginatedEvents = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredEvents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [currentPage, filteredEvents]);
-
-  const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, dateFilters, statusFilter]);
-  
-  const handleSetToday = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
-    setDateFilters({ start: todayStr, end: todayStr });
-  };
-
-  const handleClearFilters = () => {
-    setDateFilters({ start: '', end: '' });
-    setStatusFilter('all');
-    setInputValue('');
-    setSearchQuery('');
-    setCurrentPage(1);
-  };
-
-  const handleExportPDF = async () => {
-    const doc = new jsPDF();
-    const today = new Date().toLocaleDateString('pt-BR');
-    let lastHeaderPage = 0;
-
-    const pageHeader = (docInstance: jsPDF) => {
-        const currentPage = (docInstance.internal as any).getNumberOfPages();
-        if (currentPage === lastHeaderPage) {
+    const handleDateClick = (arg: { date: Date, dateStr: string }) => {
+        if (mobileView === 'dayGridMonth') {
+            setSelectedDate(arg.date);
             return;
         }
-        lastHeaderPage = currentPage;
-        
-        docInstance.setFontSize(10);
-        docInstance.setTextColor(150);
-        docInstance.text('Volunteers - Sistema da Igreja', 14, 10);
-        docInstance.text(`Gerado em: ${today}`, docInstance.internal.pageSize.width - 14, 10, { align: 'right' });
-        docInstance.setDrawColor(226, 232, 240);
-        docInstance.line(14, 13, docInstance.internal.pageSize.width - 14, 13);
+        if (!isAdmin) return;
+        setEditingEvent({ name: '', date: arg.dateStr.split('T')[0], start_time: arg.date.toTimeString().substring(0, 5), end_time: new Date(arg.date.getTime() + 60*60*1000).toTimeString().substring(0, 5), status: 'Pendente' } as Event);
+        setIsFormOpen(true);
     };
 
-    pageHeader(doc);
-
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(40);
-    doc.text('Relatório dos Eventos', doc.internal.pageSize.width / 2, 25, { align: 'center' });
-
-    let y = 35;
-
-    if (isLeader && leaderDepartmentId) {
-        let departmentName = '';
-        let leaderName = '';
-        let totalVolunteersForDept = 0;
-        let totalPresentForDept = 0;
-
-        for (const event of filteredEvents) {
-            const deptInfo = event.event_departments.find(ed => ed.department_id === leaderDepartmentId)?.departments;
-            if (deptInfo) {
-                departmentName = deptInfo.name;
-                leaderName = deptInfo.leader || 'N/A';
-                break;
-            }
+    const handleMobileEventClick = (eventData: Event) => {
+        if (eventData) {
+            setEditingEvent(eventData);
+            setIsFormOpen(true);
         }
-        
-        filteredEvents.forEach(event => {
-            const volunteersInEventForDept = (event.event_volunteers || []).filter(ev => ev.department_id === leaderDepartmentId);
-            totalVolunteersForDept += volunteersInEventForDept.length;
-            totalPresentForDept += volunteersInEventForDept.filter(ev => ev.present === true).length;
-        });
+    };
 
-        if (departmentName) {
-            doc.setFontSize(11);
-            doc.setTextColor(82, 82, 91); // slate-600
+    const handleEventClick = (info: EventClickArg) => {
+        const eventData = allEvents.find(e => e.id === parseInt(info.event.id, 10));
+        if (eventData) {
+            setEditingEvent(eventData);
+            setIsFormOpen(true);
+        }
+    };
 
-            doc.setFont('helvetica', 'bold');
-            doc.text('Departamento:', 14, y);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`${departmentName} (Líder: ${leaderName})`, 43, y);
-            y += 6;
+    const handleEventDrop = async (info: EventDropArg) => {
+        if (!isAdmin) { info.revert(); return; }
+        const { event } = info;
+        if (!event.start) { info.revert(); return; }
+        const eventId = parseInt(event.id, 10);
+    
+        const newStartDate = event.start;
+        const originalDuration = info.oldEvent.end!.getTime() - info.oldEvent.start!.getTime();
+        const newEndDate = event.end ? event.end : new Date(newStartDate.getTime() + originalDuration);
+    
+        // --- NEW: Client-side conflict check ---
+        const conflictingEvent = allEvents.find(existingEvent => {
+            if (existingEvent.id === eventId) return false;
             
-            doc.setFont('helvetica', 'bold');
-            doc.text('Total de Voluntários Escalados:', 14, y);
-            doc.setFont('helvetica', 'normal');
-            doc.text(String(totalVolunteersForDept), 75, y);
-            y += 6;
-
-            doc.setFont('helvetica', 'bold');
-            doc.text('Total de Presenças Confirmadas:', 14, y);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`${totalPresentForDept} de ${totalVolunteersForDept}`, 75, y);
-            y += 10;
-
-            doc.setDrawColor(226, 232, 240);
-            doc.line(14, y - 5, doc.internal.pageSize.width - 14, y - 5);
-        }
-    } else if (isAdmin) {
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(40);
-        doc.text('Resumo por Departamento', 14, y);
-        y += 8;
-
-        const departmentSummary = new Map<number, { name: string; leader: string; volunteerCount: number; presentCount: number }>();
-
-        filteredEvents.forEach(event => {
-            (event.event_departments || []).forEach(ed => {
-                if (ed.departments && !departmentSummary.has(ed.department_id)) {
-                    departmentSummary.set(ed.department_id, {
-                        name: ed.departments.name,
-                        leader: ed.departments.leader || 'N/A',
-                        volunteerCount: 0,
-                        presentCount: 0,
-                    });
-                }
-            });
+            const { dateTime: existingStartLocal, isValid: startIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.start_time);
+            let { dateTime: existingEndLocal, isValid: endIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.end_time);
+    
+            if (!startIsValid || !endIsValid || !existingStartLocal || !existingEndLocal) {
+                console.warn(`Skipping conflict check for event ID ${existingEvent.id} due to invalid date/time.`);
+                return false;
+            }
+    
+            if (existingEndLocal < existingStartLocal) {
+                existingEndLocal.setDate(existingEndLocal.getDate() + 1);
+            }
+    
+            // The overlap condition: (StartA < EndB) and (EndA > StartB)
+            return (newStartDate < existingEndLocal && newEndDate > existingStartLocal);
         });
-
-        filteredEvents.forEach(event => {
-            (event.event_volunteers || []).forEach(ev => {
-                const summary = departmentSummary.get(ev.department_id);
-                if (summary) {
-                    summary.volunteerCount += 1;
-                    if (ev.present === true) {
-                        summary.presentCount += 1;
-                    }
-                }
-            });
-        });
-
-        const summaryBody = Array.from(departmentSummary.values()).map(summary => [
-            summary.name,
-            summary.leader,
-            `${summary.presentCount}/${summary.volunteerCount}`,
-        ]);
-        
-        if (summaryBody.length > 0) {
-            autoTable(doc, {
-                startY: y,
-                head: [["Departamento", "Líder", "Presença Total"]],
-                body: summaryBody,
-                theme: 'striped',
-                headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' }, // Blue color for summary
-                styles: { font: "helvetica", fontSize: 10, cellPadding: 2 },
-                margin: { left: 14, right: 14 },
-                didDrawPage: () => pageHeader(doc)
-            });
-            y = (doc as any).lastAutoTable.finalY + 15;
-        } else {
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(150);
-            doc.text('Nenhum dado departamental para resumir.', 14, y);
-            y += 10;
+    
+        if (conflictingEvent) {
+            const { time: conflictStartTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.start_time);
+            const { time: conflictEndTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.end_time);
+            alert(`Conflito de horário com "${conflictingEvent.name}" (${conflictStartTime} - ${conflictEndTime}).`);
+            info.revert();
+            return;
         }
-        
-        doc.setDrawColor(226, 232, 240);
-        doc.line(14, y - 5, doc.internal.pageSize.width - 14, y - 5);
-    }
-
-
-    filteredEvents.forEach((event) => {
-        const MIN_BLOCK_HEIGHT = 45; 
-        if (y + MIN_BLOCK_HEIGHT > 280) {
-            doc.addPage();
-            pageHeader(doc);
-            y = 25;
-        }
-
-        const eventColor = event.color || '#e2e8f0'; 
-        doc.setFillColor(eventColor);
-        const lineHeight16 = doc.getTextDimensions('T', { fontSize: 16 }).h;
-        doc.rect(14, y - lineHeight16 + 2, 3, lineHeight16, 'F');
-
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(40);
-        doc.text(event.name, 20, y);
-        y += 8;
-
-        // FIX: Destructure `fullDate` as `eventDate` to match the return type of `convertUTCToLocal`.
-        const { fullDate: eventDate, time: startTime } = convertUTCToLocal(event.date, event.start_time);
-        const { time: endTime } = convertUTCToLocal(event.date, event.end_time);
-        const eventTime = `${startTime} - ${endTime}`;
-        const details = `Data: ${eventDate} | Horário: ${eventTime} | Status: ${event.status}`;
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
-        doc.text(details, 20, y);
-        y += 6;
-        
-        let totalVolunteersInEvent = 0;
-        let totalPresentInEvent = 0;
-        if (isLeader && leaderDepartmentId) {
-             const volunteersForMyDept = (event.event_volunteers || []).filter(ev => ev.department_id === leaderDepartmentId);
-            totalVolunteersInEvent = volunteersForMyDept.length;
-            totalPresentInEvent = volunteersForMyDept.filter(ev => ev.present === true).length;
-        } else {
-            totalVolunteersInEvent = (event.event_volunteers || []).length;
-            totalPresentInEvent = (event.event_volunteers || []).filter(ev => ev.present === true).length;
-        }
-        
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Total de Voluntários: ${totalVolunteersInEvent}`, 20, y);
-        y += 6;
-        doc.text(`Presenças Confirmadas: ${totalPresentInEvent} de ${totalVolunteersInEvent}`, 20, y);
-        y += 8;
-
-        const tableBody: any[][] = [];
-        let departmentsToProcess = event.event_departments || [];
-        if (isLeader && leaderDepartmentId) {
-             departmentsToProcess = (event.event_departments || []).filter(ed => ed.department_id === leaderDepartmentId);
-        }
-        
-        if (departmentsToProcess.length > 0) {
-            departmentsToProcess.forEach(eventDept => {
-                const deptInfo = eventDept.departments;
-                if (!deptInfo) return;
-                const leaderName = deptInfo.leader || 'N/A';
-                const volunteersForDept = (event.event_volunteers || [])
-                    .filter(ev => ev.department_id === deptInfo.id);
-
-                const presentCount = volunteersForDept.filter(v => v.present).length;
-                const totalCount = volunteersForDept.length;
-                const presenceSummary = `${presentCount}/${totalCount}`;
-                
-                const volunteersList = volunteersForDept.map(ev => {
-                    const name = ev.volunteers?.name || 'Voluntário';
-                    if (ev.present === true) return `${name} (Presente)`;
-                    if (ev.present === false) return `${name} (Faltou)`;
-                    return `${name} (Não marcado)`;
-                }).join('\n');
-                
-                tableBody.push([deptInfo.name, leaderName, presenceSummary, volunteersList || 'Nenhum voluntário']);
-            });
-
-            autoTable(doc, {
-                startY: y,
-                head: [["Departamento", "Líder", "Presença", "Voluntários Escalados"]],
-                body: tableBody,
-                theme: 'striped',
-                headStyles: { fillColor: [45, 88, 108], textColor: 255, fontStyle: 'bold' },
-                styles: { font: "helvetica", fontSize: 10, cellPadding: 2, halign: 'left' },
-                columnStyles: { 
-                    0: { cellWidth: 40 }, 
-                    1: { cellWidth: 40 }, 
-                    2: { cellWidth: 20, halign: 'center' }, 
-                    3: { cellWidth: 'auto' } 
-                },
-                alternateRowStyles: { fillColor: [248, 249, 250] },
-                margin: { left: 14, right: 14 },
-                didDrawPage: () => pageHeader(doc)
-            });
-            y = (doc as any).lastAutoTable.finalY + 15;
-        } else {
-             doc.setFontSize(10);
-             doc.setFont('helvetica', 'italic');
-             doc.setTextColor(150);
-             doc.text('Nenhum departamento escalado para este evento.', 20, y);
-             y += 15;
-        }
-    });
-
-    doc.save('relatorio-eventos.pdf');
-  };
-
-  
-   const handleMarkAttendance = (event: Event) => {
-    setScanningEvent(event);
-    setIsScannerOpen(true);
-  };
-
-  const handleDeleteRequest = (id: number) => {
-    setEventToDeleteId(id);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!eventToDeleteId) return;
-    const { error: deleteError } = await supabase.from('events').delete().eq('id', eventToDeleteId);
-    if (deleteError) {
-      alert(`Falha ao excluir evento: ${getErrorMessage(deleteError)}`);
-    } else {
-      await fetchEvents();
-    }
-    setIsDeleteModalOpen(false);
-    setEventToDeleteId(null);
-  };
-
-    const createAndSendNotifications = async (notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[]) => {
-        if (notifications.length === 0) return;
+    
+        // --- If no conflict, proceed with saving ---
+        const formatDateLocal = (d: Date) => d.toISOString().split('T')[0];
+        const formatTimeLocal = (d: Date) => d.toTimeString().substring(0, 8); // HH:mm:ss
+    
+        const newDate = formatDateLocal(newStartDate);
+        const newStartTime = formatTimeLocal(newStartDate);
+        const newEndTime = formatTimeLocal(newEndDate);
+    
         try {
-            const { error: invokeError } = await supabase.functions.invoke('create-notifications', {
-                body: { notifications },
+            const { error: updateError } = await supabase.from('events').update({ date: newDate, start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
+            if (updateError) throw updateError;
+    
+            await fetchAllEvents(false);
+            onDataChange();
+    
+            const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                body: {
+                    notifyType: 'event_updated',
+                    event: { id: eventId, name: event.title, date: newDate, start_time: newStartTime, end_time: newEndTime },
+                },
             });
-            if (invokeError) throw invokeError;
+            if (notifyError) console.error("Falha ao notificar sobre reagendamento:", getErrorMessage(notifyError));
+    
         } catch (err) {
-            console.error("Falha ao enviar notificações:", getErrorMessage(err));
+            alert('Erro ao mover evento: ' + getErrorMessage(err));
+            info.revert();
+        }
+    };
+    
+    const handleEventResize = async (info: EventResizeDoneArg) => {
+        if (!isAdmin) { info.revert(); return; }
+        const { event } = info;
+        if (!event.start || !event.end) { info.revert(); return; }
+        const eventId = parseInt(event.id, 10);
+    
+        const newStartDate = event.start;
+        const newEndDate = event.end;
+    
+        // --- NEW: Client-side conflict check ---
+        const conflictingEvent = allEvents.find(existingEvent => {
+            if (existingEvent.id === eventId) return false;
+            
+            const { dateTime: existingStartLocal, isValid: startIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.start_time);
+            let { dateTime: existingEndLocal, isValid: endIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.end_time);
+    
+            if (!startIsValid || !endIsValid || !existingStartLocal || !existingEndLocal) {
+                console.warn(`Skipping conflict check for event ID ${existingEvent.id} due to invalid date/time.`);
+                return false;
+            }
+    
+            if (existingEndLocal < existingStartLocal) {
+                existingEndLocal.setDate(existingEndLocal.getDate() + 1);
+            }
+    
+            return (newStartDate < existingEndLocal && newEndDate > existingStartLocal);
+        });
+    
+        if (conflictingEvent) {
+            const { time: conflictStartTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.start_time);
+            const { time: conflictEndTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.end_time);
+            alert(`Conflito de horário com "${conflictingEvent.name}" (${conflictStartTime} - ${conflictEndTime}).`);
+            info.revert();
+            return;
+        }
+    
+        // --- If no conflict, proceed with saving ---
+        const formatTimeLocal = (d: Date) => d.toTimeString().substring(0, 8); // HH:mm:ss
+        
+        const newStartTime = formatTimeLocal(event.start);
+        const newEndTime = formatTimeLocal(event.end);
+        
+        const eventDate = (event.extendedProps as Event).date;
+    
+        try {
+            const { error: updateError } = await supabase.from('events').update({ start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
+            if (updateError) throw updateError;
+            
+            await fetchAllEvents(false);
+            onDataChange();
+    
+            const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                body: {
+                    notifyType: 'event_updated',
+                    event: { id: eventId, name: event.title, date: eventDate, start_time: newStartTime, end_time: newEndTime },
+                },
+            });
+            if (notifyError) console.error("Falha ao notificar sobre alteração de horário:", getErrorMessage(notifyError));
+    
+        } catch (err) {
+            alert('Erro ao redimensionar evento: ' + getErrorMessage(err));
+            info.revert();
         }
     };
 
@@ -550,331 +782,228 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
         setIsSaving(true);
         setSaveError(null);
         try {
-            const isSchedulingMode = isLeader && eventPayload.id && eventPayload.scheduling_department_id;
+            const { volunteer_ids, scheduling_department_id, ...eventDetails } = eventPayload;
     
-            if (isSchedulingMode) {
-                const eventId = eventPayload.id;
-                const eventName = eventPayload.name;
-                const schedulingDepartmentId = eventPayload.scheduling_department_id;
-                const newVolunteerIds = new Set(eventPayload.volunteer_ids || []);
+            // The times from the form are local. We just need to save them.
+            const { data, error: fetchError } = await supabase.rpc('get_events_for_user');
+            if (fetchError) throw new Error(`Não foi possível verificar conflitos: ${fetchError.message}`);
+            const allDbEvents = (fetchError as unknown as Event[]) || [];
     
-                const { data: currentVolunteersData, error: currentVolError } = await supabase
-                    .from('event_volunteers')
-                    .select('volunteer_id, volunteers(user_id, name)')
-                    .eq('event_id', eventId)
-                    .eq('department_id', schedulingDepartmentId);
+            const { error: saveError } = await supabase.functions.invoke('save-event', {
+                body: { eventDetails, department_ids: eventPayload.department_ids, allEvents: allDbEvents },
+            });
     
-                if (currentVolError) throw currentVolError;
+            if (saveError) throw saveError;
     
-                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', schedulingDepartmentId);
-                if (deleteError) throw deleteError;
-                
-                if (eventPayload.volunteer_ids && eventPayload.volunteer_ids.length > 0) {
-                    const volunteersToInsert = eventPayload.volunteer_ids.map((vol_id: number) => ({
-                        event_id: eventId, volunteer_id: vol_id, department_id: schedulingDepartmentId,
-                    }));
-                    const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
-                    if (insertError) throw insertError;
-                }
-    
-                const currentVolunteers = currentVolunteersData || [];
-                const currentVolunteerIds = new Set(currentVolunteers.map(v => v.volunteer_id));
-    
-                const addedVolunteerIds = [...newVolunteerIds].filter(id => !currentVolunteerIds.has(id));
-                const removedVolunteers = currentVolunteers.filter(v => !newVolunteerIds.has(v.volunteer_id));
-    
-                const notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[] = [];
-    
-                if (addedVolunteerIds.length > 0) {
-                    const { data: addedUsers, error: usersError } = await supabase.from('volunteers').select('user_id').in('id', addedVolunteerIds);
-                    if (usersError) console.error("Error fetching added volunteers for notification", usersError);
-                    else if (addedUsers) {
-                        addedUsers.forEach(u => {
-                            if (u.user_id) notifications.push({ user_id: u.user_id, message: `Você foi escalado(a) para o evento "${eventName}".`, type: 'new_schedule', related_event_id: eventId });
-                        });
-                    }
-                }
-    
-                removedVolunteers.forEach(v => {
-                    const volunteer = Array.isArray(v.volunteers) ? v.volunteers[0] : v.volunteers;
-                    if (volunteer?.user_id) {
-                        notifications.push({ user_id: volunteer.user_id, message: `Você foi removido(a) da escala do evento "${eventName}".`, type: 'event_update', related_event_id: eventId });
-                    }
-                });
-                
-                if (notifications.length > 0) {
-                    await createAndSendNotifications(notifications);
-                }
-            
-            } else if (isAdmin) {
-                const { department_ids, volunteer_ids, scheduling_department_id, ...eventDetails } = eventPayload;
-                
-                let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', eventDetails.date).lt('start_time', eventDetails.end_time).gt('end_time', eventDetails.start_time);
-                if (eventDetails.id) conflictQuery = conflictQuery.neq('id', eventDetails.id);
-                const { data: conflicts, error: conflictError } = await conflictQuery;
-                if (conflictError) throw conflictError;
-                if (conflicts && conflicts.length > 0) {
-                    const c = conflicts[0];
-                    throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
-                }
-    
-                let savedEvent;
-                const isCreating = !eventDetails.id;
-    
-                if (isCreating) {
-                    const { id, ...insertPayload } = eventDetails;
-                    const { data: newEvent, error } = await supabase.from('events').insert(insertPayload).select().single();
-                    if (error) throw error;
-                    if (!newEvent) throw new Error("Falha ao criar o evento.");
-                    savedEvent = newEvent;
-                } else { // Updating
-                    const eventId = eventDetails.id;
-                    const { id, ...updatePayload } = eventDetails;
-                    const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
-                    if (error) throw error;
-                    if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
-                    savedEvent = updatedEvent;
-                }
-                
-                // Sync departments
-                const eventId = savedEvent.id;
-                const { error: deleteDeptError } = await supabase.from('event_departments').delete().eq('event_id', eventId);
-                if (deleteDeptError) throw deleteDeptError;
-
-                if (department_ids && department_ids.length > 0) {
-                    const assignments = department_ids.map((deptId: number) => ({ event_id: eventId, department_id: deptId }));
-                    const { error: insertDeptError } = await supabase.from('event_departments').insert(assignments);
-                    if (insertDeptError) throw insertDeptError;
-                }
-
-                const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
-                    body: { 
-                        notifyType: isCreating ? 'event_created' : 'event_updated',
-                        event: savedEvent,
-                    },
-                });
-                if (notifyError) {
-                    console.error("Falha ao acionar notificações:", getErrorMessage(notifyError));
-                }
-            }
-    
-            hideForm();
+            handleCloseForm();
             onDataChange();
-            await fetchEvents();
+            await fetchAllEvents(false);
+    
         } catch (err) {
             setSaveError(getErrorMessage(err));
         } finally {
             setIsSaving(false);
         }
     };
-  
-    const handleAddDepartment = async (event: Event) => {
-        if (!leaderDepartmentId || !event.id) return;
-        if ((event.event_departments || []).some(ed => ed.department_id === leaderDepartmentId)) return;
-        const { error } = await supabase.from('event_departments').insert({ event_id: event.id, department_id: leaderDepartmentId });
-        if (error) {
-            alert(`Falha ao adicionar departamento: ${getErrorMessage(error)}`);
-        } else {
-            await fetchEvents();
-            const { data: dept, error: deptError } = await supabase
-                .from('departments')
-                .select('name')
-                .eq('id', leaderDepartmentId)
-                .single();
+    
 
-            if (deptError || !dept) {
-                console.error("Não foi possível encontrar o nome do departamento para notificação", deptError);
-                return;
-            }
-
-            const { data: volunteers, error: volError } = await supabase
-                .from('volunteer_departments')
-                .select('volunteers(user_id)')
-                .eq('department_id', leaderDepartmentId);
-            
-            if (volError) {
-                console.error("Não foi possível buscar voluntários para notificação do departamento:", volError);
-            } else if (volunteers) {
-                const notifications = volunteers
-                    // @ts-ignore
-                    .map(v => v.volunteers?.user_id)
-                    .filter(Boolean)
-                    .map(userId => ({
-                        user_id: userId,
-                        message: `Um novo evento, "${event.name}", foi adicionado para o seu departamento.`,
-                        type: 'new_event_for_department' as const,
-                        related_event_id: event.id,
-                    }));
-                await createAndSendNotifications(notifications);
-            }
-        }
+    const handleAddNewEvent = () => {
+        const date = selectedDate.toISOString().split('T')[0];
+        setEditingEvent({ name: '', date: date, start_time: '09:00', end_time: '10:00', status: 'Pendente' } as Event);
+        setIsFormOpen(true);
+    };
+    
+    const handlePrev = () => calendarRef.current?.getApi().prev();
+    const handleNext = () => calendarRef.current?.getApi().next();
+    const handleToday = () => calendarRef.current?.getApi().today();
+    const handleViewChange = (view: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => {
+        calendarRef.current?.getApi().changeView(view);
     };
 
-    const renderContent = () => {
-        if (loading) return <p className="text-center text-slate-500 mt-10">Carregando eventos...</p>;
-        if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
 
-        const statusFilterOptions = [
-            { value: 'all', label: 'Todos os Status' },
-            { value: 'Confirmado', label: 'Confirmado' },
-            { value: 'Pendente', label: 'Pendente' },
-            { value: 'Cancelado', label: 'Cancelado' },
-        ];
-        const selectedStatusLabel = statusFilterOptions.find(o => o.value === statusFilter)?.label;
-
-
+    const renderModal = () => {
+        if (!isFormOpen) return null;
         return (
-            <div className="space-y-6">
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <input type="text" placeholder="Buscar por nome do evento..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
-                        <CustomDatePicker name="start" value={dateFilters.start} onChange={(value: string) => setDateFilters(prev => ({ ...prev, start: value }))} />
-                        <CustomDatePicker name="end" value={dateFilters.end} onChange={(value: string) => setDateFilters(prev => ({ ...prev, end: value }))} />
-                        <div className="relative" ref={statusDropdownRef}>
-                            <button
-                                type="button"
-                                onClick={() => setIsStatusDropdownOpen(prev => !prev)}
-                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer text-left h-full"
-                                aria-haspopup="listbox"
-                                aria-expanded={isStatusDropdownOpen}
-                            >
-                                <span className="text-slate-900">{selectedStatusLabel}</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform flex-shrink-0 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                            </button>
-                            {isStatusDropdownOpen && (
-                                <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
-                                    <ul className="py-1" role="listbox">
-                                        {statusFilterOptions.map(option => (
-                                            <li
-                                                key={option.value}
-                                                onClick={() => {
-                                                    setStatusFilter(option.value);
-                                                    setIsStatusDropdownOpen(false);
-                                                }}
-                                                className={`px-4 py-2 hover:bg-slate-100 cursor-pointer text-sm ${statusFilter === option.value ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
-                                                role="option"
-                                                aria-selected={statusFilter === option.value}
-                                            >
-                                                {option.label}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-4 items-center">
-                        <button 
-                            onClick={handleSetToday}
-                            className="px-4 py-2 md:px-5 md:py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm w-full sm:w-auto"
-                        >
-                            Hoje
-                        </button>
-                        <button onClick={handleClearFilters} className="text-sm text-blue-600 font-semibold hover:underline">Limpar Filtros</button>
-                    </div>
-                </div>
-
-                {paginatedEvents.length > 0 ? (
-                <>
-                    <div className="space-y-6">
-                        {paginatedEvents.map((event) => (
-                        <EventCard 
-                            key={event.id} 
-                            event={event} 
-                            userRole={userRole}
-                            leaderDepartmentId={leaderDepartmentId}
-                            onEdit={handleEditEvent}
-                            onDelete={handleDeleteRequest}
-                            onAddDepartment={handleAddDepartment}
-                            onMarkAttendance={handleMarkAttendance}
-                            isHighlighted={event.id === highlightedEventId}
-                            isFilteredByMyDepartment={false}
-                        />
-                        ))}
-                    </div>
-                    <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={handleCloseForm}>
+                <div className="w-full max-w-3xl my-8" onClick={e => e.stopPropagation()}>
+                    <NewEventForm 
+                        initialData={editingEvent} 
+                        onCancel={handleCloseForm} 
+                        onSave={handleSaveEvent} 
+                        isSaving={isSaving} 
+                        saveError={saveError || ''}
+                        userRole={userRole} 
+                        leaderDepartmentId={leaderDepartmentId}
+                        allDepartments={allDepartments}
                     />
-                </>
-                ) : (
-                <div className="text-center py-12 text-slate-500">
-                    <h3 className="text-lg font-medium text-slate-800">Nenhum evento encontrado</h3>
-                    <p className="mt-1 text-sm">Tente ajustar seus filtros ou adicione um novo evento.</p>
                 </div>
-                )}
             </div>
         );
     };
 
-    return (
-        <div className="space-y-6">
-             {notification && (
-                <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                    {notification.message}
-                </div>
-            )}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                <h1 className="text-3xl font-bold text-slate-800">Eventos</h1>
-                <p className="text-slate-500 mt-1">Gerencie os eventos e escalas da organização.</p>
-                </div>
-                {!isFormOpen && (
-                    <div className="flex items-center gap-2">
-                        <button 
-                            onClick={handleExportPDF}
-                            className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-                            <span>Exportar PDF</span>
-                        </button>
-                        {isAdmin && (
-                            <button 
-                            onClick={() => { setEditingEvent(null); showForm(); }}
-                            className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm"
-                            >
-                               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                                <span>Novo Evento</span>
-                            </button>
-                        )}
+    const calendarStyles = `
+        .fc { font-family: inherit; --fc-border-color: #f1f5f9; --fc-today-bg-color: transparent; } .fc .fc-view-harness { background: transparent; border: none; } .fc .fc-view { border: none; }
+        .fc-dayGridMonth-view .fc-col-header-cell-cushion { text-decoration: none !important; pointer-events: none; color: #334155 !important; font-size: 1.5rem !important; font-weight: 700 !important; text-transform: uppercase; padding: 0.5rem 0 !important; }
+        .fc .fc-timeGridWeek-view .fc-col-header-cell, .fc .fc-timeGridDay-view .fc-col-header-cell { border: none; padding-bottom: 1rem; }
+        .fc .fc-timeGridWeek-view .fc-col-header-cell-cushion, .fc .fc-timeGridDay-view .fc-col-header-cell-cushion { padding: 0 !important; }
+        .day-header-container { text-align: center; } .day-header-container .day-name { font-size: 0.8rem; font-weight: 600; color: #9ca3af; text-transform: uppercase; } .day-header-container .day-number { font-size: 2.25rem; font-weight: 700; color: #475569; line-height: 1; margin-top: 0.5rem; } 
+        .fc .fc-day-today .day-header-container .day-name { color: #1e293b; } .fc .fc-day-today .day-header-container .day-number { background-color: #2563eb; color: #fff; border-radius: 9999px; width: 48px; height: 48px; line-height: 48px; margin: 0.5rem auto 0; }
+        .fc-theme-standard .fc-scrollgrid { border: none; } .fc .fc-timegrid-slot-lane { border-color: #f1f5f9; } .fc .fc-timegrid-axis-frame { justify-content: flex-start; padding: 0 1rem 0 0; } .fc .fc-timegrid-slot-label-cushion { font-size: 0.8rem; color: #9ca3af; } .fc .fc-timegrid-now-indicator-line { border-color: #ef4444; }
+        .custom-event { border-width: 1px !important; border-radius: 0.5rem !important; font-weight: 500; cursor: pointer; }
+        .fc-daygrid-event { white-space: normal !important; margin-bottom: 4px !important; }
+        .mobile-calendar-view .fc-scrollgrid { border: none; } .mobile-calendar-view .fc .fc-col-header { border-bottom: 1px solid #e2e8f0 !important; } .mobile-calendar-view.week-view .fc-day-today { background-color: transparent !important; }
+        .mobile-calendar-view.day-view .fc .fc-col-header, .mobile-calendar-view.week-view .fc .fc-col-header { display: none; }
+        .mobile-calendar-view.day-view .fc-day-header { padding: 0.5rem 0; text-align: center; font-weight: 600; color: #1e293b; text-transform: capitalize; font-size: 1rem; }
+        .mobile-calendar-view.week-view .fc-col-header-cell-cushion { padding-top: 0 !important; padding-bottom: 0 !important; }
+        .mobile-calendar-view .fc-timegrid-body { padding-top: 0.5rem; } .mobile-calendar-view .fc-timegrid-slots { padding-bottom: 2rem; } .mobile-calendar-view .fc .fc-timegrid-slot-lane { border-bottom: 1px solid #f1f5f9; }
+        .mobile-calendar-view .fc .fc-timegrid-slot-label { border: none; text-align: left; padding-left: 0.75rem; } .mobile-calendar-view .fc .fc-timegrid-slot-label-cushion { font-size: 0.875rem; color: #94a3b8; position: relative; top: -0.7em; }
+        .mobile-calendar-view.day-view .fc-timegrid-event-harness { margin: 0 0.5rem 0 4rem !important; right: 0 !important; } .mobile-calendar-view.week-view .fc-timegrid-event-harness { margin: 1px 2px 0 2px !important; }
+        .mobile-calendar-view.month-view .fc-daygrid-day-top { display: flex; justify-content: center; } .mobile-calendar-view.month-view .fc-daygrid-day-frame { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 8px; min-height: 50px; }
+        .mobile-calendar-view.month-view .fc-daygrid-body { width: 100% !important; } .mobile-calendar-view.month-view .fc-daygrid-day-number { font-size: 0.875rem; font-weight: 600; color: #334155; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 9999px; text-align: center; }
+        .mobile-calendar-view.month-view .fc-day-today > .fc-daygrid-day-frame { background-color: transparent; } .mobile-calendar-view.month-view .fc-day.fc-day-selected > .fc-daygrid-day-frame { background-color: transparent; border-radius: 0.75rem; }
+        .mobile-calendar-view.month-view .fc-day-today:not(.fc-day-selected) .fc-daygrid-day-number { color: #2563eb; font-weight: 700; } .mobile-calendar-view.month-view .fc-day.fc-day-selected .fc-daygrid-day-number { background-color: #2563eb; color: white; }
+        .mobile-calendar-view.month-view .fc-daygrid-day-events { display: flex; justify-content: center; gap: 3px; margin-top: 4px; height: auto; flex-direction: row; flex-wrap: wrap; padding: 0 2px; }
+        .mobile-calendar-view.month-view .fc-daygrid-day-dot { width: 5px; height: 5px; border-radius: 50%; } .mobile-calendar-view.month-view .fc-day-other .fc-daygrid-day-top { opacity: 0.4; }
+        .mobile-calendar-view.month-view .fc-col-header-cell-cushion { font-size: 0.875rem !important; color: #334155; font-weight: 700; text-transform: uppercase; padding: 0.5rem 0; }
+        .mobile-calendar-view.month-view .fc-theme-standard .fc-scrollgrid { border-left: none; border-right: none; } .mobile-calendar-view.month-view .fc-daygrid-day, .mobile-calendar-view.month-view .fc-col-header-cell { border-color: #f8fafc; }
+        .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-col-header-cell:first-child, .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-daygrid-day:first-child { border-left-width: 0; }
+        .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-col-header-cell:last-child, .mobile-calendar-view.month-view .fc-scrollgrid-section .fc-daygrid-day:last-child { border-right-width: 0; }
+    `;
+
+    if (isMobile) {
+        return (
+            <div className={`bg-white flex flex-col ${mobileView === 'dayGridMonth' ? '' : 'h-full'}`}>
+                <style>{calendarStyles}</style>
+                <MobileHeader
+                    title={calendarTitle}
+                    onMenuClick={() => setIsSidebarOpen(true)}
+                    currentView={mobileView}
+                    onViewChange={setMobileView}
+                    onPrev={handlePrev}
+                    onNext={handleNext}
+                    onToday={handleToday}
+                    statusFilters={statusFilters}
+                    onStatusFilterChange={handleStatusFilterChange}
+                />
+                {mobileView === 'dayGridMonth' ? (
+                    <div className="flex flex-col">
+                         <div className={`mobile-calendar-view month-view`}>
+                            <FullCalendar
+                                key={`month-${monthViewDate.toISOString()}`}
+                                ref={calendarRef}
+                                plugins={[dayGridPlugin, interactionPlugin]}
+                                initialView="dayGridMonth"
+                                initialDate={monthViewDate}
+                                locale={ptBrLocale}
+                                firstDay={0}
+                                headerToolbar={false}
+                                events={calendarEvents}
+                                eventDisplay="block"
+                                eventContent={renderPillEventContent}
+                                dateClick={handleDateClick}
+                                dayCellClassNames={({ date }) => isSameDay(date, selectedDate) ? 'fc-day-selected' : ''}
+                                datesSet={handleDatesSet}
+                                height="auto"
+                                dayHeaderContent={(arg) => {
+                                    const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat as Intl.DateTimeFormatOptions).format(arg.date) : arg.text;
+                                    return headerText.replace('.', '');
+                                }}
+                            />
+                        </div>
+                        <MobileMonthEventList events={allEvents.filter(e => statusFilters.includes(e.status))} selectedDate={selectedDate} onEventClick={handleMobileEventClick} />
+                    </div>
+                ) : (
+                    <div className="flex flex-col flex-grow h-full">
+                        {(mobileView === 'timeGridDay' || mobileView === 'timeGridWeek') && <DateScroller selectedDate={selectedDate} onDateSelect={handleDateScrollerSelect} />}
+                        <div className={`mobile-calendar-view flex-grow ${mobileView === 'timeGridDay' ? 'day-view' : 'week-view'}`}>
+                            <FullCalendar
+                                key={mobileView}
+                                ref={calendarRef}
+                                plugins={[timeGridPlugin, interactionPlugin]}
+                                initialView={mobileView}
+                                initialDate={selectedDate}
+                                locale={ptBrLocale}
+                                firstDay={0}
+                                headerToolbar={false}
+                                allDaySlot={false}
+                                slotMinTime="06:00:00"
+                                slotMaxTime="24:00:00"
+                                scrollTime={new Date().getHours() + ':00:00'}
+                                height="100%"
+                                dayHeaderContent={renderMobileWeekDayHeader}
+                                events={calendarEvents}
+                                eventClick={handleEventClick}
+                                editable={isAdmin}
+                                droppable={isAdmin}
+                                eventDrop={handleEventDrop}
+                                eventResizableFromStart={isAdmin}
+                                eventResize={handleEventResize}
+                                datesSet={handleDatesSet}
+                            />
+                        </div>
                     </div>
                 )}
+                {isAdmin && (
+                    <button onClick={handleAddNewEvent} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center z-20">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                    </button>
+                )}
+                {renderModal()}
             </div>
+        );
+    }
 
-            {isFormOpen ? (
-                <NewEventForm 
-                initialData={editingEvent}
-                onCancel={hideForm}
-                onSave={handleSaveEvent}
-                isSaving={isSaving}
-                saveError={saveError}
-                userRole={userRole}
-                leaderDepartmentId={leaderDepartmentId}
-                allDepartments={allDepartments}
-                />
-            ) : (
-                renderContent()
-            )}
-
-            <ConfirmationModal
-                isOpen={isDeleteModalOpen}
-                onClose={() => {setIsDeleteModalOpen(false); setEventToDeleteId(null);}}
-                onConfirm={handleConfirmDelete}
-                title="Confirmar Exclusão"
-                message="Tem certeza de que deseja excluir este evento? Todos os dados de escala associados serão perdidos."
+    return (
+        <div className="bg-white p-6 rounded-2xl shadow-sm h-full flex flex-col">
+            <style>{calendarStyles}</style>
+             <CalendarHeader
+                title={calendarTitle}
+                currentView={desktopView}
+                onPrev={handlePrev}
+                onNext={handleNext}
+                onToday={handleToday}
+                onViewChange={handleViewChange}
+                onNewEvent={handleAddNewEvent}
+                isAdmin={isAdmin}
+                statusFilters={statusFilters}
+                onStatusFilterChange={handleStatusFilterChange}
             />
-            {isScannerOpen && (
-                <QRScannerModal
-                    isOpen={isScannerOpen}
-                    onClose={() => {setIsScannerOpen(false); setScanningEvent(null);}}
-                    onScanSuccess={handleScanSuccess}
-                    scanningEventName={scanningEvent?.name}
+            <div className="flex-grow">
+                <FullCalendar
+                    ref={calendarRef}
+                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    headerToolbar={false}
+                    locale={ptBrLocale}
+                    firstDay={0}
+                    events={calendarEvents}
+                    editable={isAdmin}
+                    selectable={isAdmin}
+                    droppable={isAdmin}
+                    eventResizableFromStart={isAdmin}
+                    nowIndicator
+                    dayHeaderContent={(arg) => {
+                        if (arg.view.type === 'timeGridWeek' || arg.view.type === 'timeGridDay') {
+                            return renderDayHeaderContent(arg);
+                        }
+                        const headerText = ptBrLocale.dayHeaderFormat ? new Intl.DateTimeFormat('pt-BR', ptBrLocale.dayHeaderFormat as Intl.DateTimeFormatOptions).format(arg.date) : arg.text;
+                        return headerText.replace('.', '');
+                    }}
+                    eventContent={renderPillEventContent}
+                    eventClick={handleEventClick}
+                    dateClick={(arg) => handleDateClick({ date: arg.date, dateStr: arg.dateStr })}
+                    eventDrop={handleEventDrop}
+                    eventResize={handleEventResize}
+                    dayMaxEvents={desktopView === 'dayGridMonth' ? 4 : false}
+                    height="100%"
+                    datesSet={handleDatesSet}
+                    slotMinTime="06:00:00"
+                    slotMaxTime="24:00:00"
                 />
-            )}
+            </div>
+            {renderModal()}
         </div>
     );
-}
+};
 
-// FIX: Changed export name from EventsPage to SchedulesPage to match the component's name and resolve the error.
-export default SchedulesPage;
+export default CalendarPage;

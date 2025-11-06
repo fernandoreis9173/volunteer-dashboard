@@ -1,5 +1,6 @@
 // FIX: Restored Supabase v2 User type import.
-import type { User } from '@supabase/supabase-js';
+// FIX: Export the User type so it can be imported from this module in other files like AdminPage.tsx.
+export type { User } from '@supabase/supabase-js';
 
 export interface Volunteer {
   name: string;

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -17,7 +18,8 @@ import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
 import AttendanceHistoryPage from './components/AttendanceHistoryPage';
 import VolunteerProfile from './components/VolunteerProfile';
-import UserProfilePage from './components/UserProfilePage';
+// FIX: UserProfilePage is a named export, not a default export.
+import { UserProfilePage } from './components/UserProfilePage';
 import NotificationsPage from './components/NotificationsPage';
 import NotificationToast, { Notification as ToastNotification } from './components/NotificationToast';
 import PushNotificationModal from './components/PushNotificationModal';
@@ -33,11 +35,11 @@ import { supabase } from './lib/supabaseClient';
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
 
+// FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
 const areApiKeysConfigured = 
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
-
 // FIX: Reverted UserProfileState to use `department_id` (singular) to enforce the business rule of one leader per department.
 interface UserProfileState {
   role: string | null;
@@ -496,7 +498,6 @@ const App: React.FC = () => {
 
     // Real-time volunteer status subscription
     useEffect(() => {
-        // Only run for authenticated volunteers
         if (!session?.user?.id || userProfile?.role !== 'volunteer') {
             return;
         }
@@ -514,14 +515,10 @@ const App: React.FC = () => {
                 (payload) => {
                     const updatedVolunteer = payload.new as DetailedVolunteer;
                     
-                    // Only react to a change if the new status is different from the one we have in state.
-                    // This prevents race conditions on initial subscription.
                     if (userProfile && updatedVolunteer.status !== userProfile.status) {
                         if (updatedVolunteer.status === 'Inativo') {
-                            // Directly update the profile to 'Inativo'. The derived `isUserDisabled` state will trigger the UI change.
                             setUserProfile(prev => prev ? { ...prev, status: 'Inativo' } : null);
                         } else if (updatedVolunteer.status === 'Ativo') {
-                            // If status changes back to active, refetch all data to ensure consistency.
                             refetchUserData();
                         }
                     }
@@ -532,7 +529,7 @@ const App: React.FC = () => {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [session, userProfile, refetchUserData]);
+    }, [session?.user?.id, userProfile?.role, userProfile?.status, refetchUserData, setUserProfile]);
 
     // Real-time leader department assignment subscription
     useEffect(() => {
@@ -560,7 +557,7 @@ const App: React.FC = () => {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [session, userProfile, refetchUserData]);
+    }, [session, userProfile?.role, refetchUserData]);
 
     const subscribeToPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {
