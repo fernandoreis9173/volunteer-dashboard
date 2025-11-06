@@ -109,7 +109,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
           if (joinRequestsRes.error) {
             // Gracefully handle if the table doesn't exist.
             // A "relation does not exist" error has code '42P01' from postgres.
-            if ((joinRequestsRes.error as any).code !== '42P01' && (joinRequestsRes.error as any).code !== 'PGRST205') {
+            if ((joinRequestsRes.error as any).code !== '42P01') {
                 console.warn("Could not fetch department join requests, proceeding without them. Error:", getErrorMessage(joinRequestsRes.error));
             }
             setJoinRequests([]);
