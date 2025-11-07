@@ -209,7 +209,7 @@ const AdminPage: React.FC = () => {
         <div className="space-y-8">
             <div>
                 <h1 className="text-3xl font-bold text-slate-800">Painel do Administrador</h1>
-                <p className="text-slate-500 mt-1">Gerencie usuários e envie notificações para toda a igreja.</p>
+                <p className="text-slate-500 mt-1">Gerencie usuários e envie notificações para toda a organização.</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
@@ -239,7 +239,7 @@ const AdminPage: React.FC = () => {
                                         aria-expanded={isRoleDropdownOpen}
                                     >
                                         <span className="text-slate-900">{selectedRoleLabel}</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                                     </button>
                                     {isRoleDropdownOpen && (
                                         <div className="absolute z-10 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
@@ -288,7 +288,7 @@ const AdminPage: React.FC = () => {
                         {broadcastError && <p className="text-sm text-red-500">{broadcastError}</p>}
                         {broadcastSuccess && <p className="text-sm text-green-500">{broadcastSuccess}</p>}
                         <div className="text-right mt-auto">
-                            <button type="submit" disabled={broadcastLoading} className="px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg disabled:bg-amber-300">
+                            <button type="submit" disabled={broadcastLoading} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-800 disabled:bg-blue-500">
                                 {broadcastLoading ? 'Enviando...' : 'Enviar para Todos'}
                             </button>
                         </div>

@@ -10,6 +10,7 @@ interface NotificationsPageProps {
   session: Session | null;
   onDataChange: () => void;
   onNavigate: (page: Page) => void;
+  userRole: string | null;
 }
 
 const NOTIFICATIONS_PER_PAGE = 15;
@@ -54,7 +55,7 @@ const NotificationIcon: React.FC<{ type: NotificationRecord['type'] }> = ({ type
     }
 };
 
-const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataChange, onNavigate }) => {
+const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataChange, onNavigate, userRole }) => {
     const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -187,12 +188,23 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
         if (!notification.is_read) {
             markAsRead(notification.id);
         }
-        if (notification.related_event_id && (notification.type === 'new_schedule' || notification.type === 'event_update' || notification.type === 'new_event_for_department' || notification.type === 'new_event_for_leader' || notification.type === 'shift_swap_request')) {
-            sessionStorage.setItem('highlightEventId', String(notification.related_event_id));
-            onNavigate('events');
-        } else if (notification.related_event_id) {
-            sessionStorage.setItem('showEventDetailsForId', String(notification.related_event_id));
-            onNavigate('dashboard');
+
+        const isVolunteer = userRole === 'volunteer';
+
+        const eventNavTypes: NotificationRecord['type'][] = [
+            'new_schedule', 'event_update', 'new_event_for_department', 
+            'new_event_for_leader', 'shift_swap_request', 'info'
+        ];
+
+        if (notification.related_event_id && eventNavTypes.includes(notification.type)) {
+            if (isVolunteer) {
+                // Voluntários veem eventos em seu dashboard.
+                onNavigate('dashboard');
+            } else {
+                // Administradores/Líderes têm uma página de eventos que pode destacar eventos.
+                sessionStorage.setItem('highlightEventId', String(notification.related_event_id));
+                onNavigate('events');
+            }
         }
     };
 

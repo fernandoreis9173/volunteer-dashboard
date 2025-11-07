@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TimelineTemplate, TimelineItem, Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
-import SmartSearch, { SearchItem } from './SmartSearch';
+import SmartSearch, { type SearchItem } from './SmartSearch';
 
 interface TimelineEditorFormProps {
     initialData: TimelineTemplate | null;
@@ -84,8 +84,8 @@ const LinkManager: React.FC<{
             {showForm && (
                 <div className="space-y-2 p-3 bg-white rounded-md border border-slate-300">
                     <p className="text-sm font-semibold text-slate-700">{editingLink ? 'Editar Link' : 'Novo Link'}</p>
-                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título do Link" className="w-full text-sm p-1 border-slate-300 rounded-md"/>
-                    <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="URL" className="w-full text-sm p-1 border-slate-300 rounded-md"/>
+                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título do Link (Ex: Louvor 1)" className="w-full text-sm p-1 border-slate-300 rounded-md"/>
+                    <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://youtube.com/..." className="w-full text-sm p-1 border-slate-300 rounded-md"/>
                     <div className="flex justify-end gap-2 mt-1">
                         <button type="button" onClick={handleCancel} className="text-xs px-2 py-1 rounded-md bg-slate-200 hover:bg-slate-300">Cancelar</button>
                         <button type="button" onClick={handleSaveLink} className="text-xs px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700">{editingLink ? 'Salvar Alterações' : 'Salvar Link'}</button>
@@ -105,9 +105,6 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
 
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [allTemplates, setAllTemplates] = useState<TimelineTemplate[]>([]);
-    const [allEvents, setAllEvents] = useState<SearchItem[]>([]);
-    const [selectedEvent, setSelectedEvent] = useState<SearchItem | null>(null);
-    const [associationType, setAssociationType] = useState<'principal' | 'kids'>('principal');
 
 
     const dragItem = useRef<number | null>(null);
@@ -116,7 +113,24 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
     useEffect(() => {
         if (initialData) {
             setName(initialData.nome_modelo || '');
-            setItems([...(initialData.cronograma_itens || [])].sort((a, b) => a.ordem - b.ordem).map(item => ({...item, links: (item.links || []).map(link => ({...link, id: crypto.randomUUID()})) })));
+            const sortedItems = [...(initialData.cronograma_itens || [])].sort((a, b) => a.ordem - b.ordem);
+            const parsedItems = sortedItems.map(item => {
+                let parsedLinks = item.links || [];
+                if (typeof item.links === 'string') {
+                    try {
+                        // Reintroduzindo a serialização manual para garantir consistência
+                        parsedLinks = JSON.parse(item.links);
+                    } catch (e) {
+                        console.error("Failed to parse links JSON string:", e);
+                        parsedLinks = [];
+                    }
+                }
+                return {
+                    ...item,
+                    links: parsedLinks.map(link => ({...link, id: link.id || crypto.randomUUID()}))
+                };
+            });
+            setItems(parsedItems);
         } else {
             setName('');
             setItems([]);
@@ -126,8 +140,6 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
             const { data: templatesData } = await supabase.from('cronograma_modelos').select('*, cronograma_itens(*)');
             setAllTemplates(templatesData || []);
 
-            const { data: eventsData } = await supabase.from('events').select('id, name').order('date', { ascending: false });
-            setAllEvents((eventsData as SearchItem[]) || []);
         };
         fetchData();
     }, [initialData]);
@@ -195,7 +207,20 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
     };
     
     const handleImportTemplate = (template: TimelineTemplate) => {
-        const itemsToImport = (template.cronograma_itens || []).map(item => ({ ...item, links: (item.links || []).map(link => ({...link, id: crypto.randomUUID()})) }));
+        const itemsToImport = (template.cronograma_itens || []).map(item => {
+            let parsedLinks = item.links || [];
+             if (typeof item.links === 'string') {
+                try {
+                    parsedLinks = JSON.parse(item.links);
+                } catch (e) {
+                    parsedLinks = [];
+                }
+            }
+            return {
+                ...item,
+                links: parsedLinks.map(link => ({...link, id: link.id || crypto.randomUUID()}))
+            };
+        });
         setItems(prevItems => [...prevItems, ...itemsToImport].map((item, index) => ({ ...item, ordem: index })));
         setIsImportModalOpen(false);
     };
@@ -227,24 +252,10 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                     titulo_item: item.titulo_item,
                     duracao_minutos: Number(item.duracao_minutos) || 0,
                     detalhes: item.detalhes,
-                    links: item.links && item.links.length > 0 ? item.links.map(({ id, ...rest }) => rest) : null,
+                    links: item.links && item.links.length > 0 ? JSON.stringify(item.links.map(({ id, ...rest }) => rest)) : null,
                 }));
                 const { error: itemsError } = await supabase.from('cronograma_itens').insert(itemsPayload);
                 if (itemsError) throw itemsError;
-            }
-
-            if (selectedEvent) {
-                const updatePayload: { [key: string]: string | null } = {};
-                if (associationType === 'principal') {
-                    updatePayload.cronograma_principal_id = templateId;
-                } else {
-                    updatePayload.cronograma_kids_id = templateId;
-                }
-                const { error: eventUpdateError } = await supabase
-                    .from('events')
-                    .update(updatePayload)
-                    .eq('id', selectedEvent.id);
-                if (eventUpdateError) throw eventUpdateError;
             }
             onSave();
         } catch (err) {
@@ -273,7 +284,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                                 </button>
                             </div>
                         </div>
-                        <textarea value={item.detalhes} onChange={(e) => handleItemChange(index, 'detalhes', e.target.value)} placeholder="Detalhes" rows={2} className="w-full text-sm px-2 py-1 border border-slate-300 rounded-md"/>
+                        <textarea value={item.detalhes} onChange={(e) => handleItemChange(index, 'detalhes', e.target.value)} placeholder="Detalhes (ex: lista de músicas, nome do preletor...)" rows={2} className="w-full text-sm px-2 py-1 border border-slate-300 rounded-md"/>
                         <LinkManager itemIndex={index} links={item.links} onAdd={handleAddLink} onRemove={handleRemoveLink} onUpdate={handleUpdateLink} />
                     </div>
                 ))}
@@ -300,39 +311,23 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                 
                 {renderItemList()}
                 
-                <div className="space-y-4 pt-6 border-t border-slate-200">
-                     <h3 className="font-semibold text-slate-800">Associar a um Evento (Opcional)</h3>
-                     <SmartSearch items={allEvents} selectedItems={selectedEvent ? [selectedEvent] : []} onSelectItem={(item) => setSelectedEvent(item)} placeholder="Buscar por evento para associar..."/>
-                     {selectedEvent && (
-                        <div className="mt-2 p-3 bg-slate-50 rounded-lg">
-                            <p className="text-sm text-slate-600">Modelo será associado a: <strong>{selectedEvent.name}</strong></p>
-                            <div className="mt-2 flex items-center gap-4">
-                                <label className="flex items-center text-sm">
-                                    <input 
-                                        type="radio" 
-                                        name="associationType" 
-                                        value="principal" 
-                                        checked={associationType === 'principal'} 
-                                        onChange={() => setAssociationType('principal')}
-                                        className="mr-1.5"
-                                    />
-                                    Cronograma Principal
-                                </label>
-                                <label className="flex items-center text-sm">
-                                    <input 
-                                        type="radio" 
-                                        name="associationType" 
-                                        value="kids" 
-                                        checked={associationType === 'kids'} 
-                                        onChange={() => setAssociationType('kids')}
-                                        className="mr-1.5"
-                                    />
-                                    Cronograma Kids
-                                </label>
+                <div className="pt-6 border-t border-slate-200">
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg" role="alert">
+                        <div className="flex">
+                            <div className="flex-shrink-0">
+                                <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm text-blue-800">
+                                    Na hora de criar ou editar seu evento na página 'Eventos', você poderá associar este cronograma a ele.
+                                </p>
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
+
 
                 <div className="pt-6 border-t border-slate-200 flex justify-end items-center gap-3">
                     {error && <p className="text-sm text-red-500 mr-auto">{error}</p>}

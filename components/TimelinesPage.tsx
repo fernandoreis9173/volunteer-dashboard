@@ -4,6 +4,7 @@ import { getErrorMessage } from '../lib/utils';
 import { TimelineTemplate } from '../types';
 import TimelineEditorForm from './TimelineEditorForm';
 import ConfirmationModal from './ConfirmationModal';
+import BulkAssociateTimelineModal from './BulkAssociateTimelineModal';
 
 const TimelinesPage: React.FC = () => {
     const [templates, setTemplates] = useState<TimelineTemplate[]>([]);
@@ -13,6 +14,7 @@ const TimelinesPage: React.FC = () => {
     const [editingTemplate, setEditingTemplate] = useState<TimelineTemplate | null>(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [templateToDelete, setTemplateToDelete] = useState<TimelineTemplate | null>(null);
+    const [isBulkAssociateModalOpen, setIsBulkAssociateModalOpen] = useState(false);
 
     const fetchTemplates = useCallback(async () => {
         setLoading(true);
@@ -84,7 +86,7 @@ const TimelinesPage: React.FC = () => {
         const totalMinutes = (template.cronograma_itens || []).reduce((sum, item) => sum + (item.duracao_minutos || 0), 0);
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
-        return `${hours}h ${minutes}min`;
+        return `${hours}h ${String(minutes).padStart(2, '0')}min`;
     };
     
     const renderContent = () => {
@@ -126,10 +128,18 @@ const TimelinesPage: React.FC = () => {
                     <p className="text-slate-500 mt-1">Crie e gerencie modelos de cronograma para os eventos.</p>
                 </div>
                 {!isFormVisible && (
-                    <button onClick={handleNewTemplate} className="w-full md:w-auto justify-center bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                        <span>Novo Modelo</span>
-                    </button>
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        <button onClick={() => setIsBulkAssociateModalOpen(true)} className="w-full md:w-auto justify-center bg-green-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-green-700 transition-colors shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                               <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.536a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                           </svg>
+                           <span>Associar a Eventos</span>
+                        </button>
+                        <button onClick={handleNewTemplate} className="w-full md:w-auto justify-center bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            <span>Novo Modelo</span>
+                        </button>
+                    </div>
                 )}
             </div>
             
@@ -147,6 +157,11 @@ const TimelinesPage: React.FC = () => {
                 onConfirm={handleConfirmDelete}
                 title="Confirmar Exclusão"
                 message={`Tem certeza que deseja excluir o modelo "${templateToDelete?.nome_modelo}"? Esta ação não pode ser desfeita.`}
+            />
+            <BulkAssociateTimelineModal
+                isOpen={isBulkAssociateModalOpen}
+                onClose={() => setIsBulkAssociateModalOpen(false)}
+                templates={templates}
             />
         </div>
     );
