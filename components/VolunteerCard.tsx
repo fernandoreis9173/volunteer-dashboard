@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { DetailedVolunteer, Department } from '../types';
 
 const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
@@ -15,6 +15,7 @@ interface VolunteerCardProps {
     onEdit: (volunteer: DetailedVolunteer) => void;
     onInvite: (volunteer: DetailedVolunteer) => void;
     onRemoveFromDepartment: (volunteer: DetailedVolunteer) => void;
+    onRequestAction: (volunteer: DetailedVolunteer, type: 'disable' | 'enable') => void;
     userRole: string | null;
     leaderDepartmentName: string | null;
     isInvitePending: boolean;
@@ -38,7 +39,19 @@ const formatPhoneNumber = (value: string) => {
     return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
 };
 
-const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvite, onRemoveFromDepartment, userRole, leaderDepartmentName, isInvitePending }) => {
+const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvite, onRemoveFromDepartment, onRequestAction, userRole, leaderDepartmentName, isInvitePending }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+              setIsMenuOpen(false);
+          }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   
   const getAvailabilityText = () => {
     let availabilityData: any = volunteer.availability;
@@ -86,18 +99,27 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
           </div>
           <div>
             <p className="font-bold text-slate-800">{volunteer.name}</p>
-            {/* Status display removed as the concept is deprecated from this view */}
+            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${volunteer.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{volunteer.status}</span>
           </div>
         </div>
         <div className="flex items-center space-x-1 text-slate-400">
           {isAdmin && (
-            <>
-              <button onClick={() => onEdit(volunteer)} className="p-1.5 rounded-md hover:bg-slate-100 hover:text-slate-600">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-                </svg>
+            <div className="relative" ref={menuRef}>
+              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-1.5 rounded-md hover:bg-slate-100 hover:text-slate-600">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" /></svg>
               </button>
-            </>
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
+                  <ul className="py-1">
+                    {volunteer.status === 'Inativo' ? (
+                      <li><button onClick={() => { onRequestAction(volunteer, 'enable'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Voluntário</button></li>
+                    ) : (
+                      <li><button onClick={() => { onRequestAction(volunteer, 'disable'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Desativar Voluntário</button></li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

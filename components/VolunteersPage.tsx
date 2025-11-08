@@ -44,6 +44,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   const [leaderDepartmentName, setLeaderDepartmentName] = useState<string | null>(null);
   const [isSendingInviteModalOpen, setIsSendingInviteModalOpen] = useState(false);
 
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [volunteerForAction, setVolunteerForAction] = useState<DetailedVolunteer | null>(null);
+  const [actionType, setActionType] = useState<'disable' | 'enable' | null>(null);
+
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
   
@@ -349,6 +353,36 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     }
   };
 
+  const handleRequestAction = (volunteer: DetailedVolunteer, type: 'disable' | 'enable') => {
+      setVolunteerForAction(volunteer);
+      setActionType(type);
+      setIsStatusModalOpen(true);
+  };
+
+  const handleConfirmAction = async () => {
+      if (!volunteerForAction || !actionType) return;
+      
+      const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
+      
+      try {
+          const { error } = await supabase.functions.invoke(functionName, {
+              body: { userId: volunteerForAction.user_id, volunteerId: volunteerForAction.id },
+          });
+  
+          if (error) throw error;
+          
+          showNotification(`Voluntário ${actionType === 'disable' ? 'desativado' : 'reativado'} com sucesso!`, 'success');
+          await fetchVolunteers(); // Refetch to update UI
+  
+      } catch (err: any) {
+          showNotification(`Erro ao ${actionType === 'disable' ? 'desativar' : 'reativar'} voluntário: ${getErrorMessage(err)}`, 'error');
+      } finally {
+          setIsStatusModalOpen(false);
+          setVolunteerForAction(null);
+          setActionType(null);
+      }
+  };
+
   const renderContent = () => {
     if (loading) return <p className="text-center text-slate-500 mt-10">Carregando voluntários...</p>;
     if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
@@ -379,6 +413,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                   onEdit={handleEditVolunteer}
                   onInvite={handleInviteRequest}
                   onRemoveFromDepartment={handleRemoveRequest}
+                  onRequestAction={handleRequestAction}
                   userRole={userRole}
                   leaderDepartmentName={leaderDepartmentName}
                   isInvitePending={pendingInvites.has(volunteer.id!)}
@@ -469,6 +504,16 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
             isLoading={true}
         />
     )}
+    <ConfirmationModal
+        isOpen={isStatusModalOpen}
+        onClose={() => setIsStatusModalOpen(false)}
+        onConfirm={handleConfirmAction}
+        title={`${actionType === 'disable' ? 'Desativar' : 'Reativar'} Voluntário`}
+        message={`Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o voluntário ${volunteerForAction?.name}?`}
+        isLoading={isSaving}
+        confirmButtonClass={actionType === 'disable' ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'}
+        iconType={actionType === 'disable' ? 'warning' : 'info'}
+    />
     </div>
   );
 };
