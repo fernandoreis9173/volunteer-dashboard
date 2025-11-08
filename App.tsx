@@ -309,18 +309,36 @@ const App: React.FC = () => {
     }, [fetchLeaders]);
 
     const checkForActiveEvent = useCallback(async () => {
-        if (!userId || !userProfile?.role) {
+        if (!userId || !userProfile) {
             setActiveEvent(null);
             return;
         }
     
         try {
-            // A melhor solução é usar a função RPC 'get_events_for_user' que já busca todos os eventos relevantes
-            // para o usuário logado, independentemente da sua função. Isso simplifica o código, evita erros
-            // de consulta complexa e centraliza a lógica de busca de dados no backend.
-            const { data: allEventsData, error: rpcError } = await supabase.rpc('get_events_for_user');
+            let allEventsData: any[] | null = null;
+            let fetchError: any = null;
 
-            if (rpcError) throw rpcError;
+            // FIX: Use a different data fetching strategy for volunteers to avoid an "ambiguous user_id" error
+            // in the 'get_events_for_user' RPC function. Admins and leaders continue to use the RPC.
+            if (userProfile.role === 'admin' || userProfile.role === 'leader' || userProfile.role === 'lider') {
+                const { data, error } = await supabase.rpc('get_events_for_user');
+                allEventsData = data;
+                fetchError = error;
+            } else if (userProfile.role === 'volunteer' && userProfile.volunteer_id) {
+                // Volunteers use a direct query filtered by their volunteer ID.
+                const { data, error } = await supabase
+                    .from('events')
+                    .select('*, event_departments(*, departments(*)), event_volunteers!inner(*, volunteers(*))')
+                    .eq('event_volunteers.volunteer_id', userProfile.volunteer_id);
+                allEventsData = data;
+                fetchError = error;
+            } else {
+                // Fallback for any other case
+                setActiveEvent(null);
+                return;
+            }
+    
+            if (fetchError) throw fetchError;
     
             if (!allEventsData || allEventsData.length === 0) {
                 setActiveEvent(null);
@@ -356,7 +374,7 @@ const App: React.FC = () => {
             console.error("Error checking for active event:", errorMessage);
             setActiveEvent(null);
         }
-    }, [userId, userProfile?.role]);
+    }, [userId, userProfile]);
     
     useEffect(() => {
         checkForActiveEvent(); // Check immediately on session change/load
