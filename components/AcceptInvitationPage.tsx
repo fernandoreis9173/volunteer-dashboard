@@ -68,7 +68,7 @@ const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onC
     </div>
 );
 
-const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove: () => void; }> = ({ text, color, onRemove }) => {
+const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove: () => void; disabled?: boolean }> = ({ text, color, onRemove, disabled = false }) => {
     const getInitials = (name: string): string => {
         if (!name) return '??';
         const parts = name.trim().split(' ').filter(p => p);
@@ -102,10 +102,11 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
             <button
                 type="button"
                 onClick={onRemove}
-                className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover}`}
+                disabled={disabled}
+                className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover} ${disabled ? 'hidden' : ''}`}
                 aria-label={`Remove ${text}`}
             >
-                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
@@ -195,6 +196,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
     
     const [departments, setDepartments] = useState<Department[]>([]);
     const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
+    const [areDepartmentsPreselected, setAreDepartmentsPreselected] = useState(false);
     
     useEffect(() => {
         const validateTokenAndFetchData = async () => {
@@ -221,10 +223,21 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
               .select('id, name')
               .eq('status', 'Ativo')
               .order('name');
+
             if (deptError) {
               console.error("Could not fetch departments for volunteer", getErrorMessage(deptError));
             } else {
-              setDepartments(deptData as Department[] || []);
+              const allDepts = (deptData as Department[] || []);
+              setDepartments(allDepts);
+
+              const invitedDeptIds = user.user_metadata?.invited_department_ids;
+              if (Array.isArray(invitedDeptIds) && invitedDeptIds.length > 0) {
+                  const preselected = allDepts.filter(d => d.id && invitedDeptIds.includes(d.id));
+                  if (preselected.length > 0) {
+                      setSelectedDepartments(preselected);
+                      setAreDepartmentsPreselected(true);
+                  }
+              }
             }
           }
           setIsValidating(false);
@@ -252,6 +265,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
     };
 
     const handleRemoveDepartment = (departmentId: number | string) => {
+        if (areDepartmentsPreselected) return;
         setSelectedDepartments(selectedDepartments.filter(d => d.id !== departmentId));
     };
 
@@ -384,7 +398,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 <div className="text-center">
                     <div className="flex justify-center mb-4">
                       <div className="p-3 bg-blue-600 text-white rounded-xl">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5}>
                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
                         </svg>
                       </div>
@@ -439,6 +453,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                         selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
                                         onSelectItem={handleSelectDepartment}
                                         placeholder="Buscar por departamento..."
+                                        disabled={areDepartmentsPreselected}
                                     />
                                     <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
                                         {selectedDepartments.map((department) => (
@@ -447,6 +462,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                                 text={department.name}
                                                 color="yellow"
                                                 onRemove={() => handleRemoveDepartment(department.id!)}
+                                                disabled={areDepartmentsPreselected}
                                             />
                                         ))}
                                     </div>

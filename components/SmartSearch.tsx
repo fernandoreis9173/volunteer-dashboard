@@ -18,9 +18,10 @@ interface SmartSearchProps {
   selectedItems: SearchItem[];
   onSelectItem: (item: SearchItem) => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
-const SmartSearch: React.FC<SmartSearchProps> = ({ items, selectedItems, onSelectItem, placeholder }) => {
+const SmartSearch: React.FC<SmartSearchProps> = ({ items, selectedItems, onSelectItem, placeholder, disabled = false }) => {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -66,9 +67,10 @@ const SmartSearch: React.FC<SmartSearchProps> = ({ items, selectedItems, onSelec
         onFocus={() => setIsOpen(true)}
         placeholder={placeholder}
         autoComplete="off"
-        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
+        disabled={disabled}
+        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900 disabled:bg-slate-100 disabled:cursor-not-allowed"
       />
-      {isOpen && (
+      {isOpen && !disabled && (
         <ul className="absolute z-10 w-full bg-white border border-slate-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-auto">
           {filteredItems.length > 0 ? (
             filteredItems.map(item => (
