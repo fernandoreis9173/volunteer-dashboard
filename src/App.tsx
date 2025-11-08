@@ -702,7 +702,16 @@ const App: React.FC = () => {
         }
     }
 
-    // If there's a session but the user's status is 'Pendente', force them to the registration page.
+    // At this point, we have a session.
+    // CRITICAL FIX: If the user is on the accept-invite URL, KEEP them there,
+    // even if they now have a session. This prevents the redirect race condition.
+    // The AcceptInvitationPage will handle the final sign-out and redirect.
+    if (authView === 'accept-invite') {
+        return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
+    }
+
+    // Fallback: If a user has a session but their profile is still pending (e.g., closed tab),
+    // force them to the registration page.
     if (userProfile?.status === 'Pendente') {
         return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
     }
