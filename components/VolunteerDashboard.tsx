@@ -1,5 +1,7 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { DetailedVolunteer, DashboardEvent, Page, Event as VolunteerEvent, Invitation } from '../types';
+import { DetailedVolunteer, DashboardEvent, Page, Event as VolunteerEvent, Invitation, VolunteerSchedule } from '../types';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Restored Supabase v2 types for type safety.
 import { type Session, type User } from '@supabase/supabase-js';
@@ -34,7 +36,7 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onShowDetails })
                     </div>
                 </div>
                  <button onClick={handleClick} className="p-2 text-red-600 hover:text-red-800 bg-red-100 hover:bg-red-200 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 flex-shrink-0" aria-label="Ver detalhes do evento">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </button>
@@ -46,7 +48,6 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onShowDetails })
 
 interface VolunteerDashboardProps {
   session: Session | null;
-  onDataChange: () => void;
   activeEvent: VolunteerEvent | null;
   onNavigate: (page: Page) => void;
   leaders: User[];
@@ -59,7 +60,7 @@ const getShortName = (fullName?: string | null): string => {
 };
 
 const GenericDepartmentIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" />
     </svg>
@@ -74,12 +75,11 @@ const getDepartmentIcon = (deptName: string | undefined) => {
 };
 
 
-const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onDataChange, activeEvent, onNavigate, leaders }) => {
+const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, activeEvent, onNavigate, leaders }) => {
     const [volunteerProfile, setVolunteerProfile] = useState<DetailedVolunteer | null>(null);
-    const [todayEvents, setTodayEvents] = useState<DashboardEvent[]>([]);
-    const [upcomingEvents, setUpcomingEvents] = useState<DashboardEvent[]>([]);
+    const [todayEvents, setTodayEvents] = useState<VolunteerSchedule[]>([]);
+    const [upcomingEvents, setUpcomingEvents] = useState<VolunteerSchedule[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
-    const [pendingSwaps, setPendingSwaps] = useState<Set<number>>(new Set());
     const [stats, setStats] = useState({ upcoming: 0, attended: 0, totalScheduled: 0, eventsToday: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -87,13 +87,13 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
     const [isLiveEventModalOpen, setIsLiveEventModalOpen] = useState(false);
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [qrCodeData, setQrCodeData] = useState<object | null>(null);
-    const [qrCodeEvent, setQrCodeEvent] = useState<DashboardEvent | null>(null);
+    const [qrCodeEvent, setQrCodeEvent] = useState<VolunteerSchedule | null>(null);
     
     const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
-    const [swapRequestEvent, setSwapRequestEvent] = useState<DashboardEvent | null>(null);
+    const [swapRequestEvent, setSwapRequestEvent] = useState<VolunteerSchedule | null>(null);
     const [isSubmittingSwap, setIsSubmittingSwap] = useState(false);
     const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-    const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
+    const [viewingTimelineFor, setViewingTimelineFor] = useState<VolunteerSchedule | null>(null);
 
     const userId = session?.user?.id;
     
@@ -119,15 +119,13 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
             
             const volunteerId = volProfile.id;
 
-            const [scheduleRes, rawInvitationsRes, pendingSwapsRes] = await Promise.all([
+            const [scheduleRes, rawInvitationsRes] = await Promise.all([
                 supabase.rpc('get_my_schedule'),
                 supabase.from('invitations').select('id, created_at, leader_id, departments(id, name)').eq('volunteer_id', volunteerId).eq('status', 'pendente'),
-                supabase.from('shift_swap_requests').select('event_id').eq('requesting_volunteer_id', volunteerId).eq('status', 'pendente')
             ]);
     
             if (scheduleRes.error) throw scheduleRes.error;
             if (rawInvitationsRes.error) throw rawInvitationsRes.error;
-            if (pendingSwapsRes.error) throw pendingSwapsRes.error;
 
             const rawInvitations = rawInvitationsRes.data || [];
 
@@ -145,8 +143,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
             } else {
                 setInvitations([]);
             }
-
-            setPendingSwaps(new Set(pendingSwapsRes.data?.map(s => s.event_id) || []));
             
             const transformedDepartments = (volProfile.departments || []).map((d: any) => d.departments).filter(Boolean);
             const completeProfile = { ...volProfile, departments: transformedDepartments };
@@ -165,49 +161,40 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                 
                 const timelineMap = new Map((timelineData || []).map((e: any) => [e.id, { cronograma_principal_id: e.cronograma_principal_id, cronograma_kids_id: e.cronograma_kids_id }]));
 
-                const eventsMap = new Map<number, DashboardEvent>();
-                for (const item of scheduleData as any[]) {
+                const allMySchedules: VolunteerSchedule[] = scheduleData.map((item: any) => {
                     const timelineInfo = timelineMap.get(item.id) || { cronograma_principal_id: null, cronograma_kids_id: null };
-                    if (!eventsMap.has(item.id)) {
-                        eventsMap.set(item.id, { 
-                            id: item.id, 
-                            name: item.name, 
-                            date: item.date, 
-                            start_time: item.start_time, 
-                            end_time: item.end_time, 
-                            status: item.status, 
-                            local: item.local, 
-                            observations: item.observations, 
-// FIX: Cast `timelineInfo` to `any` to resolve `unknown` type errors when accessing properties. This addresses an issue where the type of `timelineMap.get()` was not being correctly inferred, causing `timelineInfo` to be treated as `unknown`.
-                            cronograma_principal_id: (timelineInfo as any).cronograma_principal_id, 
-// FIX: Cast `timelineInfo` to `any` to resolve `unknown` type errors when accessing properties. This addresses an issue where the type of `timelineMap.get()` was not being correctly inferred, causing `timelineInfo` to be treated as `unknown`.
-                            cronograma_kids_id: (timelineInfo as any).cronograma_kids_id, 
-                            event_departments: [], 
-                            event_volunteers: [] 
-                        });
-                    }
-                    const event = eventsMap.get(item.id)!;
-                    if (!event.event_departments?.some(d => d.departments.id === item.department_id)) {
-                        event.event_departments?.push({ departments: { id: item.department_id, name: item.department_name, leader: item.leader_name } });
-                    }
-                    event.event_volunteers?.push({ department_id: item.department_id, volunteer_id: volunteerId, present: item.present, volunteers: { name: volProfile.name } });
-                }
-                const allMyEvents = Array.from(eventsMap.values());
+                    return {
+                        id: item.id,
+                        name: item.name,
+                        date: item.date,
+                        start_time: item.start_time,
+                        end_time: item.end_time,
+                        status: item.status,
+                        local: item.local,
+                        observations: item.observations,
+                        department_id: item.department_id,
+                        department_name: item.department_name,
+                        leader_name: item.leader_name,
+                        present: item.present,
+                        cronograma_principal_id: timelineInfo.cronograma_principal_id,
+                        cronograma_kids_id: timelineInfo.cronograma_kids_id,
+                    };
+                });
                 
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const todayStr = today.toISOString().split('T')[0];
         
-                setTodayEvents(allMyEvents.filter(e => e.date === todayStr));
-                setUpcomingEvents(allMyEvents.filter(e => e.date > todayStr));
+                setTodayEvents(allMySchedules.filter(e => e.date === todayStr));
+                setUpcomingEvents(allMySchedules.filter(e => e.date > todayStr));
                 
-                const attended = allMyEvents.filter(e => e.event_volunteers?.some(ev => ev.present === true)).length;
+                const attended = allMySchedules.filter(e => e.present === true).length;
         
                 setStats({
-                    upcoming: allMyEvents.filter(e => e.date > todayStr).length,
+                    upcoming: allMySchedules.filter(e => e.date > todayStr).length,
                     attended: attended,
-                    totalScheduled: allMyEvents.length,
-                    eventsToday: allMyEvents.filter(e => e.date === todayStr).length,
+                    totalScheduled: allMySchedules.length,
+                    eventsToday: allMySchedules.filter(e => e.date === todayStr).length,
                 });
             } else {
                 setTodayEvents([]);
@@ -241,7 +228,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
             if (error) throw error;
             showNotification(`Convite ${response === 'aceito' ? 'aceito' : 'recusado'} com sucesso!`, 'success');
             // Refetch all data to update department list, schedules, etc.
-            onDataChange(); 
+            fetchDashboardData(); 
         } catch (err) {
             showNotification(`Erro ao responder ao convite: ${getErrorMessage(err)}`, 'error');
         }
@@ -256,17 +243,14 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
         if (activeEvent) setIsLiveEventModalOpen(true);
     };
 
-    const handleGenerateQrCode = (event: DashboardEvent) => {
+    const handleGenerateQrCode = (event: VolunteerSchedule) => {
         if (!volunteerProfile) return;
-        const volunteerParticipation = event.event_volunteers?.find(v => v.volunteer_id === volunteerProfile.id);
-        if (!volunteerParticipation) return;
-
-        setQrCodeData({ vId: volunteerProfile.id, eId: event.id, dId: volunteerParticipation.department_id });
+        setQrCodeData({ vId: volunteerProfile.id, eId: event.id, dId: event.department_id });
         setQrCodeEvent(event);
         setIsQrModalOpen(true);
     };
     
-    const handleRequestSwap = (event: DashboardEvent) => {
+    const handleRequestSwap = (event: VolunteerSchedule) => {
         setSwapRequestEvent(event);
         setIsSwapModalOpen(true);
     };
@@ -276,7 +260,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
         setIsSubmittingSwap(true);
         try {
             const { error } = await supabase.functions.invoke('request-shift-swap', {
-                body: { eventId: swapRequestEvent.id, reason },
+                body: { eventId: swapRequestEvent.id, departmentId: swapRequestEvent.department_id, reason },
             });
             if (error) throw error;
             showNotification('Sua solicitação de troca foi enviada ao líder.', 'success');
@@ -351,7 +335,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                             onGenerateQrCode={handleGenerateQrCode}
                             onRequestSwap={handleRequestSwap}
                             onViewTimeline={setViewingTimelineFor}
-                            pendingSwaps={pendingSwaps}
                             isToday
                             loading={loading}
                         />
@@ -364,7 +347,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, onData
                             onGenerateQrCode={handleGenerateQrCode}
                             onRequestSwap={handleRequestSwap}
                             onViewTimeline={setViewingTimelineFor}
-                            pendingSwaps={pendingSwaps}
                             isToday={false}
                             loading={loading}
                         />
@@ -453,15 +435,14 @@ const InvitationCard: React.FC<{ invitation: Invitation; onRespond: (id: number,
 
 const EventList: React.FC<{
     title: string;
-    events: DashboardEvent[];
+    events: VolunteerSchedule[];
     volunteerId: number | null | undefined;
-    onGenerateQrCode: (event: DashboardEvent) => void;
-    onRequestSwap: (event: DashboardEvent) => void;
-    onViewTimeline: (event: DashboardEvent) => void;
-    pendingSwaps: Set<number>;
+    onGenerateQrCode: (event: VolunteerSchedule) => void;
+    onRequestSwap: (event: VolunteerSchedule) => void;
+    onViewTimeline: (event: VolunteerSchedule) => void;
     isToday: boolean;
     loading: boolean;
-}> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline, pendingSwaps, isToday, loading }) => {
+}> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline, isToday, loading }) => {
     
     if (loading) {
         return (
@@ -481,14 +462,13 @@ const EventList: React.FC<{
             <div className="space-y-4">
                 {events.map(event => (
                     <EventCard 
-                        key={event.id}
+                        key={`${event.id}-${event.department_id}`}
                         event={event}
                         isToday={isToday}
                         volunteerId={volunteerId}
                         onGenerateQrCode={onGenerateQrCode}
                         onRequestSwap={onRequestSwap}
                         onViewTimeline={onViewTimeline}
-                        pendingSwaps={pendingSwaps}
                     />
                 ))}
             </div>
@@ -497,18 +477,16 @@ const EventList: React.FC<{
 };
 
 const EventCard: React.FC<{
-    event: DashboardEvent;
+    event: VolunteerSchedule;
     isToday: boolean;
     volunteerId: number | null | undefined;
-    onGenerateQrCode: (event: DashboardEvent) => void;
-    onRequestSwap: (event: DashboardEvent) => void;
-    onViewTimeline: (event: DashboardEvent) => void;
-    pendingSwaps: Set<number>;
-}> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline, pendingSwaps }) => {
+    onGenerateQrCode: (event: VolunteerSchedule) => void;
+    onRequestSwap: (event: VolunteerSchedule) => void;
+    onViewTimeline: (event: VolunteerSchedule) => void;
+}> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline }) => {
     
     const { fullDate: formattedDate, dateTime: startDateTime, time: startTime } = convertUTCToLocal(event.date, event.start_time);
     const { dateTime: endDateTime, time: endTime } = convertUTCToLocal(event.date, event.end_time);
-    const isSwapPending = pendingSwaps.has(event.id);
 
     // FIX: Handle events that cross midnight in UTC timezone.
     if (startDateTime && endDateTime && endDateTime < startDateTime) {
@@ -519,28 +497,7 @@ const EventCard: React.FC<{
     const isFinished = endDateTime ? now > endDateTime : false;
     const isLive = startDateTime && endDateTime ? now >= startDateTime && now < endDateTime : false;
 
-    const myScheduleDetails = useMemo(() => {
-        const myDeptIds = new Set<number>();
-        (event.event_volunteers || []).forEach(ev => {
-            if (ev.volunteer_id === volunteerId) {
-                myDeptIds.add(ev.department_id);
-            }
-        });
-    
-        const departments = (event.event_departments || [])
-            .filter(ed => myDeptIds.has(ed.departments.id))
-            .map(ed => ed.departments);
-    
-        return {
-            departmentNames: departments.map(d => d.name).join(', '),
-            leaderNames: [...new Set(departments.map(d => d.leader).filter(Boolean))].join(', ')
-        };
-    }, [event, volunteerId]);
-
-    const myAttendance = useMemo(() => {
-        const myAttendanceRecord = (event.event_volunteers || []).find(ev => ev.volunteer_id === volunteerId);
-        return myAttendanceRecord?.present;
-    }, [event, volunteerId]);
+    const myAttendance = event.present;
 
     return (
         <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
@@ -549,28 +506,28 @@ const EventCard: React.FC<{
                     <p className="font-bold text-slate-800 truncate" title={event.name}>{event.name}</p>
                     <div className="mt-2 space-y-1.5 text-sm text-slate-600">
                         <div className="flex items-center gap-2">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
                             </svg>
                            <span>{formattedDate}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                            <span>{startTime} - {endTime}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            {getDepartmentIcon(myScheduleDetails.departmentNames)}
-                           <span className="font-medium">{myScheduleDetails.departmentNames}</span>
+                            {getDepartmentIcon(event.department_name)}
+                           <span className="font-medium">{event.department_name}</span>
                         </div>
-                        {myScheduleDetails.leaderNames && (
+                        {event.leader_name && (
                             <div className="flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
-                               <span className="font-medium">Líder: {myScheduleDetails.leaderNames}</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+                               <span className="font-medium">Líder: {event.leader_name}</span>
                             </div>
                         )}
                         {(event.cronograma_principal_id || event.cronograma_kids_id) && !isFinished && (
                             <div className="flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
                                 </svg>
                                 <button
@@ -610,10 +567,9 @@ const EventCard: React.FC<{
                     ) : (
                         <button
                             onClick={() => onRequestSwap(event)}
-                            disabled={isSwapPending}
                             className="flex-1 text-center px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 shadow-sm disabled:bg-orange-300 disabled:cursor-not-allowed"
                         >
-                            {isSwapPending ? 'Troca Pendente' : 'Preciso Trocar'}
+                            Preciso Trocar
                         </button>
                     )}
                 </div>

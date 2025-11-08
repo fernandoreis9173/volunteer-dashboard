@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -18,8 +17,8 @@ import DisabledUserPage from './components/DisabledUserPage';
 import VolunteerDashboard from './components/VolunteerDashboard';
 import AttendanceHistoryPage from './components/AttendanceHistoryPage';
 import VolunteerProfile from './components/VolunteerProfile';
-// FIX: UserProfilePage is a named export, not a default export.
-import { UserProfilePage } from './components/UserProfilePage';
+// FIX: UserProfilePage is a default export, not a named export.
+import UserProfilePage from './components/UserProfilePage';
 import NotificationsPage from './components/NotificationsPage';
 import NotificationToast, { Notification as ToastNotification } from './components/NotificationToast';
 import PushNotificationModal from './components/PushNotificationModal';
@@ -310,31 +309,71 @@ const App: React.FC = () => {
     }, [fetchLeaders]);
 
     const checkForActiveEvent = useCallback(async () => {
-        if (!userId) {
+        if (!userId || !userProfile?.role) {
             setActiveEvent(null);
             return;
         }
     
         try {
-            // FIX: Reverted from `get_active_event` RPC to client-side filtering to resolve the "function not found" database error.
-            // This fetches all user-related events and finds the currently active one.
-            const { data: eventsData, error } = await supabase.rpc('get_events_for_user');
-            
-            if (error) throw error;
-            
-            const allEvents = (eventsData as AppEvent[]) || [];
-            if (allEvents.length === 0) {
+            let allEventsData: any[] | null = null;
+            let queryError: any = null;
+    
+            const eventColumns = 'id, name, date, start_time, end_time, status, local, observations, color, cronograma_principal_id, cronograma_kids_id';
+            const departmentSelect = 'departments(id, name)';
+            const volunteerSelect = 'volunteers(id, name, initials)';
+            const relationsSelect = `event_departments(department_id, ${departmentSelect}), event_volunteers(volunteer_id, department_id, present, ${volunteerSelect})`;
+            const fullEventSelect = `${eventColumns}, ${relationsSelect}`;
+    
+            if (userProfile.role === 'admin') {
+                const { data, error } = await supabase
+                    .from('events')
+                    .select(fullEventSelect)
+                    .eq('status', 'Confirmado');
+                allEventsData = data;
+                queryError = error;
+    
+            } else if (userProfile.role === 'leader' || userProfile.role === 'lider') {
+                if (!userProfile.department_id) {
+                    setActiveEvent(null);
+                    return;
+                }
+                const { data, error } = await supabase
+                    .from('event_departments')
+                    .select(`events(${fullEventSelect})`)
+                    .eq('department_id', userProfile.department_id)
+                    .eq('events.status', 'Confirmado');
+
+                allEventsData = data ? data.map((item: any) => item.events).filter(Boolean) : [];
+                queryError = error;
+    
+            } else if (userProfile.role === 'volunteer') {
+                if (!userProfile.volunteer_id) {
+                    setActiveEvent(null);
+                    return;
+                }
+                const { data, error } = await supabase
+                    .from('event_volunteers')
+                    .select(`events(${fullEventSelect})`)
+                    .eq('volunteer_id', userProfile.volunteer_id)
+                    .eq('events.status', 'Confirmado');
+                
+                allEventsData = data ? data.map((item: any) => item.events).filter(Boolean) : [];
+                queryError = error;
+            }
+    
+            if (queryError) throw queryError;
+    
+            if (!allEventsData || allEventsData.length === 0) {
                 setActiveEvent(null);
                 return;
             }
     
+            // Remove duplicates that might arise from the new query pattern
+            const uniqueEvents = Array.from(new Map(allEventsData.map(event => [event.id, event])).values());
+            const allEvents: AppEvent[] = uniqueEvents as AppEvent[];
+    
             const now = new Date();
             const liveEvent = allEvents.find(event => {
-                if (event.status !== 'Confirmado') {
-                    return false;
-                }
-    
-                // Use the utility to convert stored UTC date/time to local Date objects for comparison
                 const { dateTime: startDateTime, isValid: startIsValid } = convertUTCToLocal(event.date, event.start_time);
                 const { dateTime: endDateTime, isValid: endIsValid } = convertUTCToLocal(event.date, event.end_time);
     
@@ -343,7 +382,6 @@ const App: React.FC = () => {
                     return false;
                 }
                 
-                // Handle events that cross midnight (e.g., 22:00 to 02:00)
                 if (endDateTime < startDateTime) {
                     endDateTime.setDate(endDateTime.getDate() + 1);
                 }
@@ -356,9 +394,9 @@ const App: React.FC = () => {
         } catch (err) {
             const errorMessage = getErrorMessage(err);
             console.error("Error checking for active event:", errorMessage);
-            setActiveEvent(null); // Clear on error
+            setActiveEvent(null);
         }
-    }, [userId]);
+    }, [userId, userProfile]);
     
     useEffect(() => {
         checkForActiveEvent(); // Check immediately on session change/load
@@ -610,7 +648,8 @@ const App: React.FC = () => {
                 case 'my-profile':
                     return <VolunteerProfile session={session} onUpdate={refetchNotificationCount} leaders={leaders} />;
                 case 'notifications':
-                    return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
+                    // FIX: Add missing userRole prop to NotificationsPage
+                    return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} userRole={userProfile.role} />;
                 case 'dashboard':
                 default:
                     // FIX: Removed `onDataChange` prop from VolunteerDashboard call. The error indicates it's not an expected prop.
@@ -638,7 +677,8 @@ const App: React.FC = () => {
             case 'frequency':
                 return <FrequencyPage />;
             case 'notifications':
-                return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} />;
+                // FIX: Add missing userRole prop to NotificationsPage
+                return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} userRole={userProfile.role} />;
             case 'my-profile':
                 // FIX: Pass the 'leaders' prop to UserProfilePage to satisfy its prop requirements.
                 return <UserProfilePage session={session} onUpdate={refetchUserData} leaders={leaders} />;

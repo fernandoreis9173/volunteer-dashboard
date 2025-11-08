@@ -118,7 +118,6 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                 let parsedLinks = item.links || [];
                 if (typeof item.links === 'string') {
                     try {
-                        // Reintroduzindo a serialização manual para garantir consistência
                         parsedLinks = JSON.parse(item.links);
                     } catch (e) {
                         console.error("Failed to parse links JSON string:", e);
@@ -127,7 +126,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                 }
                 return {
                     ...item,
-                    links: parsedLinks.map(link => ({...link, id: link.id || crypto.randomUUID()}))
+                    links: Array.isArray(parsedLinks) ? parsedLinks.map(link => ({...link, id: link.id || crypto.randomUUID()})) : []
                 };
             });
             setItems(parsedItems);
@@ -218,7 +217,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
             }
             return {
                 ...item,
-                links: parsedLinks.map(link => ({...link, id: link.id || crypto.randomUUID()}))
+                links: Array.isArray(parsedLinks) ? parsedLinks.map(link => ({...link, id: link.id || crypto.randomUUID()})) : []
             };
         });
         setItems(prevItems => [...prevItems, ...itemsToImport].map((item, index) => ({ ...item, ordem: index })));
@@ -232,31 +231,56 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
         }
         setIsSaving(true);
         setError(null);
-
+    
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("Usuário não autenticado.");
+            const templatePayload = {
+                id: initialData?.id,
+                nome_modelo: name.trim(),
+                admin_id: initialData?.admin_id, // Deixe a função lidar com o ID do usuário se for novo
+            };
+    
+            const itemsPayload = items.map((item, index) => {
+                const linksArray = Array.isArray(item.links)
+                    ? item.links
+                        .filter(link => link && link.url && link.title)
+                        .map(({ id, ...rest }) => rest) // remove o id do lado do cliente para um payload limpo
+                    : [];
+                
+                // Remove o id do item, pois ele é gerado pelo banco de dados
+                const { id, ...itemData } = item;
 
-            const { data: savedTemplate, error: templateError } = await supabase
-                .from('cronograma_modelos').upsert({ id: initialData?.id, nome_modelo: name, admin_id: initialData?.admin_id || user.id }).select().single();
-            if (templateError) throw templateError;
-
-            const templateId = savedTemplate.id;
-            const { error: deleteError } = await supabase.from('cronograma_itens').delete().eq('modelo_id', templateId);
-            if (deleteError) throw deleteError;
-            
-            if (items.length > 0) {
-                const itemsPayload = items.map((item, index) => ({
-                    modelo_id: templateId,
+                return {
+                    ...itemData,
                     ordem: index,
-                    titulo_item: item.titulo_item,
                     duracao_minutos: Number(item.duracao_minutos) || 0,
-                    detalhes: item.detalhes,
-                    links: item.links && item.links.length > 0 ? JSON.stringify(item.links.map(({ id, ...rest }) => rest)) : null,
-                }));
-                const { error: itemsError } = await supabase.from('cronograma_itens').insert(itemsPayload);
-                if (itemsError) throw itemsError;
+                    links: linksArray.length > 0 ? linksArray : null,
+                };
+            });
+    
+            // Chame a edge function
+            const { error: invokeError } = await supabase.functions.invoke('save-timeline-template', {
+                body: {
+                    template: templatePayload,
+                    items: itemsPayload,
+                },
+            });
+    
+            if (invokeError) {
+                // Tenta obter uma mensagem de erro mais específica da resposta da função
+                if (invokeError.context && typeof invokeError.context.json === 'function') {
+                    try {
+                        const errorJson = await invokeError.context.json();
+                        if (errorJson && errorJson.error) {
+                            throw new Error(errorJson.error);
+                        }
+                    } catch (e) {
+                        // Ignora erro de parsing, volta para a mensagem padrão
+                    }
+                }
+                throw invokeError;
             }
+    
+            // Sucesso
             onSave();
         } catch (err) {
             setError(getErrorMessage(err));

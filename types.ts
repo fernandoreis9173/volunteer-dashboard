@@ -1,6 +1,5 @@
 // FIX: Restored Supabase v2 User type import.
-// FIX: Export the User type so it can be imported from this module in other files like AdminPage.tsx.
-export type { User } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
 
 export interface Volunteer {
   name: string;
@@ -133,16 +132,6 @@ export interface NotificationRecord {
     data?: any;
 }
 
-export interface ShiftSwapRequest {
-  id: number;
-  created_at: string;
-  requesting_volunteer_id: number;
-  event_id: number;
-  department_id: number;
-  status: 'pendente' | 'aprovado' | 'recusado';
-  reason_for_swap?: string;
-}
-
 export interface Invitation {
     id: number;
     created_at: string;
@@ -189,3 +178,19 @@ export interface DepartmentJoinRequest {
       name: string;
     };
   }
+export interface VolunteerSchedule {
+    id: number;
+    name: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+    local?: string;
+    observations?: string;
+    department_id: number;
+    department_name: string;
+    leader_name?: string;
+    present: boolean | null;
+    cronograma_principal_id?: string | null;
+    cronograma_kids_id?: string | null;
+}

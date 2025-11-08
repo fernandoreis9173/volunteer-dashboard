@@ -7,15 +7,13 @@ if ('serviceWorker' in navigator) {
   // Defer registration until after the page has loaded to avoid race conditions
   // and ensure the document is in a valid state.
   window.addEventListener('load', () => {
-    (async () => {
-      try {
-        const swUrl = `${window.location.origin}/sw.js`;
-        const registration = await navigator.serviceWorker.register(swUrl);
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => {
         console.log('Service Worker registered successfully with scope:', registration.scope);
-      } catch (error) {
+      })
+      .catch(error => {
         console.error('Service Worker registration failed:', error);
-      }
-    })();
+      });
   });
 } else {
     console.warn('Service Workers are not supported by this browser.');

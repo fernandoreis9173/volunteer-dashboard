@@ -1,9 +1,5 @@
 
 
-
-
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
@@ -58,7 +54,7 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) =>
                     className="p-2 text-red-600 hover:text-red-800 bg-red-100 hover:bg-red-200 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 flex-shrink-0"
                     aria-label="Ver detalhes do evento"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5" >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </button>
@@ -286,19 +282,21 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
     }
   }, [scannedQrData, scanningEvent, userProfile, showNotification, fetchDashboardData]);
 
-  const handleRequestAction = async (requestId: number, action: 'approve' | 'deny') => {
-    try {
-      const { error } = await supabase.functions.invoke(`${action}-join-request`, {
-        body: { requestId },
-      });
-      if (error) throw error;
-      showNotification(`Solicitação ${action === 'approve' ? 'aprovada' : 'recusada'} com sucesso.`, 'success');
-      fetchDashboardData(); // Refresh data
-    } catch (err) {
-      showNotification(`Erro ao processar solicitação: ${getErrorMessage(err)}`, 'error');
-    }
-  };
-
+    const handleRequestAction = async (requestId: number, action: 'approve' | 'deny') => {
+        try {
+          const functionName = action === 'approve' ? 'approve-join-request' : 'deny-join-request';
+          const { error } = await supabase.functions.invoke(functionName, {
+            body: { requestId }
+          });
+    
+          if (error) throw error;
+          
+          showNotification(`Solicitação ${action === 'approve' ? 'aprovada' : 'recusada'} com sucesso.`, 'success');
+          fetchDashboardData(); // Refresh data
+        } catch (err) {
+          showNotification(`Erro ao processar solicitação: ${getErrorMessage(err)}`, 'error');
+        }
+    };
 
   const scannedVolunteerName = useMemo(() => {
     if (!scannedQrData || !scanningEvent) return 'Voluntário';
@@ -328,7 +326,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
+          <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários</p>
         </div>
 
         {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
