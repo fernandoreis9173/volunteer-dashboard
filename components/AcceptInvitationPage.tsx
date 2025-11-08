@@ -304,7 +304,6 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 password: password,
                 data: { 
                     name: fullName, 
-                    status: 'Ativo',
                     phone: phone.replace(/[^\d]/g, '')
                 }
             });
@@ -329,7 +328,6 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 const volunteerPayload = {
                     user_id: user.id,
                     email: user.email!,
-                    status: 'Ativo' as const,
                     name: fullName,
                     phone: phone.replace(/[^\d]/g, ''),
                     availability: JSON.stringify(selectedAvailabilityDays),

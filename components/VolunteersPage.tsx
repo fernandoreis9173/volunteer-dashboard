@@ -311,40 +311,6 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     }
   };
 
-  const handleStatusChange = async (volunteerId: number, newStatus: 'Ativo' | 'Inativo') => {
-    const originalVolunteers = [...masterVolunteers];
-    const volunteer = masterVolunteers.find(v => v.id === volunteerId);
-
-    if (!volunteer || !volunteer.user_id) {
-        alert('Erro: Dados do voluntário incompletos. Não é possível alterar o status.');
-        return;
-    }
-
-    // Optimistic UI Update
-    setMasterVolunteers(prev =>
-        prev.map(v => (v.id === volunteerId ? { ...v, status: newStatus } : v))
-    );
-
-    try {
-        const functionName = newStatus === 'Ativo' ? 'enable-user' : 'disable-user';
-        
-        const { error } = await supabase.functions.invoke(functionName, { 
-            body: { 
-                userId: volunteer.user_id,
-                volunteerId: volunteer.id
-            }
-        });
-
-        if (error) {
-           throw error;
-        }
-
-    } catch (error) {
-        alert(`Falha ao atualizar o status: ${getErrorMessage(error)}`);
-        setMasterVolunteers(originalVolunteers);
-    }
-  };
-
   const handleSaveVolunteer = async (volunteerData: any, departmentIds: number[]) => {
     setIsSaving(true);
     setSaveError(null);
@@ -410,7 +376,6 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                             onEdit={handleEditVolunteer}
                             onInvite={handleInviteRequest}
                             onRemoveFromDepartment={handleRemoveFromDepartmentRequest}
-                            onStatusChange={handleStatusChange}
                             userRole={userRole}
                             leaderDepartmentName={leaderDepartmentName}
                             isInvitePending={pendingInvites.has(volunteer.id!)}
