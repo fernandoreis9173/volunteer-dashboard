@@ -315,65 +315,25 @@ const App: React.FC = () => {
         }
     
         try {
-            let allEventsData: any[] | null = null;
-            let queryError: any = null;
-    
-            const eventColumns = 'id, name, date, start_time, end_time, status, local, observations, color, cronograma_principal_id, cronograma_kids_id';
-            const departmentSelect = 'departments(id, name)';
-            const volunteerSelect = 'volunteers(id, name, initials)';
-            const relationsSelect = `event_departments(department_id, ${departmentSelect}), event_volunteers(volunteer_id, department_id, present, ${volunteerSelect})`;
-            const fullEventSelect = `${eventColumns}, ${relationsSelect}`;
-    
-            if (userProfile.role === 'admin') {
-                const { data, error } = await supabase
-                    .from('events')
-                    .select(fullEventSelect)
-                    .eq('status', 'Confirmado');
-                allEventsData = data;
-                queryError = error;
-    
-            } else if (userProfile.role === 'leader' || userProfile.role === 'lider') {
-                if (!userProfile.department_id) {
-                    setActiveEvent(null);
-                    return;
-                }
-                const { data, error } = await supabase
-                    .from('event_departments')
-                    .select(`events(${fullEventSelect})`)
-                    .eq('department_id', userProfile.department_id)
-                    .eq('events.status', 'Confirmado');
+            // A melhor solução é usar a função RPC 'get_events_for_user' que já busca todos os eventos relevantes
+            // para o usuário logado, independentemente da sua função. Isso simplifica o código, evita erros
+            // de consulta complexa e centraliza a lógica de busca de dados no backend.
+            const { data: allEventsData, error: rpcError } = await supabase.rpc('get_events_for_user');
 
-                allEventsData = data ? data.map((item: any) => item.events).filter(Boolean) : [];
-                queryError = error;
-    
-            } else if (userProfile.role === 'volunteer') {
-                if (!userProfile.volunteer_id) {
-                    setActiveEvent(null);
-                    return;
-                }
-                const { data, error } = await supabase
-                    .from('event_volunteers')
-                    .select(`events(${fullEventSelect})`)
-                    .eq('volunteer_id', userProfile.volunteer_id)
-                    .eq('events.status', 'Confirmado');
-                
-                allEventsData = data ? data.map((item: any) => item.events).filter(Boolean) : [];
-                queryError = error;
-            }
-    
-            if (queryError) throw queryError;
+            if (rpcError) throw rpcError;
     
             if (!allEventsData || allEventsData.length === 0) {
                 setActiveEvent(null);
                 return;
             }
     
-            // Remove duplicates that might arise from the new query pattern
-            const uniqueEvents = Array.from(new Map(allEventsData.map(event => [event.id, event])).values());
-            const allEvents: AppEvent[] = uniqueEvents as AppEvent[];
+            const allEvents: AppEvent[] = (allEventsData as any[]).map(item => item as unknown as AppEvent);
     
             const now = new Date();
             const liveEvent = allEvents.find(event => {
+                // We only care about confirmed events for the "live" status
+                if (event.status !== 'Confirmado') return false;
+
                 const { dateTime: startDateTime, isValid: startIsValid } = convertUTCToLocal(event.date, event.start_time);
                 const { dateTime: endDateTime, isValid: endIsValid } = convertUTCToLocal(event.date, event.end_time);
     
@@ -396,7 +356,7 @@ const App: React.FC = () => {
             console.error("Error checking for active event:", errorMessage);
             setActiveEvent(null);
         }
-    }, [userId, userProfile]);
+    }, [userId, userProfile?.role]);
     
     useEffect(() => {
         checkForActiveEvent(); // Check immediately on session change/load
