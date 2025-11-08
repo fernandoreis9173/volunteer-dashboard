@@ -377,13 +377,14 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
 
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
-                    <SmartSearch
-                        items={departments.filter(d => d.id != null) as SearchItem[]}
-                        selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
-                        onSelectItem={handleSelectDepartment}
-                        placeholder={isLeaderInviting ? "Departamento do líder" : "Buscar por departamento..."}
-                        disabled={isLeaderInviting}
-                    />
+                    {!isLeaderInviting && (
+                        <SmartSearch
+                            items={departments.filter(d => d.id != null) as SearchItem[]}
+                            selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
+                            onSelectItem={handleSelectDepartment}
+                            placeholder="Buscar por departamento..."
+                        />
+                    )}
                     <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
                         {selectedDepartments.map((department) => (
                             <RemovableTag
