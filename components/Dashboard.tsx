@@ -3,7 +3,7 @@ import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
 import ActiveVolunteersList from './ActiveVolunteersList';
 // FIX: Moved ChartDataPoint to types.ts and updated import path.
-import type { DashboardEvent, Stat, EnrichedUser, ChartDataPoint, Event, Page, DashboardData, DetailedVolunteer, DepartmentJoinRequest } from '../types';
+import type { DashboardEvent, Stat, EnrichedUser, ChartDataPoint, Event, Page, DashboardData, DetailedVolunteer } from '../types';
 import EventDetailsModal from './EventDetailsModal';
 // FIX: Changed import to be a named import to match the export from TrafficChart.tsx
 import { AnalysisChart } from './TrafficChart';
@@ -52,7 +52,7 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) =>
                     className="p-2 text-red-600 hover:text-red-800 bg-red-100 hover:bg-red-200 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 flex-shrink-0"
                     aria-label="Ver detalhes do evento"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5" >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </button>
@@ -79,7 +79,6 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
   const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
   const [allDepartmentEvents, setAllDepartmentEvents] = useState<DashboardEvent[]>([]);
   const [departmentVolunteers, setDepartmentVolunteers] = useState<DetailedVolunteer[]>([]);
-  const [joinRequests, setJoinRequests] = useState<DepartmentJoinRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
@@ -87,7 +86,6 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
   const [isQrDisplayOpen, setIsQrDisplayOpen] = useState(false);
   const [scannedQrData, setScannedQrData] = useState<string | null>(null);
   const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
-  const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
 
   const fetchDashboardData = useCallback(async () => {
       if (!userProfile?.department_id) return;
@@ -96,22 +94,16 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
       const leaderDepartmentId = userProfile.department_id;
 
       try {
-          const [eventsRpcRes, volunteerDepartmentsRes, joinRequestsRes] = await Promise.all([
+          const [eventsRpcRes, volunteerDepartmentsRes] = await Promise.all([
               supabase.rpc('get_events_for_user'),
               supabase.from('volunteer_departments')
                 .select('*, volunteers!inner(*, volunteer_departments(departments(id, name)))')
                 .eq('department_id', leaderDepartmentId)
-                .eq('status', 'aprovado')
-                .eq('volunteers.status', 'Ativo'),
-              supabase.from('volunteer_departments')
-                .select('*, volunteers(*), departments(*)')
-                .eq('department_id', leaderDepartmentId)
-                .eq('status', 'pendente')
+                .eq('volunteers.status', 'Ativo')
           ]);
 
           if (eventsRpcRes.error) throw eventsRpcRes.error;
           if (volunteerDepartmentsRes.error) throw volunteerDepartmentsRes.error;
-          if (joinRequestsRes.error) throw joinRequestsRes.error;
           
           const eventsData = (eventsRpcRes.data || []).map(item => item as unknown as DashboardEvent);
           setAllDepartmentEvents(eventsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -119,8 +111,6 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
           const leaderVolunteers = (volunteerDepartmentsRes.data || []).map((vd: any) => vd.volunteers).filter(Boolean);
           const transformedVols = (leaderVolunteers || []).map((v: any) => ({ ...v, departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean) }));
           setDepartmentVolunteers(transformedVols);
-
-          setJoinRequests((joinRequestsRes.data as DepartmentJoinRequest[]) || []);
 
       } catch (err) {
           const errorMessage = getErrorMessage(err);
@@ -288,54 +278,6 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
     }
   }, [scannedQrData, scanningEvent, userProfile, showNotification, fetchDashboardData]);
 
-    const handleRequestAction = async (volunteer_id: number, department_id: number, action: 'approve' | 'deny') => {
-        const compositeKey = `${volunteer_id}-${department_id}`;
-        setProcessingRequests(prev => new Set(prev).add(compositeKey));
-    
-        try {
-            const request = joinRequests.find(req => req.volunteer_id === volunteer_id && req.department_id === department_id);
-            if (!request) throw new Error('Solicitação não encontrada ou já processada.');
-    
-            const volunteer = request.volunteers;
-            const department = request.departments;
-            const newStatus = action === 'approve' ? 'aprovado' : 'recusado';
-    
-            const { error: updateError } = await supabase
-                .from('volunteer_departments')
-                .update({ status: newStatus })
-                .match({ volunteer_id, department_id });
-    
-            if (updateError) throw updateError;
-            
-            // Send notification
-            if (volunteer?.user_id && department?.name) {
-                const message = action === 'approve'
-                    ? `Bem-vindo(a)! Sua entrada no departamento "${department.name}" foi aprovada.`
-                    : `Sua solicitação para o departamento "${department.name}" não foi aprovada no momento.`;
-                
-                await supabase.from('notifications').insert({
-                    user_id: volunteer.user_id,
-                    message: message,
-                    type: 'info',
-                });
-            }
-          
-            showNotification(`Solicitação ${action === 'approve' ? 'aprovada' : 'recusada'} com sucesso.`, 'success');
-            
-            // Refetch all data to ensure UI consistency
-            await fetchDashboardData();
-    
-        } catch (err) {
-            showNotification(`Erro ao processar solicitação: ${getErrorMessage(err)}`, 'error');
-        } finally {
-            setProcessingRequests(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(compositeKey);
-                return newSet;
-            });
-        }
-    };
-
   const scannedVolunteerName = useMemo(() => {
     if (!scannedQrData || !scanningEvent) return 'Voluntário';
     try {
@@ -373,46 +315,6 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
       {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{error}</div>}
 
       <StatsRow stats={dashboardData.stats} userRole={userProfile?.role} />
-
-      {joinRequests.length > 0 && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold text-slate-800 mb-4">Solicitações de Entrada</h2>
-            <div className="space-y-3">
-                {joinRequests.map(req => {
-                    const compositeKey = `${req.volunteer_id}-${req.department_id}`;
-                    return (
-                        <div key={compositeKey} className="bg-slate-50 p-3 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm">
-                                    {req.volunteers.initials}
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-slate-800">{req.volunteers.name}</p>
-                                    <p className="text-sm text-slate-500">{req.volunteers.email}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-end gap-2 self-end sm:self-center min-w-[170px]">
-                                {processingRequests.has(compositeKey) ? (
-                                    <div className="px-3 py-1.5 text-sm font-semibold text-slate-500 flex items-center gap-2">
-                                        <svg className="animate-spin h-4 w-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        <span>Processando...</span>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <button onClick={() => handleRequestAction(req.volunteer_id, req.department_id, 'deny')} className="px-3 py-1.5 text-sm font-semibold text-red-700 bg-red-100 rounded-md hover:bg-red-200">Recusar</button>
-                                        <button onClick={() => handleRequestAction(req.volunteer_id, req.department_id, 'approve')} className="px-3 py-1.5 text-sm font-semibold text-green-700 bg-green-100 rounded-md hover:bg-green-200">Aprovar</button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
         <div className="lg:col-span-2">

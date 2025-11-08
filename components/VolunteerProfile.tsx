@@ -1,11 +1,12 @@
 
 
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Removed problematic Supabase type imports and used 'any' as a workaround.
 // import { type Session, type User } from '@supabase/supabase-js';
-import { DetailedVolunteer, DepartmentJoinRequest } from '../types';
+import { DetailedVolunteer } from '../types';
 import { getErrorMessage, parseArrayFromString } from '../lib/utils';
 
 interface VolunteerProfileProps {
@@ -25,8 +26,7 @@ const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = (
 
 const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, leaders }) => {
     const [volunteerData, setVolunteerData] = useState<DetailedVolunteer | null>(null);
-    // FIX: Widen state type to include 'recusado' to match incoming data type before filtering.
-    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null; status: 'aprovado' | 'pendente' | 'recusado' }[]>([]);
+    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null; }[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -53,68 +53,58 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     };
     
     const fetchProfileData = useCallback(async () => {
-        if (!userId) return; // Use the stable userId
+        if (!userId) return;
         setLoading(true);
         setError(null);
         try {
             const { data: volunteerProfile, error: fetchError } = await supabase
                 .from('volunteers')
-                .select('*, volunteer_departments(department_id, status, departments(id, name))')
-                .eq('user_id', userId) // Use the stable userId
+                .select('*, volunteer_departments(departments(id, name))')
+                .eq('user_id', userId)
                 .single();
     
             if (fetchError) throw fetchError;
     
-            const allRelations = volunteerProfile.volunteer_departments || [];
-
-            // For the main profile object, only show approved departments
-            const approvedDepartments = allRelations
-                .filter((vd: any) => vd.status === 'aprovado' && vd.departments)
-                .map((vd: any) => vd.departments);
-
+            const departments = (volunteerProfile.volunteer_departments || []).map((vd: any) => vd.departments).filter(Boolean);
             const transformedProfile = {
                 ...volunteerProfile,
-                departments: approvedDepartments
+                departments: departments
             };
             setVolunteerData(transformedProfile as DetailedVolunteer);
     
-            // For the detailed list in the UI, we need all statuses
-            const allDepartmentIds = allRelations.map((vd: any) => vd.department_id);
-            let finalDepartmentDetails: { name: string; leader: string | null; status: 'aprovado' | 'pendente' | 'recusado' }[] = [];
-
-            if (allDepartmentIds.length > 0) {
+            const departmentIds = departments.map((d: any) => d.id);
+    
+            if (departmentIds.length > 0) {
                 const { data: leadersData, error: leadersError } = await supabase
                     .from('department_leaders')
                     .select('department_id, leader_id')
-                    .in('department_id', allDepartmentIds);
+                    .in('department_id', departmentIds);
                 if (leadersError) throw leadersError;
-
+    
                 const leaderMap = new Map(leaders.map(l => [l.id, l.user_metadata?.name]));
-
-                finalDepartmentDetails = allRelations
-                    .map((vd: any) => {
-                        const dept = vd.departments;
-                        if (!dept) return null;
-
-                        const deptLeaders = leadersData.filter(rel => rel.department_id === dept.id).map(rel => leaderMap.get(rel.leader_id)).filter(Boolean);
-                        return {
-                            name: dept.name,
-                            leader: deptLeaders.join(', ') || 'Não atribuído',
-                            status: vd.status
-                        };
-                    })
-                    .filter((details): details is { name: string; leader: string | null; status: 'aprovado' | 'pendente' | 'recusado' } => details !== null)
-                    // Don't show 'recusado' status on the profile page.
-                    .filter(details => details.status !== 'recusado');
+    
+                const finalDepartmentDetails = departments.map((dept: any) => {
+                    const deptLeaders = leadersData
+                        .filter(rel => rel.department_id === dept.id)
+                        .map(rel => leaderMap.get(rel.leader_id))
+                        .filter(Boolean);
+                    
+                    return {
+                        name: dept.name,
+                        leader: deptLeaders.join(', ') || 'Não atribuído'
+                    };
+                });
+                setDepartmentDetails(finalDepartmentDetails);
+            } else {
+                setDepartmentDetails([]);
             }
-            setDepartmentDetails(finalDepartmentDetails);
     
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
-    }, [userId, leaders]); // Use the stable userId as a dependency
+    }, [userId, leaders]);
 
 
     useEffect(() => {
@@ -311,20 +301,15 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                             {departmentDetails.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {departmentDetails.map(dept => (
-                                        <div key={dept.name} className={`p-4 rounded-xl border ${dept.status === 'aprovado' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}`}>
-                                            <div className="flex items-center justify-between">
-                                                <p className={`font-bold ${dept.status === 'aprovado' ? 'text-yellow-900' : 'text-gray-800'}`}>{dept.name}</p>
-                                                {dept.status === 'pendente' && (
-                                                    <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Pendente</span>
-                                                )}
-                                            </div>
+                                        <div key={dept.name} className="p-4 rounded-xl bg-yellow-50 border border-yellow-200">
+                                            <p className="font-bold text-yellow-900">{dept.name}</p>
                                             {dept.leader ? (
-                                                <p className={`text-xs mt-1 flex items-center gap-1.5 ${dept.status === 'aprovado' ? 'text-yellow-700' : 'text-gray-600'}`}>
+                                                <p className="text-xs text-yellow-700 mt-1 flex items-center gap-1.5">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
                                                     {dept.leader}
                                                 </p>
                                             ) : (
-                                                <p className={`text-xs mt-1 italic ${dept.status === 'aprovado' ? 'text-yellow-600' : 'text-gray-500'}`}>Líder não definido</p>
+                                                <p className="text-xs text-yellow-600 mt-1 italic">Líder não definido</p>
                                             )}
                                         </div>
                                     ))}

@@ -12,6 +12,7 @@ interface NewVolunteerFormProps {
     saveError: string | null;
     departments: Department[];
     userRole: string | null;
+    leaderDepartmentId?: number | null;
 }
 
 interface InputFieldProps {
@@ -176,7 +177,7 @@ const TagInputField: React.FC<{
 };
 
 
-const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, departments, userRole }) => {
+const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, departments, userRole, leaderDepartmentId }) => {
     const [skills, setSkills] = useState<string[]>([]);
     // FIX: Changed state type to match the shape of `initialData.departments` ({ id, name } objects).
     const [selectedDepartments, setSelectedDepartments] = useState<{ id: number; name: string }[]>([]);
@@ -193,6 +194,10 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
     const [isActive, setIsActive] = useState(true);
     const isEditing = !!initialData;
     const canOnlyEditDepartments = isEditing && (userRole === 'leader' || userRole === 'lider');
+    
+    const isLeader = userRole === 'leader' || userRole === 'lider';
+    const isLeaderInviting = !isEditing && isLeader;
+
 
     const formatPhoneNumber = (value: string) => {
         if (!value) return '';
@@ -262,8 +267,15 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             setSelectedDepartments([]);
             setIsActive(true);
             setAvailability(availabilityKeys);
+            // Pre-fill department if a leader is inviting
+            if (isLeaderInviting && leaderDepartmentId) {
+                const leaderDept = departments.find(d => d.id === leaderDepartmentId);
+                if (leaderDept && leaderDept.id) {
+                    setSelectedDepartments([{ id: leaderDept.id, name: leaderDept.name }]);
+                }
+            }
         }
-    }, [initialData, departments]);
+    }, [initialData, departments, isLeaderInviting, leaderDepartmentId]);
 
     useEffect(() => {
         if (!isEditing) return;
@@ -369,7 +381,8 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                         items={departments.filter(d => d.id != null) as SearchItem[]}
                         selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
                         onSelectItem={handleSelectDepartment}
-                        placeholder="Buscar por departamento..."
+                        placeholder={isLeaderInviting ? "Departamento do líder" : "Buscar por departamento..."}
+                        disabled={isLeaderInviting}
                     />
                     <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
                         {selectedDepartments.map((department) => (
@@ -378,6 +391,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                                 text={department.name}
                                 color="yellow"
                                 onRemove={() => handleRemoveDepartment(department.id!)}
+                                disabled={isLeaderInviting}
                             />
                         ))}
                     </div>

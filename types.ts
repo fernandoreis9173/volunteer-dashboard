@@ -160,25 +160,6 @@ export interface TimelineTemplate {
   cronograma_itens: TimelineItem[];
   created_at?: string;
 }
-export interface DepartmentJoinRequest {
-    // FIX: Add missing 'id' property to match the database schema.
-    id: number;
-    volunteer_id: number;
-    department_id: number;
-    status: 'pendente' | 'aprovado' | 'recusado';
-    volunteers: {
-      id: number;
-      user_id: string;
-      name: string;
-      initials: string;
-      email: string;
-      phone: string;
-    };
-    departments: {
-      id: number;
-      name: string;
-    };
-  }
 export interface VolunteerSchedule {
     id: number;
     name: string;

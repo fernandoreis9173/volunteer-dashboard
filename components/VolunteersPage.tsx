@@ -88,8 +88,6 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                 availability,
                 created_at,
                 volunteer_departments (
-                    department_id,
-                    status,
                     departments ( id, name )
                 )
             `)
@@ -99,16 +97,15 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         
         // Manually process the data to ensure the logic is clear.
         const transformedData = (rawVolunteers || []).map(volunteer => {
-            // FIX: Used `flatMap` instead of `map` to correctly flatten the nested array of department objects returned by the Supabase query. This resolves the TypeScript error where `departments` was being typed as `Department[][]` instead of `Department[]`.
+            // All relations in volunteer_departments are now considered approved.
             const approvedDepartments = (volunteer.volunteer_departments || [])
-                .filter(relation => relation.status === 'aprovado' && relation.departments)
+                .filter(relation => relation.departments)
                 .flatMap(relation => relation.departments);
             
             // Create the final volunteer object for the state.
             return {
                 ...volunteer,
-                departments: approvedDepartments, // This array will only contain approved departments.
-                // We keep the raw relations if needed elsewhere, but 'departments' is the clean one.
+                departments: approvedDepartments, // This array will ONLY contain approved departments.
                 volunteer_departments: volunteer.volunteer_departments 
             };
         });
@@ -490,6 +487,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
           saveError={saveError}
           departments={departments}
           userRole={userRole}
+          leaderDepartmentId={leaderDepartmentId}
         />
       ) : (
         renderContent()
