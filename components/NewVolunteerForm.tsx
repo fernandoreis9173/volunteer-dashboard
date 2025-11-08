@@ -107,7 +107,7 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
                 className={`ml-2 flex-shrink-0 p-0.5 rounded-full inline-flex items-center justify-center text-inherit ${classes.buttonHover} ${disabled ? 'hidden' : ''}`}
                 aria-label={`Remove ${text}`}
             >
-                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24" strokeWidth={1.5} >
+                <svg className="h-3.5 w-3.5" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
@@ -363,7 +363,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                 }
             `}</style>
             <div className="flex items-center space-x-3 mb-8">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                 </svg>
                 <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Voluntário' : 'Convidar Novo Voluntário'}</h2>
@@ -375,28 +375,32 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                     <InputField label="Email" type="email" name="email" value={formData.email} onChange={handleInputChange} required readOnly={isEditing} />
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
-                    {!isLeaderInviting && (
+                {/* The department UI is completely hidden when a leader is inviting. */}
+                {/* The department is pre-filled and handled in the background. */}
+                {!isLeaderInviting && (
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
                         <SmartSearch
                             items={departments.filter(d => d.id != null) as SearchItem[]}
                             selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
                             onSelectItem={handleSelectDepartment}
                             placeholder="Buscar por departamento..."
+                            disabled={canOnlyEditDepartments}
                         />
-                    )}
-                    <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
-                        {selectedDepartments.map((department) => (
-                            <RemovableTag
-                                key={department.id}
-                                text={department.name}
-                                color="yellow"
-                                onRemove={() => handleRemoveDepartment(department.id!)}
-                                disabled={isLeaderInviting}
-                            />
-                        ))}
+                        <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
+                            {selectedDepartments.map((department) => (
+                                <RemovableTag
+                                    key={department.id}
+                                    text={department.name}
+                                    color="yellow"
+                                    onRemove={() => handleRemoveDepartment(department.id!)}
+                                    disabled={canOnlyEditDepartments}
+                                />
+                            ))}
+                        </div>
                     </div>
-                </div>
+                )}
+
 
                 {isEditing && (
                 <>
@@ -446,7 +450,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
                         disabled={isSaving}
                         className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm disabled:bg-blue-400 disabled:cursor-not-allowed"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={1.5} >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} >
                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                         <span>{isSaving ? 'Salvando...' : (isEditing ? 'Atualizar Voluntário' : 'Enviar Convite')}</span>

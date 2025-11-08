@@ -42,6 +42,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   const [volunteerToRemove, setVolunteerToRemove] = useState<DetailedVolunteer | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [leaderDepartmentName, setLeaderDepartmentName] = useState<string | null>(null);
+  const [isSendingInviteModalOpen, setIsSendingInviteModalOpen] = useState(false);
 
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
@@ -274,134 +275,130 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         body: { volunteerId: volunteerToInvite.id }
       });
       if (error) throw error;
-      await fetchVolunteers();
-      showNotification(`Convite enviado para ${volunteerToInvite.name}.`, 'success');
-    } catch (err) {
-      showNotification(`Falha ao convidar voluntário: ${getErrorMessage(err)}`, 'error');
+      showNotification(`Convite enviado para ${volunteerToInvite.name}!`, 'success');
+      setPendingInvites(prev => new Set(prev).add(volunteerToInvite.id!));
+    } catch (err: any) {
+        showNotification(`Erro ao convidar: ${getErrorMessage(err)}`, 'error');
     } finally {
-      setIsInviting(false);
-      handleCancelInvite();
+        setIsInviting(false);
+        handleCancelInvite();
     }
   };
 
-  const handleRemoveFromDepartmentRequest = (volunteer: DetailedVolunteer) => {
+  const handleSaveVolunteer = async (volunteerData: Omit<DetailedVolunteer, 'created_at' | 'departments'>, departmentIds: number[]) => {
+    setSaveError(null);
+    setIsSaving(true);
+    if (!volunteerData.id) { // Only show loading modal for new invites
+        setIsSendingInviteModalOpen(true);
+    }
+
+    const functionToCall = volunteerData.id ? 'disable-user' : 'invite-volunteer';
+
+    try {
+        const { error: invokeError } = await supabase.functions.invoke(functionToCall, {
+            body: { 
+              email: volunteerData.email,
+              name: volunteerData.name,
+              departmentIds: departmentIds
+            },
+        });
+        
+        if (invokeError) throw invokeError;
+        
+        showNotification(
+            volunteerData.id ? 'Voluntário atualizado com sucesso!' : 'Convite enviado com sucesso!',
+            'success'
+        );
+        hideForm();
+        await fetchVolunteers();
+        onDataChange();
+    } catch (err) {
+        setSaveError(`Falha ao salvar: ${getErrorMessage(err)}`);
+    } finally {
+        setIsSaving(false);
+        setIsSendingInviteModalOpen(false);
+    }
+  };
+
+
+  const handleRemoveRequest = (volunteer: DetailedVolunteer) => {
     setVolunteerToRemove(volunteer);
     setIsRemoveModalOpen(true);
   };
-
+  
   const handleCancelRemove = () => {
     setIsRemoveModalOpen(false);
     setVolunteerToRemove(null);
   };
-
-  const handleConfirmRemoveFromDepartment = async () => {
-    if (!volunteerToRemove) return;
+  
+  const handleConfirmRemove = async () => {
+    if (!volunteerToRemove || !volunteerToRemove.id) return;
     setIsRemoving(true);
     try {
       const { error } = await supabase.functions.invoke('remove-from-department', {
         body: { volunteerId: volunteerToRemove.id }
       });
       if (error) throw error;
-      await fetchVolunteers();
-    } catch (err) {
-      alert(`Falha ao remover voluntário: ${getErrorMessage(err)}`);
+      showNotification(`${volunteerToRemove.name} removido do departamento!`, 'success');
+      await fetchVolunteers(); // Refetch to update the UI
+    } catch (err: any) {
+      showNotification(`Erro ao remover: ${getErrorMessage(err)}`, 'error');
     } finally {
       setIsRemoving(false);
       handleCancelRemove();
     }
   };
 
-  const handleSaveVolunteer = async (volunteerData: any, departmentIds: number[]) => {
-    setIsSaving(true);
-    setSaveError(null);
-    
-    try {
-        if (!volunteerData.id) { // New user invitation
-            const { error: inviteError } = await supabase.functions.invoke('invite-volunteer', {
-                body: { 
-                    name: volunteerData.name, 
-                    email: volunteerData.email,
-                    departmentIds: departmentIds 
-                },
-            });
-            if (inviteError) throw inviteError;
-        } else { // Editing existing volunteer
-            const { error: saveError } = await supabase.functions.invoke('save-volunteer-profile', {
-                body: { 
-                    volunteerData: { ...volunteerData, id: volunteerData.id }, 
-                    departmentIds: departmentIds 
-                },
-            });
-            if (saveError) throw saveError;
-        }
-        
-        await fetchVolunteers();
-        hideForm();
-
-    } catch(error: any) {
-        let errorMessage = getErrorMessage(error);
-        if (error.context && typeof error.context.json === 'function') {
-            try {
-                const errorJson = await error.context.json();
-                if (errorJson && errorJson.error) {
-                    errorMessage = errorJson.error;
-                }
-            } catch (parseError) { /* ignore */ }
-        }
-        setSaveError(`Falha ao salvar: ${errorMessage}`);
-        console.error("Error saving/inviting volunteer:", error);
-    } finally {
-        setIsSaving(false);
-    }
-  };
-
-
   const renderContent = () => {
-    if (loading) {
-        return <p className="text-center text-slate-500 mt-10">Carregando voluntários...</p>;
-    }
-    if (error) {
-        return <p className="text-center text-red-500 mt-10">{error}</p>;
-    }
+    if (loading) return <p className="text-center text-slate-500 mt-10">Carregando voluntários...</p>;
+    if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
     return (
-        <div className="space-y-6">
-          {volunteersToDisplay.length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {volunteersToDisplay.map((volunteer) => {
-                    return (
-                        <VolunteerCard 
-                            key={volunteer.id} 
-                            volunteer={volunteer} 
-                            onEdit={handleEditVolunteer}
-                            onInvite={handleInviteRequest}
-                            onRemoveFromDepartment={handleRemoveFromDepartmentRequest}
-                            userRole={userRole}
-                            leaderDepartmentName={leaderDepartmentName}
-                            isInvitePending={pendingInvites.has(volunteer.id!)}
-                        />
-                    )
-                  })}
-              </div>
-              {totalPages > 1 && (
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
+      <div className="space-y-6">
+        <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+            <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+                </div>
+                <input 
+                    type="text"
+                    placeholder="Buscar por nome ou email do voluntário..."
+                    className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
                 />
-              )}
-            </>
-          ) : (
-            <div className="text-center py-12 text-slate-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.226a3 3 0 0 0-4.682 2.72 9.094 9.094 0 0 0 3.741.479m7.5-2.226V18a2.25 2.25 0 0 1-2.25 2.25H12a2.25 2.25 0 0 1-2.25-2.25v-.226m3.75-10.5a3.375 3.375 0 0 0-6.75 0v1.5a3.375 3.375 0 0 0 6.75 0v-1.5Z" />
-                </svg>
-                <h3 className="mt-4 text-lg font-medium text-slate-800">Nenhum voluntário encontrado</h3>
-                <p className="mt-1 text-sm">Tente ajustar seus termos de busca ou convide um novo voluntário.</p>
             </div>
-          )}
         </div>
-      );
+
+        {volunteersToDisplay.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {volunteersToDisplay.map((volunteer) => (
+                <VolunteerCard 
+                  key={volunteer.id} 
+                  volunteer={volunteer}
+                  onEdit={handleEditVolunteer}
+                  onInvite={handleInviteRequest}
+                  onRemoveFromDepartment={handleRemoveRequest}
+                  userRole={userRole}
+                  leaderDepartmentName={leaderDepartmentName}
+                  isInvitePending={pendingInvites.has(volunteer.id!)}
+                />
+              ))}
+            </div>
+            <Pagination 
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </>
+        ) : (
+          <div className="text-center py-12 text-slate-500">
+            <h3 className="text-lg font-medium text-slate-800">Nenhum voluntário encontrado</h3>
+            <p className="mt-1 text-sm">Tente ajustar seus termos de busca ou adicione um novo voluntário.</p>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -417,23 +414,18 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
           <p className="text-slate-500 mt-1">Gerencie os voluntários de sua organização.</p>
         </div>
         {!isFormOpen && (
-          <div className="flex items-center gap-2 w-full md:w-auto">
-           
-            <button 
-              onClick={() => { setEditingVolunteer(null); showForm(); }}
-              className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto justify-center"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                <span>Novo Voluntário</span>
-            </button>
-          </div>
+          <button 
+            onClick={() => { setEditingVolunteer(null); showForm(); }}
+            className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto justify-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+            <span>Convidar Voluntário</span>
+          </button>
         )}
       </div>
 
       {isFormOpen ? (
-        <NewVolunteerForm
+        <NewVolunteerForm 
           initialData={editingVolunteer}
           onCancel={hideForm}
           onSave={handleSaveVolunteer}
@@ -447,20 +439,12 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         renderContent()
       )}
 
-      {isScannerOpen && (
-          <QRScannerModal
-              isOpen={isScannerOpen}
-              onClose={() => setIsScannerOpen(false)}
-              onScanSuccess={handleScanSuccess}
-              scanningEventName={activeEvent?.name}
-          />
-      )}
       <ConfirmationModal
         isOpen={isInviteModalOpen}
         onClose={handleCancelInvite}
         onConfirm={handleConfirmInvite}
-        title="Convidar Voluntário"
-        message={`Tem certeza que deseja convidar ${volunteerToInvite?.name} para seu departamento?`}
+        title="Confirmar Convite"
+        message={`Tem certeza de que deseja convidar ${volunteerToInvite?.name} para o seu departamento?`}
         isLoading={isInviting}
         confirmButtonClass="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
         iconType="info"
@@ -468,11 +452,23 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       <ConfirmationModal
         isOpen={isRemoveModalOpen}
         onClose={handleCancelRemove}
-        onConfirm={handleConfirmRemoveFromDepartment}
-        title="Remover Voluntário"
-        message={`Tem certeza que deseja remover ${volunteerToRemove?.name} do seu departamento?`}
+        onConfirm={handleConfirmRemove}
+        title="Confirmar Remoção"
+        message={`Tem certeza de que deseja remover ${volunteerToRemove?.name} do seu departamento?`}
         isLoading={isRemoving}
+        confirmButtonClass="bg-red-600 hover:bg-red-700 focus:ring-red-500"
+        iconType="warning"
       />
+       {isSendingInviteModalOpen && (
+        <ConfirmationModal
+            isOpen={isSendingInviteModalOpen}
+            onClose={() => {}}
+            onConfirm={() => {}}
+            title="Enviando Convite..."
+            message="Aguarde enquanto o convite é processado."
+            isLoading={true}
+        />
+    )}
     </div>
   );
 };
