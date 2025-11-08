@@ -161,13 +161,14 @@ export interface TimelineTemplate {
   created_at?: string;
 }
 export interface DepartmentJoinRequest {
+    // FIX: Add missing 'id' property to match the database schema.
     id: number;
-    created_at: string;
     volunteer_id: number;
     department_id: number;
     status: 'pendente' | 'aprovado' | 'recusado';
     volunteers: {
       id: number;
+      user_id: string;
       name: string;
       initials: string;
       email: string;

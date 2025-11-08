@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Removed problematic Supabase type imports and used 'any' as a workaround.
@@ -23,7 +25,8 @@ const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = (
 
 const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, leaders }) => {
     const [volunteerData, setVolunteerData] = useState<DetailedVolunteer | null>(null);
-    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null; status: 'aprovado' | 'pendente' }[]>([]);
+    // FIX: Widen state type to include 'recusado' to match incoming data type before filtering.
+    const [departmentDetails, setDepartmentDetails] = useState<{ name: string; leader: string | null; status: 'aprovado' | 'pendente' | 'recusado' }[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -56,63 +59,53 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
         try {
             const { data: volunteerProfile, error: fetchError } = await supabase
                 .from('volunteers')
-                .select('*, volunteer_departments(departments(id, name))')
+                .select('*, volunteer_departments(department_id, status, departments(id, name))')
                 .eq('user_id', userId) // Use the stable userId
                 .single();
     
             if (fetchError) throw fetchError;
     
+            const allRelations = volunteerProfile.volunteer_departments || [];
+
+            // For the main profile object, only show approved departments
+            const approvedDepartments = allRelations
+                .filter((vd: any) => vd.status === 'aprovado' && vd.departments)
+                .map((vd: any) => vd.departments);
+
             const transformedProfile = {
                 ...volunteerProfile,
-                departments: (volunteerProfile.volunteer_departments || []).map((vd: any) => vd.departments).filter(Boolean)
+                departments: approvedDepartments
             };
             setVolunteerData(transformedProfile as DetailedVolunteer);
     
-            // Combine approved departments with pending requests
-            const approvedDeptIds = transformedProfile.departments.map((d: any) => d.id);
-            
-            let pendingRequests: DepartmentJoinRequest[] = [];
-            const { data: pendingRequestsData, error: requestError } = await supabase
-                .from('department_join_requests')
-                .select('*, departments(id, name)')
-                .eq('volunteer_id', transformedProfile.id)
-                .eq('status', 'pendente');
-    
-            if (requestError) {
-                // Gracefully handle if the table doesn't exist by checking for PostgREST's "Not Found" error code.
-                if ((requestError as any).code !== 'PGRST205') {
-                    console.warn("Could not fetch department join requests, proceeding without them. Error:", getErrorMessage(requestError));
-                }
-                // In either case (table not found or other error), we proceed with an empty requests array.
-            } else {
-                pendingRequests = (pendingRequestsData as DepartmentJoinRequest[]) || [];
-            }
-    
-            const allDepartmentIds = [...new Set([...approvedDeptIds, ...pendingRequests.map(r => r.department_id)])];
-            
-            let finalDepartmentDetails: { name: string; leader: string | null; status: 'aprovado' | 'pendente' }[] = [];
-    
+            // For the detailed list in the UI, we need all statuses
+            const allDepartmentIds = allRelations.map((vd: any) => vd.department_id);
+            let finalDepartmentDetails: { name: string; leader: string | null; status: 'aprovado' | 'pendente' | 'recusado' }[] = [];
+
             if (allDepartmentIds.length > 0) {
                 const { data: leadersData, error: leadersError } = await supabase
                     .from('department_leaders')
                     .select('department_id, leader_id')
                     .in('department_id', allDepartmentIds);
                 if (leadersError) throw leadersError;
-    
+
                 const leaderMap = new Map(leaders.map(l => [l.id, l.user_metadata?.name]));
-                
-                transformedProfile.departments.forEach((dept: any) => {
-                    const deptLeaders = leadersData.filter(rel => rel.department_id === dept.id).map(rel => leaderMap.get(rel.leader_id)).filter(Boolean);
-                    finalDepartmentDetails.push({ name: dept.name, leader: deptLeaders.join(', ') || 'Não atribuído', status: 'aprovado' });
-                });
-    
-                pendingRequests.forEach(req => {
-                    const dept = req.departments as {id: number, name: string};
-                    if (dept) {
-                         const deptLeaders = leadersData.filter(rel => rel.department_id === dept.id).map(rel => leaderMap.get(rel.leader_id)).filter(Boolean);
-                         finalDepartmentDetails.push({ name: dept.name, leader: deptLeaders.join(', ') || 'Não atribuído', status: 'pendente' });
-                    }
-                });
+
+                finalDepartmentDetails = allRelations
+                    .map((vd: any) => {
+                        const dept = vd.departments;
+                        if (!dept) return null;
+
+                        const deptLeaders = leadersData.filter(rel => rel.department_id === dept.id).map(rel => leaderMap.get(rel.leader_id)).filter(Boolean);
+                        return {
+                            name: dept.name,
+                            leader: deptLeaders.join(', ') || 'Não atribuído',
+                            status: vd.status
+                        };
+                    })
+                    .filter((details): details is { name: string; leader: string | null; status: 'aprovado' | 'pendente' | 'recusado' } => details !== null)
+                    // Don't show 'recusado' status on the profile page.
+                    .filter(details => details.status !== 'recusado');
             }
             setDepartmentDetails(finalDepartmentDetails);
     
