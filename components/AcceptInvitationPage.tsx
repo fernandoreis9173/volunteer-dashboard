@@ -304,7 +304,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 password: password,
                 data: { 
                     name: fullName, 
-                    phone: phone.replace(/[^\d]/g, '')
+                    phone: phone.replace(/[^\d]/g, ''),
+                    status: 'Ativo', // CRITICAL FIX: Update status upon registration
                 }
             });
 
