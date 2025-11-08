@@ -355,7 +355,11 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     try {
         if (!volunteerData.id) { // New user invitation
             const { error: inviteError } = await supabase.functions.invoke('invite-volunteer', {
-                body: { name: volunteerData.name, email: volunteerData.email },
+                body: { 
+                    name: volunteerData.name, 
+                    email: volunteerData.email,
+                    departmentIds: departmentIds 
+                },
             });
             if (inviteError) throw inviteError;
         } else { // Editing existing volunteer
@@ -372,7 +376,15 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         hideForm();
 
     } catch(error: any) {
-        const errorMessage = getErrorMessage(error);
+        let errorMessage = getErrorMessage(error);
+        if (error.context && typeof error.context.json === 'function') {
+            try {
+                const errorJson = await error.context.json();
+                if (errorJson && errorJson.error) {
+                    errorMessage = errorJson.error;
+                }
+            } catch (parseError) { /* ignore */ }
+        }
         setSaveError(`Falha ao salvar: ${errorMessage}`);
         console.error("Error saving/inviting volunteer:", error);
     } finally {
