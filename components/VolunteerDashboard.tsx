@@ -1,5 +1,11 @@
 
 
+
+
+
+
+
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DetailedVolunteer, DashboardEvent, Page, Event as VolunteerEvent, Invitation, VolunteerSchedule } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -84,7 +90,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [isLiveEventModalOpen, setIsLiveEventModalOpen] = useState(false);
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [qrCodeData, setQrCodeData] = useState<object | null>(null);
     const [qrCodeEvent, setQrCodeEvent] = useState<VolunteerSchedule | null>(null);
@@ -148,7 +153,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             const completeProfile = { ...volProfile, departments: transformedDepartments };
             setVolunteerProfile(completeProfile as unknown as DetailedVolunteer);
     
-            const scheduleData = scheduleRes.data || [];
+            const scheduleData = (scheduleRes.data as any[]) || [];
             if (scheduleData.length > 0) {
                 const eventIds = [...new Set(scheduleData.map((item: any) => item.id))];
 
@@ -159,8 +164,11 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 
                 if (timelineError) throw timelineError;
                 
-                const timelineMap = new Map((timelineData || []).map((e: any) => [e.id, { cronograma_principal_id: e.cronograma_principal_id, cronograma_kids_id: e.cronograma_kids_id }]));
+                // FIX: Cast `timelineData` to `any[]` to ensure correct type inference for `timelineMap`.
+                // Without this, `timelineMap` can be inferred as `Map<unknown, unknown>`, causing downstream errors.
+                const timelineMap = new Map(((timelineData as any[]) || []).map((e: any) => [e.id, { cronograma_principal_id: e.cronograma_principal_id, cronograma_kids_id: e.cronograma_kids_id }]));
 
+                // FIX: Explicitly type `item` as `any` to prevent it from being inferred as `unknown`. This resolves type errors when accessing properties on `item` and when using it to look up values in `timelineMap`.
                 const allMySchedules: VolunteerSchedule[] = scheduleData.map((item: any) => {
                     const timelineInfo = timelineMap.get(item.id) || { cronograma_principal_id: null, cronograma_kids_id: null };
                     return {
@@ -240,7 +248,29 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
     }, [loading, volunteerProfile]);
 
     const handleLiveEventNavigate = () => {
-        if (activeEvent) setIsLiveEventModalOpen(true);
+        if (activeEvent && volunteerProfile) {
+            // The active event might involve the volunteer in multiple departments.
+            // We find the first one to scroll to.
+            const scheduleDetails = activeEvent.event_volunteers.find(
+                ev => ev.volunteer_id === volunteerProfile.id
+            );
+    
+            if (scheduleDetails) {
+                const cardId = `event-card-${activeEvent.id}-${scheduleDetails.department_id}`;
+                const cardElement = document.getElementById(cardId);
+                if (cardElement) {
+                    cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // Add a temporary highlight effect for better UX. Using classes for cleaner state management.
+                    cardElement.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2', 'transition-shadow', 'duration-300');
+                    setTimeout(() => {
+                        cardElement.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+                    }, 2500); // Highlight for 2.5 seconds
+                } else {
+                    console.warn(`Could not find event card with ID: ${cardId}`);
+                }
+            }
+        }
     };
 
     const handleGenerateQrCode = (event: VolunteerSchedule) => {
@@ -383,12 +413,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 </div>
             </div>
 
-            <LiveEventDetailsModal
-                isOpen={isLiveEventModalOpen}
-                event={activeEvent}
-                volunteerProfile={volunteerProfile}
-                onClose={() => setIsLiveEventModalOpen(false)}
-            />
             <QRCodeDisplayModal
                 isOpen={isQrModalOpen}
                 onClose={() => setIsQrModalOpen(false)}
@@ -500,7 +524,7 @@ const EventCard: React.FC<{
     const myAttendance = event.present;
 
     return (
-        <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
+        <div id={`event-card-${event.id}-${event.department_id}`} className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 transition-shadow">
             <div className="flex justify-between items-start">
                 <div className="flex-1 min-w-0">
                     <p className="font-bold text-slate-800 truncate" title={event.name}>{event.name}</p>
