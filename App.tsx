@@ -26,6 +26,7 @@ import IOSInstallPromptModal from './components/IOSInstallPromptModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
 import ApiConfigPage from './components/ApiConfigPage'; // Import the config page
 import TimelinesPage from './components/TimelinesPage';
+import LgpdConsentPage from './components/LgpdConsentPage'; // Importar a página de consentimento LGPD
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
 // FIX: Import EnrichedUser type to correctly type users from `list-users` function.
 import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer, type EnrichedUser } from './types';
@@ -45,6 +46,7 @@ interface UserProfileState {
   department_id: number | null;
   volunteer_id: number | null;
   status: string | null;
+  lgpd_accepted: boolean | null;
 }
 
 const pagePermissions: Record<Page, string[]> = {
@@ -135,10 +137,22 @@ const App: React.FC = () => {
         const userStatus = currentSession.user.user_metadata?.status;
         const userRole = currentSession.user.user_metadata?.role;
 
+        // Fetch LGPD status from the 'profiles' table for all users.
+        const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('lgpd_accepted')
+            .eq('id', currentSession.user.id)
+            .single();
+
+        if (profileError && profileError.code !== 'PGRST116') { // Ignore "row not found" error
+            console.error("Error fetching profile for LGPD check:", getErrorMessage(profileError));
+        }
+
+        const lgpdAccepted = profileData?.lgpd_accepted ?? false;
+
         if (userStatus === 'Inativo') {
-            // FIX: Initialize with a single null department_id for inactive users.
-            setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo' });
-            setIsLoading(false); // Stop loading, render disabled page.
+            setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo', lgpd_accepted: lgpdAccepted });
+            setIsLoading(false);
             return;
         }
 
@@ -148,11 +162,8 @@ const App: React.FC = () => {
             return;
         }
         
-        // If the user status is pending, we don't need to fetch detailed profiles yet.
-        // The registration page will handle the profile creation.
         if (userStatus === 'Pendente') {
-             // FIX: Initialize with a single null department_id for pending users.
-             setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null });
+             setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null, lgpd_accepted: lgpdAccepted });
              return;
         }
 
@@ -168,19 +179,18 @@ const App: React.FC = () => {
             
             profile = {
                 role: userRole,
-                // FIX: Initialize with a single null department_id for volunteers.
                 department_id: null,
                 volunteer_id: volunteerData?.id ?? null,
                 status: userStatus,
+                lgpd_accepted: lgpdAccepted
             };
 
         } else { // Admin/Leader
-             // FIX: Fetch only a single department ID for a leader, enforcing the business rule.
              const { data: leaderDept, error: leaderDeptError } = await supabase
                 .from('department_leaders')
                 .select('department_id')
                 .eq('leader_id', currentSession.user.id)
-                .maybeSingle(); // Use maybeSingle to handle admins with no departments.
+                .maybeSingle();
 
             if (leaderDeptError) {
                  console.error("Error fetching admin/leader department:", getErrorMessage(leaderDeptError));
@@ -188,15 +198,14 @@ const App: React.FC = () => {
             
             profile = {
                 role: userRole,
-                // FIX: Assign the single department ID to `department_id`.
                 department_id: leaderDept?.department_id || null,
                 volunteer_id: null,
                 status: userStatus,
+                lgpd_accepted: lgpdAccepted
             };
         }
         setUserProfile(profile);
 
-        // Fetch global data (like unread notifications count) for active users
         const { count } = await supabase
             .from('notifications')
             .select('*', { count: 'exact', head: true })
@@ -205,9 +214,9 @@ const App: React.FC = () => {
         setUnreadCount(count ?? 0);
     } catch (err) {
         console.error("Error fetching core user data:", getErrorMessage(err));
-        setUserProfile(null); // Clear profile on error
+        setUserProfile(null);
     } finally {
-        setIsLoading(false); // Signal that all initial data loading is complete.
+        setIsLoading(false);
     }
   }, []);
 
@@ -225,10 +234,9 @@ const App: React.FC = () => {
   }, []);
 
   const handleRegistrationComplete = useCallback(() => {
-    // After registration, user status is 'Ativo'. We just need to refetch the profile data.
     refetchUserData();
-    handleNavigate('dashboard');
-  }, [refetchUserData, handleNavigate]);
+    // A navegação para o dashboard será bloqueada pela verificação da LGPD
+  }, [refetchUserData]);
 
   const refetchNotificationCount = useCallback(async () => {
     if (session) {
@@ -711,9 +719,6 @@ const App: React.FC = () => {
         return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
     }
 
-    // If the main loading is done, but we're still waiting for a profile,
-    // this is an intermediate loading state. Show a spinner to prevent flashing
-    // the permission denied page.
     if (!userProfile) {
         return (
             <div className="flex flex-col items-center justify-center h-screen bg-slate-50" aria-live="polite" aria-busy="true">
@@ -738,6 +743,13 @@ const App: React.FC = () => {
         return <DisabledUserPage userRole={userProfile.role ?? null} />;
     }
 
+    // **NOVO: Verificação da LGPD**
+    // Se o usuário estiver logado e seu perfil carregado, mas ele não aceitou a LGPD,
+    // mostre a página de consentimento.
+    if (session && userProfile && !userProfile.lgpd_accepted) {
+        return <LgpdConsentPage session={session} onConsentAccepted={refetchUserData} />;
+    }
+    
     // Full-screen permission check, runs after all data is loaded and user status is confirmed as not 'Pendente'.
     if (!hasPermission) {
         return <PermissionDeniedPage onNavigate={handleNavigate} />;
