@@ -3,7 +3,7 @@ import type { Page } from '../types';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Use 'type' import for Session to resolve potential module resolution issues with Supabase v2.
 import { type Session } from '@supabase/supabase-js';
-import { DashboardIcon, VolunteerIcon, DepartamentsIcon, EventosIcon, AdminIcon, FrequenciaIcon, CalendarIcon, NewVolunteersIcon, AddEventsIcon, NotificationIcon, HistoryIcon, InstallAppIcon, LogoNovaIcon, ProfileIcon, LogoutIcon } from '@/assets/icons';
+import { DashboardIcon, VolunteerIcon, DepartamentsIcon, EventosIcon, AdminIcon, FrequenciaIcon, CalendarIcon, NewVolunteersIcon, AddEventsIcon, NotificationIcon, HistoryIcon, InstallAppIcon, LogoNovaIcon, ProfileIcon, LogoutIcon } from '../assets/icons';
 
 interface NavItemProps {
   icon: React.ReactElement<any>;
@@ -87,7 +87,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
     }, []);
 
     const handleLogout = async () => {
-        const { error } = await supabase.auth.signOut();
+        // FIX: Explicitly set the scope to 'local' to avoid a 403 Forbidden error.
+        // The client was incorrectly attempting a 'global' sign-out, which is not permitted
+        // by the user's session, leading to an AuthSessionMissingError.
+        const { error } = await supabase.auth.signOut({ scope: 'local' });
         if (error) {
             console.error('Error during sign out:', error);
         }

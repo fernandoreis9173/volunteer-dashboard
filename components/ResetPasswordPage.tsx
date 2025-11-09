@@ -39,8 +39,10 @@ const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ setAuthView }) =>
             setSuccessMessage('Sua senha foi redefinida com sucesso! Você será redirecionado para a tela de login em alguns segundos.');
             
             setTimeout(async () => {
-                // FIX: Reverted to Supabase v1 API `signOut` to fix method error.
-                await supabase.auth.signOut();
+                // FIX: Explicitly set the scope to 'local' to resolve a 403 Forbidden error.
+                // The client was incorrectly attempting a 'global' sign-out after a password
+                // reset, which is not permitted and was causing the redirection to fail.
+                await supabase.auth.signOut({ scope: 'local' });
                 setAuthView('login');
                 // We don't want the recovery hash in the URL on the login page.
                 window.location.hash = ''; 

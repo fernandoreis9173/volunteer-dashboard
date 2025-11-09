@@ -362,7 +362,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login para você acessar sua conta.');
             
             // Sign out the user session from the invite link
-            await supabase.auth.signOut();
+            // FIX: Explicitly set the scope to 'local' to resolve a 403 Forbidden error.
+            // After registration, the temporary invite session must be cleared locally
+            // to allow for a clean login. The default global scope was failing.
+            await supabase.auth.signOut({ scope: 'local' });
             
             // Redirect to login page after a short delay
             setTimeout(() => {

@@ -7,8 +7,10 @@ interface DisabledUserPageProps {
 
 const DisabledUserPage: React.FC<DisabledUserPageProps> = ({ userRole }) => {
     const handleLogout = async () => {
-        // FIX: Reverted to Supabase v1 API `signOut` to fix method error.
-        await supabase.auth.signOut();
+        // FIX: Explicitly set the scope to 'local' to resolve a 403 Forbidden error.
+        // The client was incorrectly attempting a 'global' sign-out, which requires
+        // higher permissions and was causing the logout to fail.
+        await supabase.auth.signOut({ scope: 'local' });
     };
 
     const getRoleDisplayName = (role: string | null): string => {

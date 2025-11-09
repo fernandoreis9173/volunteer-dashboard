@@ -711,14 +711,31 @@ const App: React.FC = () => {
         return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
     }
 
+    // If the main loading is done, but we're still waiting for a profile,
+    // this is an intermediate loading state. Show a spinner to prevent flashing
+    // the permission denied page.
+    if (!userProfile) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen bg-slate-50" aria-live="polite" aria-busy="true">
+                <div 
+                    className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
+                    role="status"
+                >
+                   <span className="sr-only">Carregando perfil...</span>
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-700">Carregando perfil...</p>
+            </div>
+        );
+    }
+
     // Fallback: If a user has a session but their profile is still pending (e.g., closed tab),
     // force them to the registration page.
-    if (userProfile?.status === 'Pendente') {
+    if (userProfile.status === 'Pendente') {
         return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
     }
 
     if (isUserDisabled) {
-        return <DisabledUserPage userRole={userProfile?.role ?? null} />;
+        return <DisabledUserPage userRole={userProfile.role ?? null} />;
     }
 
     // Full-screen permission check, runs after all data is loaded and user status is confirmed as not 'Pendente'.
