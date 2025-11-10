@@ -348,15 +348,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 }
 
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
-                const normalizedRole = role === 'lider' ? 'leader' : role;
-                const { error: profileUpsertError } = await supabase
-                    .from('profiles')
-                    .upsert({ id: user.id, role: normalizedRole }, { onConflict: 'id' });
-
-                if (profileUpsertError) {
-                    console.error("Critical error: Failed to upsert admin/leader profile.", profileUpsertError);
-                    throw new Error("Sua conta foi ativada, mas houve um erro ao criar seu perfil. Por favor, contate um administrador.");
-                }
+                // FIX: The profile for admins and leaders is created server-side by the 'invite-user' function.
+                // This client-side upsert was redundant and caused a permission error due to RLS policies.
+                // It is now removed, as only the auth user data needs updating at this stage.
+                console.log(`Admin/Leader registration for ${user.email}. Profile was created during invitation.`);
             }
             
             setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login para você acessar sua conta.');
