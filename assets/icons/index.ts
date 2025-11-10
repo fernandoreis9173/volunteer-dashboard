@@ -20,7 +20,8 @@ import HistoryIcon from './history.svg';
  import LogoutIcon from './logout.svg';
  import NextEventIcon from './nextEvent.svg';
 import LogoMobileIcon from './logomobile.svg';
-import CronogramasIcon from './iconcronogramas.svg';
+ import CronogramasIcon from './iconcronogramas.svg';
+import EditIcon from './editicon.svg';
  
 
 // Mapeamento de ícones por nome
@@ -60,6 +61,7 @@ export const icons = {
   'next-event': NextEventIcon,
   logomobile: LogoMobileIcon,
   cronogramas: CronogramasIcon,
+  edit: EditIcon,
 } as const;
 
 // Tipos TypeScript
@@ -89,7 +91,7 @@ export {
   NextEventIcon,
   LogoMobileIcon,
   CronogramasIcon,
+  EditIcon,
 };
-
 // Função helper para obter ícone por nome
 export const getIcon = (name: IconName) => icons[name];
