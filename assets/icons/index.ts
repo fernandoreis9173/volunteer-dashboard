@@ -20,6 +20,7 @@ import HistoryIcon from './history.svg';
  import LogoutIcon from './logout.svg';
  import NextEventIcon from './nextEvent.svg';
 import LogoMobileIcon from './logomobile.svg';
+import CronogramasIcon from './iconcronogramas.svg';
  
 
 // Mapeamento de ícones por nome
@@ -58,6 +59,7 @@ export const icons = {
   nextEvent: NextEventIcon,
   'next-event': NextEventIcon,
   logomobile: LogoMobileIcon,
+  cronogramas: CronogramasIcon,
 } as const;
 
 // Tipos TypeScript
@@ -86,6 +88,7 @@ export {
   LogoutIcon,
   NextEventIcon,
   LogoMobileIcon,
+  CronogramasIcon,
 };
 
 // Função helper para obter ícone por nome
