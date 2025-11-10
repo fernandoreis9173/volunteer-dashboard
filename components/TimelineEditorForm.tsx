@@ -3,6 +3,7 @@ import { TimelineTemplate, TimelineItem, Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import SmartSearch, { type SearchItem } from './SmartSearch';
+import { EditIcon } from '../assets/icons';
 
 interface TimelineEditorFormProps {
     initialData: TimelineTemplate | null;
@@ -63,10 +64,10 @@ const LinkManager: React.FC<{
                                 <span className="truncate" title={link.title}>{link.title}</span>
                             </a>
                             <div className="flex items-center gap-1 flex-shrink-0">
-                                <button type="button" onClick={() => handleEditClick(link)} className="p-1 text-slate-500 hover:bg-slate-100 rounded-full">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L14.732 3.732z" /></svg>
-                                </button>
-                                <button type="button" onClick={() => onRemove(itemIndex, link.id)} className="p-1 text-red-500 hover:bg-red-100 rounded-full">
+                                <button type="button" onClick={() => handleEditClick(link)} className="p-0.5 text-slate-400 hover:bg-slate-200 rounded-full">
+  <img src={EditIcon} alt="Calendário" className="w-4 h-4 grayscale opacity-50" />
+</button>
+                                <button type="button" onClick={() => onRemove(itemIndex, link.id)} className="p-0 text-red-500 hover:bg-red-100 rounded-full">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                                 </button>
                             </div>
@@ -88,7 +89,7 @@ const LinkManager: React.FC<{
                     <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://youtube.com/..." className="w-full text-sm p-1 border-slate-300 rounded-md"/>
                     <div className="flex justify-end gap-2 mt-1">
                         <button type="button" onClick={handleCancel} className="text-xs px-2 py-1 rounded-md bg-slate-200 hover:bg-slate-300">Cancelar</button>
-                        <button type="button" onClick={handleSaveLink} className="text-xs px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700">{editingLink ? 'Salvar Alterações' : 'Salvar Link'}</button>
+                        <button type="button" onClick={handleSaveLink} className="text-xs px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700">{editingLink ? 'Salvar' : 'Salvar Link'}</button>
                     </div>
                 </div>
             )}
@@ -314,9 +315,9 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                 ))}
                 <div className="flex flex-col sm:flex-row gap-2">
                     <button onClick={handleAddItem} className="flex-1 text-center px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200">
-                        + Adicionar Bloco
+                        Adicionar Bloco
                     </button>
-                    <button onClick={() => setIsImportModalOpen(true)} className="flex-1 text-center px-4 py-2 text-sm font-semibold text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200">
+                     <button onClick={handleAddItem} className="flex-1 text-center px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200">
                         Adicionar de Modelo
                     </button>
                 </div>

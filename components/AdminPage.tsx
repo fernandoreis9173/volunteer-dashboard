@@ -279,7 +279,7 @@ const AdminPage: React.FC = () => {
 
                  {/* Broadcast Form */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
-                    <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa (Broadcast)</h2>
+                    <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa</h2>
                     <form onSubmit={handleBroadcastSubmit} className="space-y-4 flex-grow flex flex-col">
                         <div className="flex-grow">
                             <label htmlFor="broadcast-message" className="block text-sm font-medium text-slate-700 mb-1">Mensagem</label>

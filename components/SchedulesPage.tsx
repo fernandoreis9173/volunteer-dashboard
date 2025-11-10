@@ -727,7 +727,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
             <div className="space-y-6">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <input type="text" placeholder="Buscar por nome do evento..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                        <input type="text" placeholder="Buscar por evento..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
                         <CustomDatePicker name="start" value={dateFilters.start} onChange={(value: string) => setDateFilters(prev => ({ ...prev, start: value }))} />
                         <CustomDatePicker name="end" value={dateFilters.end} onChange={(value: string) => setDateFilters(prev => ({ ...prev, end: value }))} />
                         <div className="relative" ref={statusDropdownRef}>

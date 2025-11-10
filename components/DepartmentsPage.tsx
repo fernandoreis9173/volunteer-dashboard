@@ -244,7 +244,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
                 </div>
                 <input 
                     type="text"
-                    placeholder="Buscar por nome ou líder do departamento..."
+                    placeholder="Buscar por nome ou departamento..."
                     className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
