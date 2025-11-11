@@ -50,17 +50,36 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       const codeReader = new BrowserQRCodeReader();
 
       try {
+        // Primeiro pede permissão para a câmera
+        await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } 
+        }).then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        }).catch(() => {
+          // Se falhar com environment, tenta qualquer câmera
+        });
+
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
         
         // Tenta encontrar a câmera traseira
-        const backCamera = videoDevices.find(device => 
-          device.label.toLowerCase().includes('back') || 
-          device.label.toLowerCase().includes('rear') ||
-          device.label.toLowerCase().includes('traseira')
-        );
+        let selectedDeviceId = videoDevices[0]?.deviceId;
         
-        const selectedDeviceId = backCamera?.deviceId || videoDevices[0]?.deviceId;
+        // Procura por câmera traseira em ordem de prioridade
+        const backCamera = videoDevices.find(device => {
+          const label = device.label.toLowerCase();
+          return label.includes('back') || 
+                 label.includes('rear') || 
+                 label.includes('traseira') ||
+                 label.includes('environment');
+        });
+        
+        if (backCamera) {
+          selectedDeviceId = backCamera.deviceId;
+        } else if (videoDevices.length > 1) {
+          // Se tem mais de uma câmera, geralmente a segunda é a traseira
+          selectedDeviceId = videoDevices[1].deviceId;
+        }
 
         if (selectedDeviceId && videoRef.current && !controlsRef.current) {
           controlsRef.current = await codeReader.decodeFromVideoDevice(
@@ -117,18 +136,20 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 m-4 text-center transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-auto text-center transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="modal-title" className="text-xl font-bold text-slate-900">
-          Escanear QR Code
-        </h3>
-        <p className="text-sm text-slate-500 mt-1">
-          Alinhe o QR Code do voluntário para o evento <br /> 
-          <span className="font-semibold">{scanningEventName}</span>.
-        </p>
+        <div className="p-6">
+          <h3 id="modal-title" className="text-xl font-bold text-slate-900">
+            Escanear QR Code
+          </h3>
+          <p className="text-sm text-slate-500 mt-1">
+            Alinhe o QR Code do voluntário para o evento <br /> 
+            <span className="font-semibold">{scanningEventName}</span>.
+          </p>
+        </div>
 
-        <div className="my-6 mx-auto overflow-hidden rounded-lg relative bg-slate-900 video-container">
+        <div className="relative bg-slate-900 video-container">
           <video 
             ref={videoRef}
             className="scanner-video"
@@ -146,29 +167,31 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          className="mt-4 w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-slate-600 text-base font-semibold text-white shadow-sm hover:bg-slate-700 sm:w-auto"
-          onClick={onClose}
-        >
-          Cancelar
-        </button>
+        <div className="p-6">
+          <button
+            type="button"
+            className="w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-slate-600 text-base font-semibold text-white shadow-sm hover:bg-slate-700"
+            onClick={onClose}
+          >
+            Cancelar
+          </button>
+        </div>
       </div>
 
       <style>{`
         .video-container {
-          width: 100%;
           height: 400px;
           position: relative;
         }
 
         .scanner-video {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          object-position: center !important;
         }
 
         .scanner-overlay {
