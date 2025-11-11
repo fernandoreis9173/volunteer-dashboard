@@ -90,17 +90,26 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         </p>
 
         <div className="my-6 mx-auto overflow-hidden rounded-lg relative bg-slate-900" 
-             style={{ width: '100%', height: '400px' }}>
+             style={{ width: '100%', height: '400px', position: 'relative' }}>
           <Webcam
             ref={webcamRef}
             audio={false}
             screenshotFormat="image/jpeg"
             videoConstraints={{
-              facingMode: 'environment'
+              facingMode: 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
             }}
+            className="qr-webcam"
             style={{
-              width: '100%',
-              height: '100%',
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              minWidth: '100%',
+              minHeight: '100%',
+              width: 'auto',
+              height: 'auto',
               objectFit: 'cover'
             }}
           />
@@ -126,6 +135,19 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       </div>
 
       <style>{`
+        .qr-webcam video {
+          position: absolute !important;
+          top: 50% !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) !important;
+          -webkit-transform: translate(-50%, -50%) !important;
+          min-width: 100% !important;
+          min-height: 100% !important;
+          width: auto !important;
+          height: auto !important;
+          object-fit: cover !important;
+        }
+
         .scanner-overlay {
           position: absolute;
           inset: 0;
