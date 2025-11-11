@@ -93,9 +93,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             Alinhe o QR Code do voluntário para o evento <br/> <span className="font-semibold">{scanningEventName}</span>.
         </p>
         
-        <div className="my-6 w-full h-96 overflow-hidden rounded-lg relative bg-slate-900">
+        <div className="my-6 w-full max-w-sm mx-auto overflow-hidden rounded-lg relative bg-slate-900" style={{ height: '400px' }}>
             <div id={qrcodeRegionId} className="w-full h-full"></div>
-            <div className="absolute inset-0 scanner-overlay">
+            <div className="absolute inset-0 scanner-overlay pointer-events-none">
                 <div className="scanner-line"></div>
                 <div className="corner top-left"></div>
                 <div className="corner top-right"></div>
@@ -121,13 +121,12 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             overflow: hidden;
         }
         #${qrcodeRegionId} video {
-            position: absolute !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            /* Over-scale to force covering the container, a common fix for iOS */
-            min-width: 150% !important;
-            min-height: 150% !important;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 100%;
+            min-height: 100%;
             width: auto !important;
             height: auto !important;
             object-fit: cover !important;
@@ -136,7 +135,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
         .scanner-overlay {
             position: absolute;
             inset: 0;
-            box-shadow: inset 0 0 0 50vmax rgba(0,0,0,0.5); /* Creates the "window" effect */
+            box-shadow: inset 0 0 0 50vmax rgba(0,0,0,0.5);
+            z-index: 1;
         }
         
         .scanner-line {
@@ -144,7 +144,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             left: 5%;
             right: 5%;
             height: 2px;
-            background: #ef4444; /* red-500 */
+            background: #ef4444;
             box-shadow: 0 0 10px #ef4444;
             animation: scan 2.5s infinite linear;
         }
@@ -159,7 +159,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
         .corner.top-right { top: 10px; right: 10px; border-left: none; border-bottom: none; }
         .corner.bottom-left { bottom: 10px; left: 10px; border-right: none; border-top: none; }
         .corner.bottom-right { bottom: 10px; right: 10px; border-left: none; border-top: none; }
-
 
         @keyframes scan {
             0% { top: 5%; }
