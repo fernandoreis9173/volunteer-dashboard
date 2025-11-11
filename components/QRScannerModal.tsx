@@ -126,12 +126,18 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             overflow: hidden !important;
             background: #000;
         }
-        #${qrcodeRegionId} > div {
+        #${qrcodeRegionId} * {
+            max-width: 100% !important;
+        }
+        #${qrcodeRegionId} > div,
+        #${qrcodeRegionId} > div > div {
             width: 100% !important;
             height: 100% !important;
             position: absolute !important;
             top: 0 !important;
             left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
         }
         #${qrcodeRegionId} video {
             position: absolute !important;
@@ -141,9 +147,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             bottom: 0 !important;
             width: 100% !important;
             height: 100% !important;
+            max-width: 100% !important;
             object-fit: cover !important;
             transform: none !important;
             -webkit-transform: none !important;
+        }
+        #${qrcodeRegionId} canvas {
+            display: none !important;
         }
 
         .scanner-overlay {
