@@ -181,17 +181,23 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       <style>{`
         .video-container {
           height: 400px;
+          width: 100%;
           position: relative;
+          overflow: hidden;
+          background: #000;
         }
 
         .scanner-video {
           position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: 100% !important;
-          height: 100% !important;
+          top: 50% !important;
+          left: 50% !important;
+          min-width: 100% !important;
+          min-height: 100% !important;
+          width: auto !important;
+          height: auto !important;
+          transform: translate(-50%, -50%) !important;
+          -webkit-transform: translate(-50%, -50%) !important;
           object-fit: cover !important;
-          object-position: center !important;
         }
 
         .scanner-overlay {
