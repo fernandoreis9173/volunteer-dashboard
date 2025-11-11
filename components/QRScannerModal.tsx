@@ -93,8 +93,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             Alinhe o QR Code do voluntário para o evento <br/> <span className="font-semibold">{scanningEventName}</span>.
         </p>
         
-        <div className="my-6 w-full max-w-sm mx-auto overflow-hidden rounded-lg relative bg-slate-900" style={{ height: '400px', width: '100%' }}>
-            <div id={qrcodeRegionId} className="w-full h-full" style={{ position: 'relative' }}></div>
+        <div className="my-6 mx-auto overflow-hidden rounded-lg relative bg-slate-900" style={{ height: '400px', width: '100%', maxWidth: '100%' }}>
+            <div id={qrcodeRegionId} style={{ width: '100%', height: '100%', position: 'relative' }}></div>
             <div className="absolute inset-0 scanner-overlay pointer-events-none">
                 <div className="scanner-line"></div>
                 <div className="corner top-left"></div>
@@ -113,23 +113,37 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
         </button>
       </div>
        <style>{`
+        * {
+            -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+        }
+        
         #${qrcodeRegionId} {
-            width: 100%;
-            height: 100%;
+            width: 100% !important;
+            height: 100% !important;
             border: none !important;
-            position: relative;
-            overflow: hidden;
+            position: relative !important;
+            overflow: hidden !important;
+            background: #000;
+        }
+        #${qrcodeRegionId} > div {
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
         }
         #${qrcodeRegionId} video {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            min-width: 100%;
-            min-height: 100%;
-            width: auto !important;
-            height: auto !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
             object-fit: cover !important;
+            transform: none !important;
+            -webkit-transform: none !important;
         }
 
         .scanner-overlay {
