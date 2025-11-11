@@ -26,9 +26,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       if (controlsRef.current) {
         try {
           controlsRef.current.stop();
-        } catch (e) {
-          // Ignora erros
-        }
+        } catch (e) {}
         controlsRef.current = null;
       }
       if (timeoutRef.current) {
@@ -45,41 +43,37 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
     isStartingRef.current = true;
 
-    // Aguarda um pouco antes de iniciar para evitar conflitos
     timeoutRef.current = setTimeout(async () => {
       const codeReader = new BrowserQRCodeReader();
 
       try {
-        // Primeiro pede permissão para a câmera
-        await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'environment' } 
+        // Pede permissão e define proporção 16:9
+        await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
         }).then(stream => {
           stream.getTracks().forEach(track => track.stop());
-        }).catch(() => {
-          // Se falhar com environment, tenta qualquer câmera
         });
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
         
-        // Tenta encontrar a câmera traseira
         let selectedDeviceId = videoDevices[0]?.deviceId;
-        
-        // Procura por câmera traseira em ordem de prioridade
         const backCamera = videoDevices.find(device => {
           const label = device.label.toLowerCase();
-          return label.includes('back') || 
-                 label.includes('rear') || 
-                 label.includes('traseira') ||
-                 label.includes('environment');
+          return (
+            label.includes('back') || 
+            label.includes('rear') || 
+            label.includes('traseira') ||
+            label.includes('environment')
+          );
         });
-        
-        if (backCamera) {
-          selectedDeviceId = backCamera.deviceId;
-        } else if (videoDevices.length > 1) {
-          // Se tem mais de uma câmera, geralmente a segunda é a traseira
-          selectedDeviceId = videoDevices[1].deviceId;
-        }
+
+        if (backCamera) selectedDeviceId = backCamera.deviceId;
+        else if (videoDevices.length > 1) selectedDeviceId = videoDevices[1].deviceId;
 
         if (selectedDeviceId && videoRef.current && !controlsRef.current) {
           controlsRef.current = await codeReader.decodeFromVideoDevice(
@@ -90,9 +84,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 if (controlsRef.current) {
                   try {
                     controlsRef.current.stop();
-                  } catch (e) {
-                    // Ignora erros
-                  }
+                  } catch (e) {}
                   controlsRef.current = null;
                 }
                 isStartingRef.current = false;
@@ -116,9 +108,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       if (controlsRef.current) {
         try {
           controlsRef.current.stop();
-        } catch (e) {
-          // Ignora erros ao parar
-        }
+        } catch (e) {}
         controlsRef.current = null;
       }
       isStartingRef.current = false;
@@ -180,7 +170,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
       <style>{`
         .video-container {
-          height: 400px;
+          aspect-ratio: 16 / 9;
           width: 100%;
           position: relative;
           overflow: hidden;
@@ -189,21 +179,16 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         .scanner-video {
           position: absolute !important;
-          top: 50% !important;
-          left: 50% !important;
-          min-width: 100% !important;
-          min-height: 100% !important;
-          width: auto !important;
-          height: auto !important;
-          transform: translate(-50%, -50%) !important;
-          -webkit-transform: translate(-50%, -50%) !important;
-          object-fit: cover !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: fill !important; /* ✅ Corrige a barra preta no iPhone */
         }
 
         .scanner-overlay {
           position: absolute;
           inset: 0;
-          box-shadow: inset 0 0 0 50vmax rgba(0,0,0,0.5);
           z-index: 1;
         }
 
