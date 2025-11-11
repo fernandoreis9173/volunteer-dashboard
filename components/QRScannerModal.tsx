@@ -22,11 +22,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) {
-      // Limpa tudo quando fechar
       if (controlsRef.current) {
-        try {
-          controlsRef.current.stop();
-        } catch (e) {}
+        try { controlsRef.current.stop(); } catch (e) {}
         controlsRef.current = null;
       }
       if (timeoutRef.current) {
@@ -47,12 +44,12 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       const codeReader = new BrowserQRCodeReader();
 
       try {
-        // Pede permissão e define proporção 16:9
+        // Força câmera traseira e proporção vertical (9:16)
         await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 720 },
+            height: { ideal: 1280 }
           }
         }).then(stream => {
           stream.getTracks().forEach(track => track.stop());
@@ -82,9 +79,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             (result) => {
               if (result) {
                 if (controlsRef.current) {
-                  try {
-                    controlsRef.current.stop();
-                  } catch (e) {}
+                  try { controlsRef.current.stop(); } catch (e) {}
                   controlsRef.current = null;
                 }
                 isStartingRef.current = false;
@@ -106,9 +101,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         timeoutRef.current = null;
       }
       if (controlsRef.current) {
-        try {
-          controlsRef.current.stop();
-        } catch (e) {}
+        try { controlsRef.current.stop(); } catch (e) {}
         controlsRef.current = null;
       }
       isStartingRef.current = false;
@@ -126,14 +119,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-auto text-center transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale overflow-hidden"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-xs mx-auto text-center transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6">
-          <h3 id="modal-title" className="text-xl font-bold text-slate-900">
+        <div className="p-4">
+          <h3 id="modal-title" className="text-lg font-bold text-slate-900">
             Escanear QR Code
           </h3>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Alinhe o QR Code do voluntário para o evento <br /> 
             <span className="font-semibold">{scanningEventName}</span>.
           </p>
@@ -157,10 +150,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-4">
           <button
             type="button"
-            className="w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-slate-600 text-base font-semibold text-white shadow-sm hover:bg-slate-700"
+            className="w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-slate-600 text-sm font-semibold text-white shadow-sm hover:bg-slate-700"
             onClick={onClose}
           >
             Cancelar
@@ -170,7 +163,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
       <style>{`
         .video-container {
-          aspect-ratio: 16 / 9;
+          aspect-ratio: 3 / 4;
           width: 100%;
           position: relative;
           overflow: hidden;
@@ -183,7 +176,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           left: 0 !important;
           width: 100% !important;
           height: 100% !important;
-          object-fit: fill !important; /* ✅ Corrige a barra preta no iPhone */
+          object-fit: fill !important;
         }
 
         .scanner-overlay {
@@ -194,8 +187,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         .scanner-line {
           position: absolute;
-          left: 5%;
-          right: 5%;
+          left: 10%;
+          right: 10%;
           height: 2px;
           background: #ef4444;
           box-shadow: 0 0 10px #ef4444;
@@ -204,9 +197,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         .corner {
           position: absolute;
-          width: 30px;
-          height: 30px;
-          border: 5px solid #ef4444;
+          width: 25px;
+          height: 25px;
+          border: 4px solid #ef4444;
         }
         .corner.top-left { top: 10px; left: 10px; border-right: none; border-bottom: none; }
         .corner.top-right { top: 10px; right: 10px; border-left: none; border-bottom: none; }
