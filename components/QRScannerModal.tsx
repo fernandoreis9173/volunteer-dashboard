@@ -125,8 +125,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             top: 50% !important;
             left: 50% !important;
             transform: translate(-50%, -50%) !important;
-            min-width: 100% !important;
-            min-height: 100% !important;
+            /* Over-scale to force covering the container, a common fix for iOS */
+            min-width: 150% !important;
+            min-height: 150% !important;
             width: auto !important;
             height: auto !important;
             object-fit: cover !important;
