@@ -93,7 +93,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             Alinhe o QR Code do voluntário para o evento <br/> <span className="font-semibold">{scanningEventName}</span>.
         </p>
         
-        <div className="my-6 w-full max-w-sm mx-auto aspect-[3/4] overflow-hidden rounded-lg relative bg-slate-900">
+        <div className="my-6 w-full h-96 overflow-hidden rounded-lg relative bg-slate-900">
             <div id={qrcodeRegionId} className="w-full h-full"></div>
             <div className="absolute inset-0 scanner-overlay">
                 <div className="scanner-line"></div>
