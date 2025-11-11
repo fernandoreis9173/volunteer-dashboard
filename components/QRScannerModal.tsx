@@ -117,10 +117,18 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, onScan
             width: 100%;
             height: 100%;
             border: none !important;
+            position: relative;
+            overflow: hidden;
         }
         #${qrcodeRegionId} video {
-            width: 100% !important;
-            height: 100% !important;
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            min-width: 100% !important;
+            min-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
             object-fit: cover !important;
         }
 
