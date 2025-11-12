@@ -317,8 +317,8 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                     <button onClick={handleAddItem} className="flex-1 text-center px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200">
                         Adicionar Bloco
                     </button>
-                     <button onClick={handleAddItem} className="flex-1 text-center px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200">
-                        Adicionar de Modelo
+                    <button onClick={() => setIsImportModalOpen(true)} className="flex-1 text-center px-4 py-2 text-sm font-semibold text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200">
+                        Adicionar Modelo
                     </button>
                 </div>
             </div>
