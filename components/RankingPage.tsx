@@ -1,0 +1,247 @@
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { getErrorMessage } from '../lib/utils';
+import { Session } from '@supabase/supabase-js';
+
+interface UserProfile {
+    volunteer_id: number | null;
+}
+
+interface RankingPageProps {
+    session: Session | null;
+    userProfile: UserProfile | null;
+}
+
+interface RankedVolunteer {
+    id: number;
+    name: string;
+    initials: string;
+    departments: { id: number; name: string }[];
+    totalPresent: number;
+    totalScheduled: number;
+}
+
+const StarIcon: React.FC<{ rank: number }> = ({ rank }) => {
+    const styles = {
+        1: { fill: '#FBBF24', stroke: '#FBBF24', strokeWidth: '2' }, // Gold, filled
+        2: { fill: 'none', stroke: '#9CA3AF', strokeWidth: '2' },    // Silver, outline
+        3: { fill: 'none', stroke: '#F97316', strokeWidth: '2' },    // Bronze, outline
+    };
+    const style = styles[rank as keyof typeof styles];
+
+    if (!style) return null;
+
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill={style.fill} stroke={style.stroke} strokeWidth={style.strokeWidth}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.563.563 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.563.563 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+        </svg>
+    );
+};
+
+
+const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
+    const [rankingData, setRankingData] = useState<RankedVolunteer[]>([]);
+    // FIX: The `departments` state was incorrectly typed as `Department[]`, but the fetch query only selects `id` and `name`. The type has been adjusted to `{ id: number; name: string }[]` to match the data being set, resolving the type error.
+    const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [selectedDepartment, setSelectedDepartment] = useState('all');
+    const [sortBy, setSortBy] = useState<'most' | 'least' | 'name'>('most');
+
+    const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
+    const deptDropdownRef = useRef<HTMLDivElement>(null);
+    const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
+    const sortDropdownRef = useRef<HTMLDivElement>(null);
+
+    const Dropdown: React.FC<{
+        buttonLabel: string;
+        options: { value: string; label: string }[];
+        selectedValue: string;
+        onSelect: (value: string) => void;
+        isOpen: boolean;
+        setIsOpen: (isOpen: boolean) => void;
+        dropdownRef: React.RefObject<HTMLDivElement>;
+    }> = ({ buttonLabel, options, selectedValue, onSelect, isOpen, setIsOpen, dropdownRef }) => (
+        <div className="relative" ref={dropdownRef}>
+            <button onClick={() => setIsOpen(!isOpen)} className="flex items-center justify-between w-full sm:w-auto px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors">
+                <span>{buttonLabel}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+            </button>
+            {isOpen && (
+                <div className="absolute left-0 mt-2 w-full sm:w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                    <ul className="py-1">
+                        {options.map(option => (
+                            <li key={option.value}><button onClick={() => { onSelect(option.value); setIsOpen(false); }} className={`w-full text-left px-4 py-2 text-sm ${selectedValue === option.value ? 'font-semibold text-blue-600 bg-blue-50' : 'text-slate-700 hover:bg-slate-100'}`}>{option.label}</button></li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (deptDropdownRef.current && !deptDropdownRef.current.contains(event.target as Node)) setIsDeptDropdownOpen(false);
+            if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) setIsSortDropdownOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const fetchRankingData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const [volunteersRes, attendanceRes, departmentsRes] = await Promise.all([
+                supabase.from('volunteers').select('id, name, initials, volunteer_departments(departments(id, name))').eq('status', 'Ativo'),
+                supabase.from('event_volunteers').select('volunteer_id, present'),
+                supabase.from('departments').select('id, name').order('name')
+            ]);
+
+            if (volunteersRes.error) throw volunteersRes.error;
+            if (attendanceRes.error) throw attendanceRes.error;
+            if (departmentsRes.error) throw departmentsRes.error;
+
+            const attendanceByVolunteer = new Map<number, { totalPresent: number; totalScheduled: number }>();
+            for (const record of attendanceRes.data) {
+                if (!attendanceByVolunteer.has(record.volunteer_id)) {
+                    attendanceByVolunteer.set(record.volunteer_id, { totalPresent: 0, totalScheduled: 0 });
+                }
+                const stats = attendanceByVolunteer.get(record.volunteer_id)!;
+                stats.totalScheduled++;
+                if (record.present) {
+                    stats.totalPresent++;
+                }
+            }
+
+            const rankedVolunteers: RankedVolunteer[] = volunteersRes.data.map((v: any) => {
+                const stats = attendanceByVolunteer.get(v.id) || { totalPresent: 0, totalScheduled: 0 };
+                return {
+                    id: v.id,
+                    name: v.name,
+                    initials: v.initials,
+                    departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean),
+                    ...stats
+                };
+            });
+            
+            setRankingData(rankedVolunteers);
+            setDepartments(departmentsRes.data || []);
+        } catch (err) {
+            setError(getErrorMessage(err));
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchRankingData();
+    }, [fetchRankingData]);
+
+    const processedRanking = useMemo(() => {
+        let filtered = [...rankingData];
+        if (selectedDepartment !== 'all') {
+            const deptId = parseInt(selectedDepartment, 10);
+            filtered = filtered.filter(v => v.departments.some(d => d.id === deptId));
+        }
+
+        return filtered.sort((a, b) => {
+            const percentageA = a.totalScheduled > 0 ? a.totalPresent / a.totalScheduled : 0;
+            const percentageB = b.totalScheduled > 0 ? b.totalPresent / b.totalScheduled : 0;
+            
+            switch (sortBy) {
+                case 'least':
+                    if (a.totalPresent !== b.totalPresent) return a.totalPresent - b.totalPresent;
+                    return percentageA - percentageB;
+                case 'name':
+                    return a.name.localeCompare(b.name);
+                case 'most':
+                default:
+                    if (b.totalPresent !== a.totalPresent) return b.totalPresent - a.totalPresent;
+                    return percentageB - percentageA;
+            }
+        });
+    }, [rankingData, selectedDepartment, sortBy]);
+
+    const currentUserRank = useMemo(() => {
+        if (!userProfile?.volunteer_id) return null;
+        const index = processedRanking.findIndex(v => v.id === userProfile.volunteer_id);
+        return index !== -1 ? index + 1 : null;
+    }, [processedRanking, userProfile]);
+
+    const departmentOptions = [{ value: 'all', label: 'Todos os Departamentos' }, ...departments.map(d => ({ value: String(d.id), label: d.name }))];
+    const sortOptions = [
+        { value: 'most', label: 'Mais Frequentes' },
+        { value: 'least', label: 'Menos Frequentes' },
+        { value: 'name', label: 'Nome (A-Z)' },
+    ];
+    const selectedDeptLabel = departmentOptions.find(d => d.value === selectedDepartment)?.label || 'Filtrar';
+    const selectedSortLabel = sortOptions.find(s => s.value === sortBy)?.label || 'Ordenar';
+
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold text-slate-800">Ranking de Presenças</h1>
+                <p className="text-slate-500 mt-1">Veja os voluntários mais engajados nos eventos.</p>
+            </div>
+
+            {currentUserRank && (
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg shadow-sm">
+                    <p className="font-semibold text-blue-800">Parabéns! Você está na <span className="text-xl">{currentUserRank}ª</span> posição no ranking atual.</p>
+                </div>
+            )}
+            
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-4">
+                <Dropdown buttonLabel={selectedDeptLabel} options={departmentOptions} selectedValue={selectedDepartment} onSelect={setSelectedDepartment} isOpen={isDeptDropdownOpen} setIsOpen={setIsDeptDropdownOpen} dropdownRef={deptDropdownRef} />
+                <Dropdown buttonLabel={selectedSortLabel} options={sortOptions} selectedValue={sortBy} onSelect={(value) => setSortBy(value as 'most' | 'least' | 'name')} isOpen={isSortDropdownOpen} setIsOpen={setIsSortDropdownOpen} dropdownRef={sortDropdownRef} />
+            </div>
+
+            {loading ? <p className="text-center text-slate-500 mt-10">Carregando ranking...</p> : error ? <p className="text-center text-red-500 mt-10">{error}</p> : (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="divide-y divide-slate-100">
+                        {processedRanking.map((volunteer, index) => {
+                            const rank = index + 1;
+                            const isTop3 = rank <= 3;
+                            const percentage = volunteer.totalScheduled > 0 ? (volunteer.totalPresent / volunteer.totalScheduled) * 100 : 0;
+                            const isCurrentUser = volunteer.id === userProfile?.volunteer_id;
+                            
+                            return (
+                                <div key={volunteer.id} className={`p-4 flex items-center gap-4 transition-colors ${isCurrentUser ? 'bg-blue-50' : ''}`}>
+                                    <div className="flex-shrink-0 w-12 flex items-center justify-center">
+                                        {isTop3 ? (
+                                            <StarIcon rank={rank} />
+                                        ) : (
+                                            <span className="text-lg font-bold text-slate-400">#{rank}</span>
+                                        )}
+                                    </div>
+                                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{volunteer.initials}</div>
+                                    
+                                    <p className="font-semibold text-slate-800 flex-grow min-w-0 truncate">{volunteer.name}</p>
+                
+                                    <div className="flex items-center gap-4 w-2/5 sm:w-1/3 md:w-1/4 flex-shrink-0">
+                                        <div className="w-full bg-slate-200 rounded-full h-2.5">
+                                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                        </div>
+                                        <span className="text-sm font-semibold text-slate-600 w-12 text-right">{volunteer.totalPresent}/{volunteer.totalScheduled}</span>
+                                        {percentage === 100 && volunteer.totalScheduled > 0 && (
+                                            <span title="100% de presença!" className="text-xl text-orange-500">🔥</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {processedRanking.length === 0 && (
+                        <div className="text-center py-12 text-slate-500">
+                            <h3 className="text-lg font-medium text-slate-800">Nenhum voluntário encontrado</h3>
+                            <p className="mt-1 text-sm">Tente ajustar seus filtros para encontrar resultados.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default RankingPage;

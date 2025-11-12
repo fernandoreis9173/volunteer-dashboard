@@ -3,7 +3,7 @@ import type { Page } from '../types';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Use 'type' import for Session to resolve potential module resolution issues with Supabase v2.
 import { type Session } from '@supabase/supabase-js';
-import { DashboardIcon, VolunteerIcon, DepartamentsIcon, EventosIcon, AdminIcon, FrequenciaIcon, CalendarIcon, NewVolunteersIcon, AddEventsIcon, NotificationIcon, HistoryIcon, InstallAppIcon, LogoNovaIcon, ProfileIcon, LogoutIcon, CronogramasIcon } from '../assets/icons';
+import { DashboardIcon, VolunteerIcon, DepartamentsIcon, EventosIcon, AdminIcon, FrequenciaIcon, CalendarIcon, NewVolunteersIcon, AddEventsIcon, NotificationIcon, HistoryIcon, InstallAppIcon, LogoNovaIcon, ProfileIcon, LogoutIcon, CronogramasIcon, RankingIcon } from '../assets/icons';
 
 interface NavItemProps {
   icon: React.ReactElement<any>;
@@ -64,6 +64,7 @@ const allNavItems: NavItemData[] = [
     { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIcon} alt="Notificações" />, roles: ['leader', 'volunteer'] },  
     { page: 'history', label: 'Histórico', icon: <img src={HistoryIcon} alt="Histórico" />, roles: ['volunteer'] },
     { page: 'volunteers', label: 'Voluntários', icon: <img src={VolunteerIcon} alt="Voluntários" />, roles: ['admin', 'leader'] },
+    { page: 'ranking', label: 'Ranking', icon: <img src={RankingIcon} alt="Ranking" />, roles: ['admin', 'leader', 'volunteer'] },
     { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIcon} alt="Departamentos" />, roles: ['admin'] },
     { page: 'events', label: 'Eventos', icon: <img src={EventosIcon} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },
     { page: 'calendar', label: 'Calendário', icon: <img src={CalendarIcon} alt="Calendário" />, roles: ['admin', 'leader'] },

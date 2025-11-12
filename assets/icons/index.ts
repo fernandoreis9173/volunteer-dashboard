@@ -22,6 +22,7 @@ import HistoryIcon from './history.svg';
 import LogoMobileIcon from './logomobile.svg';
  import CronogramasIcon from './iconcronogramas.svg';
 import EditIcon from './editicon.svg';
+import RankingIcon from './rankingicon.svg';
  
 
 // Mapeamento de ícones por nome
@@ -62,6 +63,7 @@ export const icons = {
   logomobile: LogoMobileIcon,
   cronogramas: CronogramasIcon,
   edit: EditIcon,
+  ranking: RankingIcon,
 } as const;
 
 // Tipos TypeScript
@@ -92,6 +94,7 @@ export {
   LogoMobileIcon,
   CronogramasIcon,
   EditIcon,
+  RankingIcon,
 };
 // Função helper para obter ícone por nome
 export const getIcon = (name: IconName) => icons[name];

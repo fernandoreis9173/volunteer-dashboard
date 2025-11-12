@@ -1,6 +1,9 @@
 // FIX: Restored Supabase v2 User type import.
 import type { User } from '@supabase/supabase-js';
 
+// FIX: Export User type to be available for other modules.
+export type { User };
+
 export interface Volunteer {
   name: string;
   email: string;
@@ -70,7 +73,7 @@ export interface DashboardData {
     activeLeaders?: EnrichedUser[];
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin' | 'history' | 'timelines';
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin' | 'history' | 'timelines' | 'ranking';
 
 export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 

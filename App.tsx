@@ -26,6 +26,7 @@ import IOSInstallPromptModal from './components/IOSInstallPromptModal';
 import PermissionDeniedPage from './components/PermissionDeniedPage';
 import ApiConfigPage from './components/ApiConfigPage'; // Import the config page
 import TimelinesPage from './components/TimelinesPage';
+import RankingPage from './components/RankingPage'; // Import the new RankingPage
 import LgpdConsentPage from './components/LgpdConsentPage'; // Importar a página de consentimento LGPD
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
 // FIX: Import EnrichedUser type to correctly type users from `list-users` function.
@@ -55,6 +56,7 @@ const pagePermissions: Record<Page, string[]> = {
     'notifications': ['leader', 'volunteer'],
     'my-profile': ['admin', 'leader', 'volunteer'],
     'volunteers': ['admin', 'leader'],
+    'ranking': ['admin', 'leader', 'volunteer'],
     'departments': ['admin'],
     'events': ['admin', 'leader'],
     'timelines': ['admin'],
@@ -72,7 +74,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2); 
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -637,6 +639,8 @@ const App: React.FC = () => {
                 case 'notifications':
                     // FIX: Add missing userRole prop to NotificationsPage
                     return <NotificationsPage session={session} onDataChange={refetchNotificationCount} onNavigate={handleNavigate} userRole={userProfile.role} />;
+                case 'ranking':
+                    return <RankingPage session={session} userProfile={userProfile} />;
                 case 'dashboard':
                 default:
                     // FIX: Removed `onDataChange` prop from VolunteerDashboard call. The error indicates it's not an expected prop.
@@ -649,11 +653,14 @@ const App: React.FC = () => {
             case 'volunteers':
                 // FIX: Pass the single leaderDepartmentId to VolunteersPage.
                 return <VolunteersPage isFormOpen={isVolunteerFormOpen} setIsFormOpen={setIsVolunteerFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} activeEvent={eventForSidebar} onDataChange={refetchUserData} />;
+            case 'ranking':
+                return <RankingPage session={session} userProfile={userProfile} />;
             case 'departments':
                 // FIX: Pass the single leaderDepartmentId to DepartmentsPage.
                 return <DepartmentsPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} leaders={leaders} onLeadersChange={fetchLeaders} />;
             case 'events':
-                 return <SchedulesPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} />;
+                 // FIX: Pass `leaders` prop to SchedulesPage to satisfy its prop requirements.
+                 return <SchedulesPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} leaders={leaders} />;
             case 'timelines':
                 return <TimelinesPage />;
             case 'calendar':
@@ -662,6 +669,7 @@ const App: React.FC = () => {
             case 'admin':
                 return <AdminPage />;
             case 'frequency':
+                // FIX: Remove unused `leaders` prop from `FrequencyPage` component call to fix type error, as the component no longer requires it.
                 return <FrequencyPage />;
             case 'notifications':
                 // FIX: Add missing userRole prop to NotificationsPage
