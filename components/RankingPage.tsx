@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import { Session } from '@supabase/supabase-js';
+import VolunteerStatsModal from './VolunteerStatsModal';
 
 interface UserProfile {
     volunteer_id: number | null;
@@ -12,7 +13,7 @@ interface RankingPageProps {
     userProfile: UserProfile | null;
 }
 
-interface RankedVolunteer {
+export interface RankedVolunteer {
     id: number;
     name: string;
     initials: string;
@@ -20,6 +21,29 @@ interface RankedVolunteer {
     totalPresent: number;
     totalScheduled: number;
 }
+
+// Gamification component for medals
+const Badge: React.FC<{ percentage: number }> = ({ percentage }) => {
+    let badge: { icon: string; label: string; } | null = null;
+
+    if (percentage >= 90) {
+        badge = { icon: '🥇', label: 'Voluntário Ouro (90%+ de presença)' };
+    } else if (percentage >= 70) {
+        badge = { icon: '🥈', label: 'Voluntário Prata (70-89% de presença)' };
+    } else if (percentage >= 50) {
+        badge = { icon: '🥉', label: 'Voluntário Bronze (50-69% de presença)' };
+    }
+
+    if (!badge) {
+        return null;
+    }
+
+    return (
+        <span className="text-xl ml-2" title={badge.label}>
+            {badge.icon}
+        </span>
+    );
+};
 
 const StarIcon: React.FC<{ rank: number }> = ({ rank }) => {
     const styles = {
@@ -41,12 +65,12 @@ const StarIcon: React.FC<{ rank: number }> = ({ rank }) => {
 
 const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
     const [rankingData, setRankingData] = useState<RankedVolunteer[]>([]);
-    // FIX: The `departments` state was incorrectly typed as `Department[]`, but the fetch query only selects `id` and `name`. The type has been adjusted to `{ id: number; name: string }[]` to match the data being set, resolving the type error.
     const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedDepartment, setSelectedDepartment] = useState('all');
     const [sortBy, setSortBy] = useState<'most' | 'least' | 'name'>('most');
+    const [viewingVolunteer, setViewingVolunteer] = useState<RankedVolunteer | null>(null);
 
     const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
     const deptDropdownRef = useRef<HTMLDivElement>(null);
@@ -202,12 +226,44 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                     <div className="divide-y divide-slate-100">
                         {processedRanking.map((volunteer, index) => {
                             const rank = index + 1;
-                            const isTop3 = rank <= 3;
-                            const percentage = volunteer.totalScheduled > 0 ? (volunteer.totalPresent / volunteer.totalScheduled) * 100 : 0;
+                            const isTop3 = rank <= 3 && sortBy === 'most';
+                            const percentage = volunteer.totalScheduled > 0 ? Math.round((volunteer.totalPresent / volunteer.totalScheduled) * 100) : 0;
                             const isCurrentUser = volunteer.id === userProfile?.volunteer_id;
                             
+                            const points = volunteer.totalPresent;
+                            const level = Math.floor(points / 5) + 1;
+
+                            const renderContent = () => {
+                                return (
+                                    <>
+                                        <div className="flex-grow min-w-0">
+                                            <div className="font-semibold text-slate-800 truncate">{volunteer.name}</div>
+                                            {volunteer.totalScheduled > 0 && (
+                                                <div className="mt-1" title={`Presença: ${percentage}%`}>
+                                                    <div className="w-full bg-slate-200 rounded-full h-2.5 shadow-inner">
+                                                        <div
+                                                            className="bg-blue-500 h-2.5 rounded-full transition-all duration-500"
+                                                            style={{ width: `${percentage}%` }}
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+            
+                                        <div className="text-right flex-shrink-0 ml-auto w-24">
+                                            <p className="text-lg font-bold text-slate-800">{points} pts</p>
+                                            <p className="text-xs font-semibold text-slate-500">Nível {level}</p>
+                                        </div>
+                                    </>
+                                );
+                            };
+
                             return (
-                                <div key={volunteer.id} className={`p-4 flex items-center gap-4 transition-colors ${isCurrentUser ? 'bg-blue-50' : ''}`}>
+                                <div
+                                    key={volunteer.id}
+                                    onClick={() => setViewingVolunteer(volunteer)}
+                                    className={`p-4 flex items-center gap-4 transition-colors cursor-pointer hover:bg-slate-100 ${isCurrentUser ? 'bg-blue-50' : ''}`}
+                                >
                                     <div className="flex-shrink-0 w-12 flex items-center justify-center">
                                         {isTop3 ? (
                                             <StarIcon rank={rank} />
@@ -215,19 +271,8 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                                             <span className="text-lg font-bold text-slate-400">#{rank}</span>
                                         )}
                                     </div>
-                                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{volunteer.initials}</div>
-                                    
-                                    <p className="font-semibold text-slate-800 flex-grow min-w-0 truncate">{volunteer.name}</p>
-                
-                                    <div className="flex items-center gap-4 w-2/5 sm:w-1/3 md:w-1/4 flex-shrink-0">
-                                        <div className="w-full bg-slate-200 rounded-full h-2.5">
-                                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
-                                        </div>
-                                        <span className="text-sm font-semibold text-slate-600 w-12 text-right">{volunteer.totalPresent}/{volunteer.totalScheduled}</span>
-                                        {percentage === 100 && volunteer.totalScheduled > 0 && (
-                                            <span title="100% de presença!" className="text-xl text-orange-500">🔥</span>
-                                        )}
-                                    </div>
+                                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{volunteer.initials}</div>
+                                    {renderContent()}
                                 </div>
                             );
                         })}
@@ -240,6 +285,11 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                     )}
                 </div>
             )}
+             <VolunteerStatsModal
+                isOpen={!!viewingVolunteer}
+                onClose={() => setViewingVolunteer(null)}
+                volunteer={viewingVolunteer}
+            />
         </div>
     );
 };
