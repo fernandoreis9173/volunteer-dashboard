@@ -430,7 +430,18 @@ const App: React.FC = () => {
         // This handles navigation via URL hash changes.
         const handleHashChange = () => {
             setActivePage(getPageFromHash());
-            setAuthView(getInitialAuthView());
+            setAuthView(prevAuthView => {
+                const newAuthView = getInitialAuthView();
+                // This is the race condition fix: Supabase auto-signs-in the user with the recovery/invite token,
+                // then it cleans the URL hash. The hash change triggers this handler, which would
+                // incorrectly set the view to 'login', kicking the user out of the flow.
+                // This check prevents that from happening. The auth flow components (AcceptInvitationPage,
+                // ResetPasswordPage) are responsible for navigation when they are done.
+                if ((prevAuthView === 'reset-password' || prevAuthView === 'accept-invite') && newAuthView === 'login') {
+                    return prevAuthView; // Keep the current auth view
+                }
+                return newAuthView; // Otherwise, update to the new view from the URL
+            });
         };
 
         window.addEventListener('hashchange', handleHashChange, false);
