@@ -458,9 +458,9 @@ const App: React.FC = () => {
     }, [session, fetchCoreData]);
 
     useEffect(() => {
-        // Handles initial redirect and post-login actions like notification prompts.
-        // DO NOT run this logic if the user is in the middle of accepting an invitation.
-        if (session && userProfile && !hasLoginRedirected.current && authView !== 'accept-invite') {
+        // Handles initial redirect and post-login actions.
+        // This should NOT run if the user is in the middle of a special auth flow.
+        if (session && userProfile && !hasLoginRedirected.current && authView !== 'accept-invite' && authView !== 'reset-password') {
             hasLoginRedirected.current = true; // Mark as handled to run once per login.
 
             // Prompt leaders and volunteers to enable push notifications upon login if not yet configured.
