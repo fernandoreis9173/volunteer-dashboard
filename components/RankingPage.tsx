@@ -3,10 +3,26 @@ import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import { Session } from '@supabase/supabase-js';
 import VolunteerStatsModal from './VolunteerStatsModal';
+import { Medalha01Icon, Medalha02Icon, Medalha03Icon } from '../assets/icons';
 
 interface UserProfile {
     volunteer_id: number | null;
 }
+
+const MedalIcon: React.FC<{ rank: number }> = ({ rank }) => {
+    const icons = {
+        1: Medalha01Icon,
+        2: Medalha02Icon,
+        3: Medalha03Icon,
+    };
+    
+    const iconSrc = icons[rank as keyof typeof icons];
+    
+    if (!iconSrc) return null;
+
+    return <img src={iconSrc} alt={`Medalha ${rank}`} className="h-8 w-8" />;
+};
+
 
 interface RankingPageProps {
     session: Session | null;
@@ -45,22 +61,7 @@ const Badge: React.FC<{ percentage: number }> = ({ percentage }) => {
     );
 };
 
-const StarIcon: React.FC<{ rank: number }> = ({ rank }) => {
-    const styles = {
-        1: { fill: '#FBBF24', stroke: '#FBBF24', strokeWidth: '2' }, // Gold, filled
-        2: { fill: 'none', stroke: '#9CA3AF', strokeWidth: '2' },    // Silver, outline
-        3: { fill: 'none', stroke: '#F97316', strokeWidth: '2' },    // Bronze, outline
-    };
-    const style = styles[rank as keyof typeof styles];
 
-    if (!style) return null;
-
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill={style.fill} stroke={style.stroke} strokeWidth={style.strokeWidth}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.563.563 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.563.563 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
-        </svg>
-    );
-};
 
 
 const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
@@ -226,7 +227,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                     <div className="divide-y divide-slate-100">
                         {processedRanking.map((volunteer, index) => {
                             const rank = index + 1;
-                            const isTop3 = rank <= 3 && sortBy === 'most';
+                            const isTop3 = rank <= 3;
                             const percentage = volunteer.totalScheduled > 0 ? Math.round((volunteer.totalPresent / volunteer.totalScheduled) * 100) : 0;
                             const isCurrentUser = volunteer.id === userProfile?.volunteer_id;
                             
@@ -266,7 +267,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                                 >
                                     <div className="flex-shrink-0 w-12 flex items-center justify-center">
                                         {isTop3 ? (
-                                            <StarIcon rank={rank} />
+                                            <MedalIcon rank={rank} />
                                         ) : (
                                             <span className="text-lg font-bold text-slate-400">#{rank}</span>
                                         )}

@@ -417,8 +417,12 @@ const App: React.FC = () => {
 
     useEffect(() => {
         // This is the primary listener for auth changes (login, logout, token refresh).
-        // FIX: Supabase v2 onAuthStateChange returns a subscription object inside a data object.
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+            // This handles the password recovery flow. When the user clicks the recovery link,
+            // Supabase signs them in and fires this event. We must show the password reset page.
+            if (event === 'PASSWORD_RECOVERY') {
+                setAuthView('reset-password');
+            }
             setSession(newSession);
              // If session becomes null (logout), we're not loading anymore.
             if (!newSession) {
@@ -725,6 +729,12 @@ const App: React.FC = () => {
     // The AcceptInvitationPage will handle the final sign-out and redirect.
     if (authView === 'accept-invite') {
         return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
+    }
+
+    // FIX: If the user is in the password recovery flow, show the reset page.
+    // This handles the case where Supabase creates a temporary session upon clicking the recovery link.
+    if (authView === 'reset-password') {
+        return <ResetPasswordPage setAuthView={setAuthView} />;
     }
 
     if (!userProfile) {
