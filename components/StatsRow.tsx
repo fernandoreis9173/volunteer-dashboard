@@ -56,7 +56,7 @@ const StatsRow: React.FC<StatsRowProps> = ({ stats, userRole }) => {
         color: 'orange' as const,
     },
     { 
-        title: 'Total de Frequência Anual', 
+        title: 'Total de Frequência', 
         data: stats?.annualAttendance,
         icon: (
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24 " strokeWidth={1.5} stroke="currentColor">

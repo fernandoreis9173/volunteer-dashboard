@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 import type { Stat, DetailedVolunteer } from '../types';
@@ -87,7 +85,7 @@ const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ volunteers,
             </div>
             
             {isLeader && volunteers ? (
-                <div className="flex-grow overflow-y-auto -mx-2 pr-2 space-y-3 mt-4 custom-scrollbar">
+                <div className="h-48 overflow-y-auto -mx-2 pr-2 space-y-3 mt-4 custom-scrollbar">
                     {volunteers.map(v => (
                     <div key={v.id} className="flex items-center space-x-4 p-2 rounded-lg hover:bg-slate-50">
                         <div className="flex items-center space-x-3 flex-shrink-0">
@@ -109,7 +107,7 @@ const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ volunteers,
                     ))}
                 </div>
             ) : (
-                <div className="flex-grow h-24 -mx-6">
+                <div className="h-24 -mx-6">
                     <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
                         <defs>
@@ -124,8 +122,9 @@ const ActiveVolunteersList: React.FC<ActiveVolunteersListProps> = ({ volunteers,
                 </div>
             )}
 
+            {isLeader && <div className="flex-grow"></div>}
 
-            <div className="mt-4 pt-4 border-t border-slate-200 flex justify-around items-center">
+            <div className="mt-auto pt-4 border-t border-slate-200 flex justify-around items-center">
                 {userRole === 'admin' && (
                   <>
                     <StatItem value={departmentsCount} label="Departamentos" />

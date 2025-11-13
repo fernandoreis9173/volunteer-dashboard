@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import Pagination from './Pagination';
 import QRScannerModal from './QRScannerModal';
+import PromoteToLeaderModal from './PromoteToLeaderModal'; // Importar o novo modal
 
 interface VolunteersPageProps {
   isFormOpen: boolean;
@@ -47,6 +48,11 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [volunteerForAction, setVolunteerForAction] = useState<DetailedVolunteer | null>(null);
   const [actionType, setActionType] = useState<'disable' | 'enable' | null>(null);
+
+  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
+  const [volunteerToPromote, setVolunteerToPromote] = useState<DetailedVolunteer | null>(null);
+  const [isPromoting, setIsPromoting] = useState(false);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
 
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
@@ -383,6 +389,32 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       }
   };
 
+  const handleRequestPromotion = (volunteer: DetailedVolunteer) => {
+    setVolunteerToPromote(volunteer);
+    setIsPromoteModalOpen(true);
+    setPromoteError(null);
+  };
+
+  const handleConfirmPromotion = async (departmentId: number) => {
+    if (!volunteerToPromote?.user_id) return;
+    setIsPromoting(true);
+    setPromoteError(null);
+    try {
+        const { error } = await supabase.functions.invoke('promote-to-leader', {
+            body: { userId: volunteerToPromote.user_id, departmentId },
+        });
+        if (error) throw error;
+        showNotification(`${volunteerToPromote.name} foi promovido a líder com sucesso!`, 'success');
+        await fetchVolunteers();
+        setIsPromoteModalOpen(false);
+        setVolunteerToPromote(null);
+    } catch (err) {
+        setPromoteError(getErrorMessage(err));
+    } finally {
+        setIsPromoting(false);
+    }
+  };
+
   const renderContent = () => {
     if (loading) return <p className="text-center text-slate-500 mt-10">Carregando voluntários...</p>;
     if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
@@ -395,7 +427,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                 </div>
                 <input 
                     type="text"
-                    placeholder="Buscar por nome ou email..."
+                    placeholder="Buscar por nome ou email do voluntário..."
                     className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
@@ -414,6 +446,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                   onInvite={handleInviteRequest}
                   onRemoveFromDepartment={handleRemoveRequest}
                   onRequestAction={handleRequestAction}
+                  onPromote={handleRequestPromotion}
                   userRole={userRole}
                   leaderDepartmentName={leaderDepartmentName}
                   isInvitePending={pendingInvites.has(volunteer.id!)}
@@ -513,6 +546,15 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         isLoading={isSaving}
         confirmButtonClass={actionType === 'disable' ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'}
         iconType={actionType === 'disable' ? 'warning' : 'info'}
+    />
+     <PromoteToLeaderModal
+        isOpen={isPromoteModalOpen}
+        onClose={() => setIsPromoteModalOpen(false)}
+        onConfirm={handleConfirmPromotion}
+        volunteer={volunteerToPromote}
+        departments={departments}
+        isPromoting={isPromoting}
+        error={promoteError}
     />
     </div>
   );

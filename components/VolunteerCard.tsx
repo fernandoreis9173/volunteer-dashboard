@@ -16,6 +16,7 @@ interface VolunteerCardProps {
     onInvite: (volunteer: DetailedVolunteer) => void;
     onRemoveFromDepartment: (volunteer: DetailedVolunteer) => void;
     onRequestAction: (volunteer: DetailedVolunteer, type: 'disable' | 'enable') => void;
+    onPromote: (volunteer: DetailedVolunteer) => void; // Nova prop
     userRole: string | null;
     leaderDepartmentName: string | null;
     isInvitePending: boolean;
@@ -39,7 +40,7 @@ const formatPhoneNumber = (value: string) => {
     return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
 };
 
-const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvite, onRemoveFromDepartment, onRequestAction, userRole, leaderDepartmentName, isInvitePending }) => {
+const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvite, onRemoveFromDepartment, onRequestAction, onPromote, userRole, leaderDepartmentName, isInvitePending }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -111,6 +112,7 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
               {isMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
                   <ul className="py-1">
+                    <li><button onClick={() => { onPromote(volunteer); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Promover a Líder</button></li>
                     {volunteer.status === 'Inativo' ? (
                       <li><button onClick={() => { onRequestAction(volunteer, 'enable'); setIsMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Voluntário</button></li>
                     ) : (

@@ -37,11 +37,11 @@ import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
 
 // FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
+// FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
 const areApiKeysConfigured = 
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
-// FIX: Reverted UserProfileState to use `department_id` (singular) to enforce the business rule of one leader per department.
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -417,12 +417,8 @@ const App: React.FC = () => {
 
     useEffect(() => {
         // This is the primary listener for auth changes (login, logout, token refresh).
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-            // This handles the password recovery flow. When the user clicks the recovery link,
-            // Supabase signs them in and fires this event. We must show the password reset page.
-            if (event === 'PASSWORD_RECOVERY') {
-                setAuthView('reset-password');
-            }
+        // FIX: Supabase v2 onAuthStateChange returns a subscription object inside a data object.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
             setSession(newSession);
              // If session becomes null (logout), we're not loading anymore.
             if (!newSession) {
@@ -671,7 +667,7 @@ const App: React.FC = () => {
                 // FIX: Pass the single leaderDepartmentId to CalendarPage.
                 return <CalendarPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} setIsSidebarOpen={setIsSidebarOpen} />;
             case 'admin':
-                return <AdminPage />;
+                return <AdminPage onDataChange={fetchLeaders} />;
             case 'frequency':
                 // FIX: Remove unused `leaders` prop from `FrequencyPage` component call to fix type error, as the component no longer requires it.
                 return <FrequencyPage />;
@@ -729,12 +725,6 @@ const App: React.FC = () => {
     // The AcceptInvitationPage will handle the final sign-out and redirect.
     if (authView === 'accept-invite') {
         return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
-    }
-
-    // FIX: If the user is in the password recovery flow, show the reset page.
-    // This handles the case where Supabase creates a temporary session upon clicking the recovery link.
-    if (authView === 'reset-password') {
-        return <ResetPasswordPage setAuthView={setAuthView} />;
     }
 
     if (!userProfile) {

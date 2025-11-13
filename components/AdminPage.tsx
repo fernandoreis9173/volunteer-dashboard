@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-// FIX: Removed Supabase User type import to resolve module errors. The local `User` type in `types.ts` will be used.
-// import type { User } from '@supabase/supabase-js';
+// FIX: Import the 'User' type from the central 'types.ts' module to resolve the export error.
+import { EnrichedUser, User } from '../types';
 import EditUserModal from './EditUserModal';
 import ConfirmationModal from './ConfirmationModal';
-import { EnrichedUser, User } from '../types';
 import { getErrorMessage } from '../lib/utils';
 
-const AdminPage: React.FC = () => {
+interface AdminPageProps {
+  onDataChange: () => void;
+}
+
+const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     // States for User Management
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -25,7 +28,7 @@ const AdminPage: React.FC = () => {
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [userToAction, setUserToAction] = useState<User | null>(null);
-    const [actionType, setActionType] = useState<'disable' | 'enable' | null>(null);
+    const [actionType, setActionType] = useState<'disable' | 'enable' | 'demote' | null>(null);
     
     // States for custom role dropdown
     const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
@@ -137,7 +140,7 @@ const AdminPage: React.FC = () => {
         }
     };
 
-    const handleRequestAction = (user: User, type: 'disable' | 'enable') => {
+    const handleRequestAction = (user: User, type: 'disable' | 'enable' | 'demote') => {
         setUserToAction(user);
         setActionType(type);
         setIsActionModalOpen(true);
@@ -146,15 +149,30 @@ const AdminPage: React.FC = () => {
 
     const handleConfirmAction = async () => {
         if (!userToAction || !actionType) return;
-        const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
-        const { error } = await supabase.functions.invoke(functionName, {
-            body: { userId: userToAction.id },
-        });
-        if (error) {
-            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
+    
+        if (actionType === 'demote') {
+            const { error } = await supabase.functions.invoke('demote-to-volunteer', {
+                body: { userId: userToAction.id },
+            });
+            if (error) {
+                alert(`Falha ao rebaixar líder: ${getErrorMessage(error)}`);
+            } else {
+                await fetchInvitedUsers();
+                onDataChange(); // Refetch leaders list in App.tsx
+            }
         } else {
-            await fetchInvitedUsers();
+            // Existing disable/enable logic
+            const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
+            const { error } = await supabase.functions.invoke(functionName, {
+                body: { userId: userToAction.id },
+            });
+            if (error) {
+                alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
+            } else {
+                await fetchInvitedUsers();
+            }
         }
+    
         setIsActionModalOpen(false);
         setUserToAction(null);
         setActionType(null);
@@ -279,7 +297,7 @@ const AdminPage: React.FC = () => {
 
                  {/* Broadcast Form */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
-                    <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa</h2>
+                    <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa (Broadcast)</h2>
                     <form onSubmit={handleBroadcastSubmit} className="space-y-4 flex-grow flex flex-col">
                         <div className="flex-grow">
                             <label htmlFor="broadcast-message" className="block text-sm font-medium text-slate-700 mb-1">Mensagem</label>
@@ -331,10 +349,15 @@ const AdminPage: React.FC = () => {
                                                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
                                                         <ul className="py-1">
                                                             <li><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button></li>
+                                                            {(user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider') && (
+                                                                <li><button onClick={() => handleRequestAction(user, 'demote')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Rebaixar para Voluntário</button></li>
+                                                            )}
                                                             {user.app_status === 'Inativo' ? (
                                                                 <li><button onClick={() => handleRequestAction(user, 'enable')} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Usuário</button></li>
                                                             ) : (
-                                                                <li><button onClick={() => handleRequestAction(user, 'disable')} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Desativar Usuário</button></li>
+                                                                user.user_metadata?.role !== 'admin' && (
+                                                                    <li><button onClick={() => handleRequestAction(user, 'disable')} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Desativar Usuário</button></li>
+                                                                )
                                                             )}
                                                         </ul>
                                                     </div>
@@ -357,8 +380,14 @@ const AdminPage: React.FC = () => {
                 isOpen={isActionModalOpen}
                 onClose={() => setIsActionModalOpen(false)}
                 onConfirm={handleConfirmAction}
-                title={`${actionType === 'disable' ? 'Desativar' : 'Reativar'} Usuário`}
-                message={`Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o usuário ${userToAction?.email}?`}
+                title={
+                    actionType === 'demote' ? 'Rebaixar para Voluntário' :
+                    `${actionType === 'disable' ? 'Desativar' : 'Reativar'} Usuário`
+                }
+                message={
+                    actionType === 'demote' ? `Tem certeza de que deseja rebaixar ${userToAction?.user_metadata?.name} para voluntário? Ele será removido da liderança e seu perfil de voluntário será reativado.` :
+                    `Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o usuário ${userToAction?.email}?`
+                }
             />
         </div>
     );
