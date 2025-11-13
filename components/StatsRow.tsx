@@ -73,7 +73,7 @@ const StatsRow: React.FC<StatsRowProps> = ({ stats, userRole }) => {
         return userRole === 'admin';
     }
     // Cartão exclusivo para líder
-    if (item.title === 'Total de Frequência Anual') {
+    if (item.title === 'Total de Frequência') {
         return userRole === 'leader' || userRole === 'lider';
     }
     // Cartões compartilhados

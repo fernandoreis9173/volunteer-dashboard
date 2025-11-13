@@ -37,11 +37,11 @@ import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
 
 // FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
-// FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
 const areApiKeysConfigured = 
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
+// FIX: Reverted UserProfileState to use `department_id` (singular) to enforce the business rule of one leader per department.
 interface UserProfileState {
   role: string | null;
   department_id: number | null;
@@ -725,6 +725,14 @@ const App: React.FC = () => {
     // The AcceptInvitationPage will handle the final sign-out and redirect.
     if (authView === 'accept-invite') {
         return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
+    }
+
+    // **NOVO: Verificação de Redefinição de Senha**
+    // Se o usuário estiver na URL de recuperação, MANTENHA-O na página de redefinição,
+    // mesmo que ele já tenha uma sessão. Isso corrige a condição de corrida onde o
+    // Supabase faz login automático antes que o usuário possa redefinir a senha.
+    if (authView === 'reset-password') {
+        return <ResetPasswordPage setAuthView={setAuthView} />;
     }
 
     if (!userProfile) {
