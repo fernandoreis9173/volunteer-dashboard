@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { EnrichedUser, User } from '../types';
 import EditUserModal from './EditUserModal';
 import ConfirmationModal from './ConfirmationModal';
-import { getErrorMessage } from '../lib/utils';
+import { getErrorMessage, getInitials } from '../lib/utils';
 
 interface AdminPageProps {
   onDataChange: () => void;
@@ -315,71 +315,78 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             </div>
 
             {/* Users List */}
-            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <h2 className="text-xl font-bold text-slate-800 mb-4">Gerenciar Usuários</h2>
                 <input type="text" placeholder="Buscar por nome ou email..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg mb-4"/>
                 
                 {listLoading ? <p>Carregando usuários...</p> : listError ? <p className="text-red-500">{listError}</p> : (
-                    <div className="-mx-4 md:-mx-6 overflow-x-auto">
-                        <div className="py-2 align-middle inline-block min-w-full px-4 md:px-6">
-                            <div className="shadow overflow-hidden border-b border-slate-200 sm:rounded-lg">
-                                <table className="min-w-full divide-y divide-slate-200">
-                                    <thead className="bg-slate-50">
-                                        <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nome</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Email</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Permissão</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                                            <th scope="col" className="relative px-6 py-3"><span className="sr-only">Ações</span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-slate-200">
-                                        {filteredUsers.map(user => {
-                                            const statusInfo = getStatusInfo(user.app_status);
-                                            return (
-                                            <tr key={user.id}>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-slate-900">{user.user_metadata?.name || 'N/A'}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-slate-500">{user.email}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 capitalize">
-                                                    {user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider' ? 'Líder' : user.user_metadata?.role}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.text}</span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <div className="relative inline-block">
-                                                        <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="p-1 text-slate-500 rounded-md hover:bg-slate-100">
-                                                            <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
-                                                        </button>
-                                                        {activeMenu === user.id && (
-                                                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
-                                                                <ul className="py-1">
-                                                                    <li><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button></li>
-                                                                    {(user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider') && (
-                                                                        <li><button onClick={() => handleRequestAction(user, 'demote')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Voluntário</button></li>
-                                                                    )}
-                                                                    {user.app_status === 'Inativo' ? (
-                                                                        <li><button onClick={() => handleRequestAction(user, 'enable')} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Usuário</button></li>
-                                                                    ) : (
-                                                                        user.user_metadata?.role !== 'admin' && (
-                                                                            <li><button onClick={() => handleRequestAction(user, 'disable')} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Desativar Usuário</button></li>
-                                                                        )
-                                                                    )}
-                                                                </ul>
-                                                            </div>
-                                                        )}
+                    <div className="-mx-6 overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th scope="col" className="py-3.5 pl-6 pr-3 text-left text-sm font-semibold text-slate-900">Usuário</th>
+                                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-slate-900">Email</th>
+                                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">Permissão</th>
+                                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-slate-900 whitespace-nowrap">Status</th>
+                                    <th scope="col" className="relative py-3.5 pl-3 pr-6"><span className="sr-only">Ações</span></th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-slate-200">
+                                {filteredUsers.map(user => {
+                                    const statusInfo = getStatusInfo(user.app_status);
+                                    return (
+                                    <tr key={user.id}>
+                                        <td className="py-4 pl-6 pr-3 text-sm">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200 flex-shrink-0">
+                                                    {user.user_metadata?.avatar_url ? (
+                                                        <img src={user.user_metadata.avatar_url} alt={user.user_metadata.name || 'Avatar'} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">
+                                                            {getInitials(user.user_metadata?.name || '')}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="font-medium text-slate-900 truncate">{user.user_metadata?.name || 'N/A'}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-4 text-sm text-slate-500 break-words">
+                                            {user.email}
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500 capitalize">
+                                            {user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider' ? 'Líder' : user.user_metadata?.role}
+                                        </td>
+                                        <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500">
+                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.text}</span>
+                                        </td>
+                                        <td className="relative whitespace-nowrap py-4 pl-3 pr-6 text-right text-sm font-medium">
+                                            <div className="relative inline-block">
+                                                <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="p-1 text-slate-500 rounded-md hover:bg-slate-100">
+                                                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+                                                </button>
+                                                {activeMenu === user.id && (
+                                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
+                                                        <ul className="py-1">
+                                                            <li><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button></li>
+                                                            {(user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider') && (
+                                                                <li><button onClick={() => handleRequestAction(user, 'demote')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Voluntário</button></li>
+                                                            )}
+                                                            {user.app_status === 'Inativo' ? (
+                                                                <li><button onClick={() => handleRequestAction(user, 'enable')} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Usuário</button></li>
+                                                            ) : (
+                                                                user.user_metadata?.role !== 'admin' && (
+                                                                    <li><button onClick={() => handleRequestAction(user, 'disable')} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Desativar Usuário</button></li>
+                                                                )
+                                                            )}
+                                                        </ul>
                                                     </div>
-                                                </td>
-                                            </tr>
-                                        )})}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )})}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>

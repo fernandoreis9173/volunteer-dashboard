@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AuthView } from '../types';
-import { LogoMobileIcon } from '@/assets/icons';
+import { LogoMobileIcon } from '../assets/icons';
 
 interface LoginPageProps {
     setAuthView: (view: AuthView) => void;
@@ -14,6 +14,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [view, setView] = useState<'sign_in' | 'forgot_password'>('sign_in');
+    const [rememberMe, setRememberMe] = useState(true);
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -28,6 +29,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
             });
             if (error) {
                 throw error;
+            }
+            // If login is successful, handle the 'remember me' logic
+            if (rememberMe) {
+                // Default behavior persists the session, so we just ensure our flag is not set.
+                sessionStorage.removeItem('supabase.auth.no-persist');
+            } else {
+                // Set a flag in sessionStorage to indicate the session should be cleared on browser close.
+                sessionStorage.setItem('supabase.auth.no-persist', 'true');
             }
         } catch (error: any) {
             if (error.message === 'Invalid login credentials') {
@@ -108,7 +117,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
 
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center">
-                                    <input id="remember-me" name="remember-me" type="checkbox" className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded" />
+                                    <input 
+                                        id="remember-me" 
+                                        name="remember-me" 
+                                        type="checkbox" 
+                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded" 
+                                        checked={rememberMe}
+                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                    />
                                     <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-600">Permanecer conectado</label>
                                 </div>
                                 <div className="text-sm">

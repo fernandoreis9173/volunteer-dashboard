@@ -78,3 +78,15 @@ export const convertUTCToLocal = (date: string, time: string): { dateTime: Date 
 
     return { dateTime: localDateTime, fullDate, time: formattedTime, isValid: true };
 };
+
+export const getInitials = (name: string): string => {
+    if (!name) return '?';
+    const names = name.trim().split(' ').filter(n => n);
+    if (names.length > 1) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+    }
+    if (names.length === 1 && names[0].length > 1) {
+        return names[0].substring(0, 2).toUpperCase();
+    }
+    return names[0]?.[0]?.toUpperCase() || '?';
+};
