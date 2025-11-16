@@ -49,7 +49,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
 
         if (fetchError) {
             const errorMessage = getErrorMessage(fetchError);
-            setListError(`Falha ao carregar a lista de convidados: ${errorMessage}`);
+            setListError(`Falha ao carregar la lista de convidados: ${errorMessage}`);
         } else if (data && data.error) {
             setListError(`Erro retornado pela função: ${data.error}`);
             setInvitedUsers([]);
@@ -232,7 +232,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                 {/* Invite User Form */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
+                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
                     <h2 className="text-xl font-bold text-slate-800 mb-4">Convidar Novo Administrador/Líder</h2>
                     <form onSubmit={handleInviteSubmit} className="space-y-4 flex-grow flex flex-col">
                         <div className="space-y-4">
@@ -296,7 +296,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
                 </div>
 
                  {/* Broadcast Form */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
+                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 h-full flex flex-col">
                     <h2 className="text-xl font-bold text-slate-800 mb-4">Notificação em Massa (Broadcast)</h2>
                     <form onSubmit={handleBroadcastSubmit} className="space-y-4 flex-grow flex flex-col">
                         <div className="flex-grow">
@@ -315,59 +315,71 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             </div>
 
             {/* Users List */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                 <h2 className="text-xl font-bold text-slate-800 mb-4">Gerenciar Usuários</h2>
                 <input type="text" placeholder="Buscar por nome ou email..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg mb-4"/>
                 
                 {listLoading ? <p>Carregando usuários...</p> : listError ? <p className="text-red-500">{listError}</p> : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left text-slate-500">
-                            <thead className="text-xs text-slate-700 uppercase bg-slate-50">
-                                <tr>
-                                    <th scope="col" className="px-6 py-3">Nome</th>
-                                    <th scope="col" className="px-6 py-3">Email</th>
-                                    <th scope="col" className="px-6 py-3">Permissão</th>
-                                    <th scope="col" className="px-6 py-3">Status</th>
-                                    <th scope="col" className="px-6 py-3"><span className="sr-only">Ações</span></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredUsers.map(user => {
-                                    const statusInfo = getStatusInfo(user.app_status);
-                                    return (
-                                    <tr key={user.id} className="bg-white border-b hover:bg-slate-50">
-                                        <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">{user.user_metadata?.name || 'N/A'}</td>
-                                        <td className="px-6 py-4">{user.email}</td>
-                                        <td className="px-6 py-4 capitalize">{user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider' ? 'Líder' : user.user_metadata?.role}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.text}</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="relative inline-block">
-                                                <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="p-1 text-slate-500 rounded-md hover:bg-slate-100">...</button>
-                                                {activeMenu === user.id && (
-                                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
-                                                        <ul className="py-1">
-                                                            <li><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button></li>
-                                                            {(user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider') && (
-                                                                <li><button onClick={() => handleRequestAction(user, 'demote')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Rebaixar para Voluntário</button></li>
-                                                            )}
-                                                            {user.app_status === 'Inativo' ? (
-                                                                <li><button onClick={() => handleRequestAction(user, 'enable')} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Usuário</button></li>
-                                                            ) : (
-                                                                user.user_metadata?.role !== 'admin' && (
-                                                                    <li><button onClick={() => handleRequestAction(user, 'disable')} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Desativar Usuário</button></li>
-                                                                )
-                                                            )}
-                                                        </ul>
+                    <div className="-mx-4 md:-mx-6 overflow-x-auto">
+                        <div className="py-2 align-middle inline-block min-w-full px-4 md:px-6">
+                            <div className="shadow overflow-hidden border-b border-slate-200 sm:rounded-lg">
+                                <table className="min-w-full divide-y divide-slate-200">
+                                    <thead className="bg-slate-50">
+                                        <tr>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nome</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Email</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Permissão</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                                            <th scope="col" className="relative px-6 py-3"><span className="sr-only">Ações</span></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-slate-200">
+                                        {filteredUsers.map(user => {
+                                            const statusInfo = getStatusInfo(user.app_status);
+                                            return (
+                                            <tr key={user.id}>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-slate-900">{user.user_metadata?.name || 'N/A'}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-slate-500">{user.email}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 capitalize">
+                                                    {user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider' ? 'Líder' : user.user_metadata?.role}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.text}</span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <div className="relative inline-block">
+                                                        <button onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)} className="p-1 text-slate-500 rounded-md hover:bg-slate-100">
+                                                            <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+                                                        </button>
+                                                        {activeMenu === user.id && (
+                                                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
+                                                                <ul className="py-1">
+                                                                    <li><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button></li>
+                                                                    {(user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider') && (
+                                                                        <li><button onClick={() => handleRequestAction(user, 'demote')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Voluntário</button></li>
+                                                                    )}
+                                                                    {user.app_status === 'Inativo' ? (
+                                                                        <li><button onClick={() => handleRequestAction(user, 'enable')} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Usuário</button></li>
+                                                                    ) : (
+                                                                        user.user_metadata?.role !== 'admin' && (
+                                                                            <li><button onClick={() => handleRequestAction(user, 'disable')} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Desativar Usuário</button></li>
+                                                                        )
+                                                                    )}
+                                                                </ul>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )})}
-                            </tbody>
-                        </table>
+                                                </td>
+                                            </tr>
+                                        )})}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -381,11 +393,11 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
                 onClose={() => setIsActionModalOpen(false)}
                 onConfirm={handleConfirmAction}
                 title={
-                    actionType === 'demote' ? 'Rebaixar para Voluntário' :
+                    actionType === 'demote' ? 'Tornar Voluntário' :
                     `${actionType === 'disable' ? 'Desativar' : 'Reativar'} Usuário`
                 }
                 message={
-                    actionType === 'demote' ? `Tem certeza de que deseja rebaixar ${userToAction?.user_metadata?.name} para voluntário? Ele será removido da liderança e seu perfil de voluntário será reativado.` :
+                    actionType === 'demote' ? `Tem certeza de que deseja tornar ${userToAction?.user_metadata?.name} para voluntário? Ele será removido da liderança e seu perfil de voluntário será reativado.` :
                     `Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o usuário ${userToAction?.email}?`
                 }
             />

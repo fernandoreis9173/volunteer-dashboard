@@ -65,18 +65,27 @@ const Badge: React.FC<{ percentage: number }> = ({ percentage }) => {
 
 
 const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
-    const [rankingData, setRankingData] = useState<RankedVolunteer[]>([]);
+    const [volunteers, setVolunteers] = useState<any[]>([]);
+    const [rawAttendance, setRawAttendance] = useState<any[]>([]);
     const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    
+    // Filter and Sort States
     const [selectedDepartment, setSelectedDepartment] = useState('all');
+    const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
     const [sortBy, setSortBy] = useState<'most' | 'least' | 'name'>('most');
+    
     const [viewingVolunteer, setViewingVolunteer] = useState<RankedVolunteer | null>(null);
 
+    // Dropdown States and Refs
     const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
     const deptDropdownRef = useRef<HTMLDivElement>(null);
     const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
     const sortDropdownRef = useRef<HTMLDivElement>(null);
+    const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
+    const yearDropdownRef = useRef<HTMLDivElement>(null);
+    const [availableYears, setAvailableYears] = useState<number[]>([]);
 
     const Dropdown: React.FC<{
         buttonLabel: string;
@@ -108,6 +117,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
         const handleClickOutside = (event: MouseEvent) => {
             if (deptDropdownRef.current && !deptDropdownRef.current.contains(event.target as Node)) setIsDeptDropdownOpen(false);
             if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) setIsSortDropdownOpen(false);
+            if (yearDropdownRef.current && !yearDropdownRef.current.contains(event.target as Node)) setIsYearDropdownOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -119,7 +129,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
         try {
             const [volunteersRes, attendanceRes, departmentsRes] = await Promise.all([
                 supabase.from('volunteers').select('id, name, initials, volunteer_departments(departments(id, name))').eq('status', 'Ativo'),
-                supabase.from('event_volunteers').select('volunteer_id, present'),
+                supabase.from('event_volunteers').select('volunteer_id, present, events(date)'),
                 supabase.from('departments').select('id, name').order('name')
             ]);
 
@@ -127,50 +137,74 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
             if (attendanceRes.error) throw attendanceRes.error;
             if (departmentsRes.error) throw departmentsRes.error;
 
-            const attendanceByVolunteer = new Map<number, { totalPresent: number; totalScheduled: number }>();
-            for (const record of attendanceRes.data) {
-                if (!attendanceByVolunteer.has(record.volunteer_id)) {
-                    attendanceByVolunteer.set(record.volunteer_id, { totalPresent: 0, totalScheduled: 0 });
-                }
-                const stats = attendanceByVolunteer.get(record.volunteer_id)!;
-                stats.totalScheduled++;
-                if (record.present) {
-                    stats.totalPresent++;
+            const attendanceData = attendanceRes.data || [];
+            const years = new Set<number>();
+            for (const record of attendanceData) {
+                if (record.events?.date) {
+                    years.add(new Date(record.events.date).getFullYear());
                 }
             }
+            const sortedYears = Array.from(years).sort((a, b) => b - a);
+            setAvailableYears(sortedYears);
+            if (sortedYears.length > 0 && selectedYear === new Date().getFullYear().toString()) {
+                setSelectedYear(String(sortedYears[0]));
+            }
 
-            const rankedVolunteers: RankedVolunteer[] = volunteersRes.data.map((v: any) => {
-                const stats = attendanceByVolunteer.get(v.id) || { totalPresent: 0, totalScheduled: 0 };
-                return {
-                    id: v.id,
-                    name: v.name,
-                    initials: v.initials,
-                    departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean),
-                    ...stats
-                };
-            });
-            
-            setRankingData(rankedVolunteers);
+            setVolunteers(volunteersRes.data || []);
+            setRawAttendance(attendanceData);
             setDepartments(departmentsRes.data || []);
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [selectedYear]);
 
     useEffect(() => {
         fetchRankingData();
     }, [fetchRankingData]);
 
     const processedRanking = useMemo(() => {
-        let filtered = [...rankingData];
-        if (selectedDepartment !== 'all') {
-            const deptId = parseInt(selectedDepartment, 10);
-            filtered = filtered.filter(v => v.departments.some(d => d.id === deptId));
+        // 1. Filter attendance by selected year
+        const yearFilteredAttendance = rawAttendance.filter(record => {
+            if (selectedYear === 'all') return true;
+            if (!record.events?.date) return false;
+            return new Date(record.events.date).getFullYear().toString() === selectedYear;
+        });
+
+        // 2. Calculate scores based on filtered attendance
+        const attendanceByVolunteer = new Map<number, { totalPresent: number; totalScheduled: number }>();
+        for (const record of yearFilteredAttendance) {
+            if (!attendanceByVolunteer.has(record.volunteer_id)) {
+                attendanceByVolunteer.set(record.volunteer_id, { totalPresent: 0, totalScheduled: 0 });
+            }
+            const stats = attendanceByVolunteer.get(record.volunteer_id)!;
+            stats.totalScheduled++;
+            if (record.present) {
+                stats.totalPresent++;
+            }
         }
 
-        return filtered.sort((a, b) => {
+        // 3. Combine volunteer data with calculated scores
+        let rankedVolunteers: RankedVolunteer[] = volunteers.map((v: any) => {
+            const stats = attendanceByVolunteer.get(v.id) || { totalPresent: 0, totalScheduled: 0 };
+            return {
+                id: v.id,
+                name: v.name,
+                initials: v.initials,
+                departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean),
+                ...stats
+            };
+        });
+
+        // 4. Filter by department
+        if (selectedDepartment !== 'all') {
+            const deptId = parseInt(selectedDepartment, 10);
+            rankedVolunteers = rankedVolunteers.filter(v => v.departments.some(d => d.id === deptId));
+        }
+
+        // 5. Sort the results
+        return rankedVolunteers.sort((a, b) => {
             const percentageA = a.totalScheduled > 0 ? a.totalPresent / a.totalScheduled : 0;
             const percentageB = b.totalScheduled > 0 ? b.totalPresent / b.totalScheduled : 0;
             
@@ -186,7 +220,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                     return percentageB - percentageA;
             }
         });
-    }, [rankingData, selectedDepartment, sortBy]);
+    }, [volunteers, rawAttendance, selectedYear, selectedDepartment, sortBy]);
 
     const currentUserRank = useMemo(() => {
         if (!userProfile?.volunteer_id) return null;
@@ -195,12 +229,14 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
     }, [processedRanking, userProfile]);
 
     const departmentOptions = [{ value: 'all', label: 'Todos os Departamentos' }, ...departments.map(d => ({ value: String(d.id), label: d.name }))];
+    const yearOptions = [{ value: 'all', label: 'Todos os Anos' }, ...availableYears.map(y => ({ value: String(y), label: String(y) }))];
     const sortOptions = [
         { value: 'most', label: 'Mais Frequentes' },
         { value: 'least', label: 'Menos Frequentes' },
         { value: 'name', label: 'Nome (A-Z)' },
     ];
     const selectedDeptLabel = departmentOptions.find(d => d.value === selectedDepartment)?.label || 'Filtrar';
+    const selectedYearLabel = yearOptions.find(y => y.value === selectedYear)?.label || 'Ano';
     const selectedSortLabel = sortOptions.find(s => s.value === sortBy)?.label || 'Ordenar';
 
 
@@ -219,6 +255,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
             
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-4">
                 <Dropdown buttonLabel={selectedDeptLabel} options={departmentOptions} selectedValue={selectedDepartment} onSelect={setSelectedDepartment} isOpen={isDeptDropdownOpen} setIsOpen={setIsDeptDropdownOpen} dropdownRef={deptDropdownRef} />
+                <Dropdown buttonLabel={selectedYearLabel} options={yearOptions} selectedValue={selectedYear} onSelect={setSelectedYear} isOpen={isYearDropdownOpen} setIsOpen={setIsYearDropdownOpen} dropdownRef={yearDropdownRef} />
                 <Dropdown buttonLabel={selectedSortLabel} options={sortOptions} selectedValue={sortBy} onSelect={(value) => setSortBy(value as 'most' | 'least' | 'name')} isOpen={isSortDropdownOpen} setIsOpen={setIsSortDropdownOpen} dropdownRef={sortDropdownRef} />
             </div>
 
@@ -228,7 +265,8 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                         {processedRanking.map((volunteer, index) => {
                             const rank = index + 1;
                             const isTop3 = rank <= 3;
-                            const percentage = volunteer.totalScheduled > 0 ? Math.round((volunteer.totalPresent / volunteer.totalScheduled) * 100) : 0;
+                            const topScore = processedRanking.length > 0 ? processedRanking[0].totalPresent : 0;
+                            const progressBarWidth = topScore > 0 ? Math.round((volunteer.totalPresent / topScore) * 100) : 0;
                             const isCurrentUser = volunteer.id === userProfile?.volunteer_id;
                             
                             const points = volunteer.totalPresent;
@@ -240,11 +278,11 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                                         <div className="flex-grow min-w-0">
                                             <div className="font-semibold text-slate-800 truncate">{volunteer.name}</div>
                                             {volunteer.totalScheduled > 0 && (
-                                                <div className="mt-1" title={`Presença: ${percentage}%`}>
+                                                <div className="mt-1" title={`Pontuação Relativa: ${progressBarWidth}%`}>
                                                     <div className="w-full bg-slate-200 rounded-full h-2.5 shadow-inner">
                                                         <div
                                                             className="bg-blue-500 h-2.5 rounded-full transition-all duration-500"
-                                                            style={{ width: `${percentage}%` }}
+                                                            style={{ width: `${progressBarWidth}%` }}
                                                         ></div>
                                                     </div>
                                                 </div>
