@@ -75,7 +75,7 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
 const colorOptions = [
     { name: 'Azul', value: '#3b82f6', bg: 'bg-blue-500' },
     { name: 'Verde', value: '#22c55e', bg: 'bg-green-500' },
-    { name: 'Amarelo', value: '#f59e0b', bg: 'bg-amber-500' },
+    { name: 'Branco', value: '#E2E8F0', bg: 'bg-white' },
     { name: 'Vermelho', value: '#ef4444', bg: 'bg-red-500' },
 ];
 
@@ -477,9 +477,9 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const selectedStatusLabel = statusOptionsForForm.find(o => o.value === formData.status)?.label;
 
     return (
-    <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
-        <h2 className="text-xl font-bold text-slate-800 mb-6">{title}</h2>
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <h2 className="text-xl font-bold text-slate-800 mb-4">{title}</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
             {isSchedulingMode ? (
                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-sm text-slate-700">
                     <p><strong>Data:</strong> {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
@@ -488,7 +488,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="sm:col-span-2">
                             <label className="block text-sm font-medium text-slate-700 mb-1">Título do Evento *</label>
                             <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
@@ -527,7 +527,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                             </div>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Data *</label>
                             <CustomDatePicker name="date" value={formData.date} onChange={handleDateChange} />
@@ -582,24 +582,30 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">Cor do Evento</label>
                             <div className="flex items-center space-x-3">
-                                {colorOptions.map(option => (
-                                <button
-                                    type="button"
-                                    key={option.value}
-                                    onClick={() => handleColorChange(option.value)}
-                                    className={`w-8 h-8 rounded-full ${option.bg} transition-transform duration-150 transform hover:scale-110 focus:outline-none ${formData.color === option.value ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
-                                    aria-label={option.name}
-                                >
-                                {formData.color === option.value && <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} ><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                                </button>
-                                ))}
+                                {colorOptions.map(option => {
+                                    const isSelected = formData.color === option.value;
+                                    const isWhite = option.name === 'Branco';
+
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={option.value}
+                                            onClick={() => handleColorChange(option.value)}
+                                            className={`w-8 h-8 rounded-full ${option.bg} transition-all duration-150 transform hover:scale-110 focus:outline-none border-2 ${
+                                                isSelected ? 'border-blue-600' : (isWhite ? 'border-slate-300' : 'border-transparent')
+                                            }`}
+                                            aria-label={option.name}
+                                        >
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
                     )}
                     <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"></textarea></div>
                 
                     {isAdminMode && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Principal</label>
                                 <select name="cronograma_principal_id" value={formData.cronograma_principal_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
@@ -624,7 +630,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
             )}
 
             {isSchedulingMode && !isSchedulingAllowed && (
-                 <div className="pt-5 border-t border-slate-200">
+                 <div className="pt-4 border-t border-slate-200">
                     <div className="text-center bg-yellow-50 text-yellow-800 p-4 rounded-lg border border-yellow-200">
                         <p className="font-semibold">A escala de voluntários não está disponível.</p>
                         <p className="text-sm mt-1">
@@ -637,7 +643,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
             )}
 
             {isSchedulingAllowed && (
-                <div className="pt-5 border-t border-slate-200">
+                <div className="pt-4 border-t border-slate-200">
                     {allVolunteers.length > 0 ? (
                         <div className="space-y-4">
                             <input
@@ -677,7 +683,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
             )}
 
 
-            <div className="pt-5 border-t border-slate-200 mt-6 flex justify-end items-center gap-3">
+            <div className="pt-4 border-t border-slate-200 mt-4 flex justify-end items-center gap-3">
                 {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
                 <button type="button" onClick={onCancel} className="px-4 py-2 bg-white border border-slate-300 font-semibold rounded-lg">Cancelar</button>
                 <button 

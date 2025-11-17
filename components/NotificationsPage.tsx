@@ -41,17 +41,17 @@ const timeAgo = (dateString?: string): string => {
 const NotificationIcon: React.FC<{ type: NotificationRecord['type'] }> = ({ type }) => {
     switch (type) {
         case 'new_schedule':
-            return <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>;
+            return <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>;
         case 'invitation_received':
-             return <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></div>;
+             return <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg></div>;
         case 'shift_swap_request':
-            return <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg></div>;
+            return <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" /></svg></div>;
         case 'event_update':
         case 'new_event_for_department':
         case 'new_event_for_leader':
         case 'info':
         default:
-            return <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>;
+            return <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>;
     }
 };
 
@@ -220,31 +220,31 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
         <div className="space-y-6 max-w-4xl mx-auto">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Notificações</h1>
-                    <p className="text-slate-500 mt-1">Veja suas atualizações mais recentes.</p>
+                    <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Notificações</h1>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Veja suas atualizações mais recentes.</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <button 
                         onClick={markAllAsRead}
                         disabled={!notifications.some(n => !n.is_read)}
-                        className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-600"
                     >
                         Marcar como lidas
                     </button>
                     <button 
                         onClick={() => setIsDeleteAllModalOpen(true)}
                         disabled={notifications.length === 0}
-                        className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 font-semibold rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 font-semibold rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-900/20 dark:border-red-800/30 dark:text-red-300 dark:hover:bg-red-900/40"
                     >
                         Limpar Todas
                     </button>
                 </div>
             </div>
             
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
-                <ul className="divide-y divide-slate-200">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                <ul className="divide-y divide-slate-200 dark:divide-slate-700">
                     {notifications.length > 0 ? notifications.map(n => (
-                        <li key={n.id} className="group p-4">
+                        <li key={n.id} className="group p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                             <div className={`flex items-center space-x-4 ${!n.is_read ? 'font-semibold' : ''}`}>
                                 <div 
                                     className="flex-grow flex items-start space-x-4 cursor-pointer"
@@ -252,8 +252,8 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
                                 >
                                     <NotificationIcon type={n.type} />
                                     <div className="flex-1">
-                                        <p className="text-sm text-slate-700">{n.message}</p>
-                                        <p className="text-xs text-slate-500 mt-1">{timeAgo(n.created_at)}</p>
+                                        <p className="text-sm text-slate-700 dark:text-slate-300">{n.message}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
                                     </div>
                                 </div>
                                 <div className="flex-shrink-0 flex items-center gap-2">
@@ -262,7 +262,7 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
                                     )}
                                     <button
                                         onClick={(e) => handleDeleteNotification(n.id, e)}
-                                        className="p-1.5 rounded-full text-slate-400 hover:bg-red-100 hover:text-red-600 transition-colors"
+                                        className="p-1.5 rounded-full text-slate-400 dark:text-slate-500 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                                         aria-label="Apagar notificação"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
@@ -273,8 +273,8 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
                             </div>
                         </li>
                     )) : (
-                        <li className="text-center py-12 text-slate-500">
-                            <h3 className="text-lg font-medium text-slate-800">Nenhuma notificação</h3>
+                        <li className="text-center py-12 text-slate-500 dark:text-slate-400">
+                            <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200">Nenhuma notificação</h3>
                             <p className="mt-1 text-sm">Você não tem nenhuma notificação no momento.</p>
                         </li>
                     )}
@@ -284,7 +284,7 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ session, onDataCh
                         <button
                             onClick={handleLoadMore}
                             disabled={loadingMore}
-                            className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                            className="px-6 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-wait dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-600"
                         >
                             {loadingMore ? 'Carregando...' : 'Ver mais notificações'}
                         </button>

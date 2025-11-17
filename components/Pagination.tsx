@@ -51,14 +51,14 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
     return pages.map((page, index) => (
       <li key={index}>
         {typeof page === 'string' ? (
-          <span className="flex items-center justify-center px-4 h-10 leading-tight text-slate-500">...</span>
+          <span className="flex items-center justify-center px-4 h-10 leading-tight text-slate-500 dark:text-slate-400">...</span>
         ) : (
           <button
             onClick={() => handlePageChange(page)}
             className={`flex items-center justify-center px-4 h-10 leading-tight transition-colors duration-150 rounded-lg ${
               currentPage === page
-                ? 'bg-blue-600 text-white font-semibold'
-                : 'text-slate-600 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-700'
+                ? 'bg-blue-600 text-white font-semibold border border-blue-600'
+                : 'text-slate-600 bg-white border border-slate-300 hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white'
             }`}
           >
             {page}
@@ -75,7 +75,7 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="flex items-center justify-center px-4 h-10 leading-tight text-slate-500 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 hover:text-slate-700 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+            className="flex items-center justify-center px-4 h-10 leading-tight text-slate-500 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 hover:text-slate-700 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white dark:disabled:bg-slate-800/50 dark:disabled:text-slate-500"
           >
             <span className="sr-only">Anterior</span>
             <svg className="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
@@ -88,7 +88,7 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="flex items-center justify-center px-4 h-10 leading-tight text-slate-500 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 hover:text-slate-700 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+            className="flex items-center justify-center px-4 h-10 leading-tight text-slate-500 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 hover:text-slate-700 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white dark:disabled:bg-slate-800/50 dark:disabled:text-slate-500"
           >
             <span className="sr-only">Próximo</span>
             <svg className="w-4 h-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">

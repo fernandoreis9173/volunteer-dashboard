@@ -825,7 +825,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         if (!isFormOpen) return null;
         return (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={handleCloseForm}>
-                <div className="w-full max-w-3xl my-8" onClick={e => e.stopPropagation()}>
+                <div className="w-full max-w-4xl my-8" onClick={e => e.stopPropagation()}>
                     <NewEventForm 
                         initialData={editingEvent} 
                         onCancel={handleCloseForm} 

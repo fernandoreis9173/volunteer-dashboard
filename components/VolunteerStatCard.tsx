@@ -10,20 +10,20 @@ interface VolunteerStatCardProps {
 
 const colorClasses = {
   blue: {
-    bg: 'bg-blue-100',
-    icon: 'text-blue-600',
+    bg: 'bg-blue-100 dark:bg-blue-900/20',
+    icon: 'text-blue-600 dark:text-blue-400',
   },
   green: {
-    bg: 'bg-green-100',
-    icon: 'text-green-600',
+    bg: 'bg-green-100 dark:bg-green-900/20',
+    icon: 'text-green-600 dark:text-green-400',
   },
   yellow: {
-    bg: 'bg-yellow-100',
-    icon: 'text-yellow-600',
+    bg: 'bg-yellow-100 dark:bg-yellow-900/20',
+    icon: 'text-yellow-600 dark:text-yellow-400',
   },
   purple: {
-      bg: 'bg-purple-100',
-      icon: 'text-purple-600',
+      bg: 'bg-purple-100 dark:bg-purple-900/20',
+      icon: 'text-purple-600 dark:text-purple-400',
   }
 };
 
@@ -31,10 +31,10 @@ const VolunteerStatCard: React.FC<VolunteerStatCardProps> = ({ title, value, ico
   if (loading) {
     return (
       <div className="px-4 py-5 sm:p-6 flex items-center space-x-4 animate-pulse">
-        <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-slate-200"></div>
+        <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-slate-200 dark:bg-slate-700"></div>
         <div className="flex-1 space-y-2">
-            <div className="h-4 bg-slate-200 rounded w-3/4"></div>
-            <div className="h-8 bg-slate-200 rounded w-1/2"></div>
+            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
         </div>
       </div>
     );
@@ -48,8 +48,8 @@ const VolunteerStatCard: React.FC<VolunteerStatCardProps> = ({ title, value, ico
         {React.cloneElement(icon, { className: 'h-6 w-6' })}
       </div>
       <div>
-        <p className="text-sm font-medium text-slate-600">{title}</p>
-        <p className="text-4xl font-bold text-slate-900">{value}</p>
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{title}</p>
+        <p className="text-4xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
       </div>
     </div>
   );

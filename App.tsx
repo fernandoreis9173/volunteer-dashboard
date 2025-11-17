@@ -90,6 +90,20 @@ const urlBase64ToUint8Array = (base64String: string) => {
     return outputArray;
 };
 
+const getInitialTheme = (): 'light' | 'dark' => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const storedPrefs = window.localStorage.getItem('theme');
+    if (storedPrefs === 'light' || storedPrefs === 'dark') {
+      return storedPrefs;
+    }
+    const userMedia = window.matchMedia('(prefers-color-scheme: dark)');
+    if (userMedia.matches) {
+      return 'dark';
+    }
+  }
+  return 'light'; // default
+};
+
 const App: React.FC = () => {
   // FIX: Use 'any' for Session type due to import errors.
   const [session, setSession] = useState<Session | null>(null);
@@ -113,7 +127,8 @@ const App: React.FC = () => {
   const [leaders, setLeaders] = useState<User[]>([]);
   const lastUserId = useRef<string | null>(null);
   const hasLoginRedirected = useRef(false);
-  
+  const [theme, setTheme] = useState(getInitialTheme());
+
   // VAPID key is now hardcoded for production
   const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
 
@@ -123,6 +138,28 @@ const App: React.FC = () => {
   const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
   const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
   const isUserDisabled = useMemo(() => userProfile?.status === 'Inativo', [userProfile]);
+
+  useEffect(() => {
+    const isVolunteer = userProfile?.role === 'volunteer';
+
+    // Only apply theme if user is a volunteer
+    if (isVolunteer) {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      localStorage.setItem('theme', theme);
+    } else {
+      // If not a volunteer, ensure light mode and clear storage
+      document.documentElement.classList.remove('dark');
+      localStorage.removeItem('theme');
+    }
+  }, [theme, userProfile?.role]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
+  }, []);
 
   const hasPermission = useMemo(() => {
     if (!userProfile?.role) {
@@ -706,14 +743,14 @@ const App: React.FC = () => {
     
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center h-screen bg-slate-50" aria-live="polite" aria-busy="true">
+            <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-900" aria-live="polite" aria-busy="true">
                 <div 
                     className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
                     role="status"
                 >
                    <span className="sr-only">Carregando...</span>
                 </div>
-                <p className="mt-4 text-lg font-semibold text-slate-700">Carregando...</p>
+                <p className="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-300">Carregando...</p>
             </div>
         );
     }
@@ -748,80 +785,95 @@ const App: React.FC = () => {
 
     if (!userProfile) {
         return (
-            <div className="flex flex-col items-center justify-center h-screen bg-slate-50" aria-live="polite" aria-busy="true">
-                <div 
-                    className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
-                    role="status"
-                >
-                   <span className="sr-only">Carregando perfil...</span>
+            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4 dark:from-slate-900 dark:to-slate-800">
+                <div className="w-full max-w-lg p-8 space-y-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg text-center">
+                    <div className="flex justify-center mb-4">
+                      <div className="p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded-xl flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Erro ao Carregar Perfil</h1>
+                    <p className="text-slate-600 dark:text-slate-300">
+                        Não foi possível carregar os dados do seu perfil. Isso pode acontecer se sua conta não estiver configurada corretamente.
+                    </p>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">
+                        Se o problema persistir, por favor, entre em contato com o administrador do sistema.
+                    </p>
+                    <div className="pt-4">
+                        <button
+                            onClick={async () => await supabase.auth.signOut()}
+                            className="w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-slate-600 text-base font-semibold text-white shadow-sm hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500"
+                        >
+                            Sair
+                        </button>
+                    </div>
                 </div>
-                <p className="mt-4 text-lg font-semibold text-slate-700">Carregando perfil...</p>
             </div>
         );
     }
-
-    // Fallback: If a user has a session but their profile is still pending (e.g., closed tab),
-    // force them to the registration page.
-    if (userProfile.status === 'Pendente') {
-        return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
-    }
-
+    
     if (isUserDisabled) {
-        return <DisabledUserPage userRole={userProfile.role ?? null} />;
+        return <DisabledUserPage userRole={userProfile.role} />;
     }
 
-    // **NOVO: Verificação da LGPD**
-    // Se o usuário estiver logado e seu perfil carregado, mas ele não aceitou a LGPD,
-    // mostre a página de consentimento.
-    if (session && userProfile && !userProfile.lgpd_accepted) {
+    if (!userProfile.lgpd_accepted) {
         return <LgpdConsentPage session={session} onConsentAccepted={refetchUserData} />;
     }
     
-    // Full-screen permission check, runs after all data is loaded and user status is confirmed as not 'Pendente'.
     if (!hasPermission) {
         return <PermissionDeniedPage onNavigate={handleNavigate} />;
     }
-    
+
     return (
-        <>
-            <div className="flex min-h-screen bg-slate-50">
-                <Sidebar
-                    activePage={activePage}
-                    onNavigate={handleNavigate}
-                    onNewVolunteer={handleNewVolunteer}
-                    onNewEvent={handleNewEvent}
-                    isOpen={isSidebarOpen}
-                    setIsOpen={setIsSidebarOpen}
-                    userRole={userProfile?.role ?? null}
-                    session={session}
-                    unreadCount={unreadCount}
-                    pushPermissionStatus={pushPermissionStatus}
-                    onSubscribeToPush={() => setIsPushPromptOpen(true)}
-                    canInstallPwa={!!installPromptEvent || (isIOS && !isStandalone)}
-                    onInstallPrompt={handleInstallPrompt}
-                />
-                <div className="flex-1 flex flex-col min-w-0">
-                    {activePage !== 'calendar' && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
-                    <main className={`flex-1 bg-slate-50 ${activePage === 'calendar' ? 'p-0 lg:p-6' : 'p-6'}`}>
-                        {renderPage()}
-                    </main>
-                </div>
-                <PushNotificationModal
-                    isOpen={isPushPromptOpen}
-                    onClose={() => setIsPushPromptOpen(false)}
-                    onConfirm={subscribeToPushNotifications}
-                />
-                <IOSInstallPromptModal
-                    isOpen={isIOSInstallPromptOpen}
-                    onClose={() => setIsIOSInstallPromptOpen(false)}
-                />
+        <div className="flex h-screen bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300">
+            <Sidebar
+                activePage={activePage}
+                onNavigate={handleNavigate}
+                onNewVolunteer={handleNewVolunteer}
+                onNewEvent={handleNewEvent}
+                isOpen={isSidebarOpen}
+                setIsOpen={setIsSidebarOpen}
+                userRole={userProfile.role}
+                session={session}
+                unreadCount={unreadCount}
+                pushPermissionStatus={pushPermissionStatus}
+                onSubscribeToPush={subscribeToPushNotifications}
+                canInstallPwa={!!installPromptEvent || (isIOS && !isStandalone)}
+                onInstallPrompt={handleInstallPrompt}
+                theme={theme}
+                toggleTheme={toggleTheme}
+            />
+
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <Header onMenuClick={() => setIsSidebarOpen(true)} />
+                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 lg:p-8">
+                    {renderPage()}
+                </main>
             </div>
-            <div className="fixed top-4 right-4 z-[9999] space-y-2">
-                {notifications.map(n => (
-                    <NotificationToast key={n.id} notification={n} onClose={removeNotification} />
+
+             <div className="fixed top-4 right-4 z-[9999] w-full max-w-sm space-y-3">
+                {notifications.map(notification => (
+                    <NotificationToast 
+                        key={notification.id}
+                        notification={notification}
+                        onClose={removeNotification}
+                    />
                 ))}
             </div>
-        </>
+
+            <PushNotificationModal
+                isOpen={isPushPromptOpen}
+                onConfirm={subscribeToPushNotifications}
+                onClose={() => setIsPushPromptOpen(false)}
+            />
+            
+            <IOSInstallPromptModal 
+                isOpen={isIOSInstallPromptOpen}
+                onClose={() => setIsIOSInstallPromptOpen(false)}
+            />
+        </div>
     );
 };
 
