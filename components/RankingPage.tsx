@@ -247,7 +247,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Ranking de Presenças</h1>
+                <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Ranking</h1>
                 <p className="text-slate-500 dark:text-slate-400 mt-1">Veja os voluntários mais engajados nos eventos.</p>
             </div>
 

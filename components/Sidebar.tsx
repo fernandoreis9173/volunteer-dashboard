@@ -70,7 +70,7 @@ const allNavItems: NavItemData[] = [
     { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIcon} alt="Departamentos" />, roles: ['admin'] },
     { page: 'events', label: 'Eventos', icon: <img src={EventosIcon} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },
     { page: 'calendar', label: 'Calendário', icon: <img src={CalendarIcon} alt="Calendário" />, roles: ['admin', 'leader'] },
-    { page: 'timelines', label: 'Cronogramas', icon: <img src={CronogramasIcon} alt="Calendário" />, roles: ['admin', 'leader'] },
+    { page: 'timelines', label: 'Cronogramas', icon: <img src={CronogramasIcon} alt="Calendário" />, roles: ['admin'] },
     { page: 'frequency', label: 'Frequência', icon: <img src={FrequenciaIcon} alt="Frequência" />, roles: ['admin'] },
     { page: 'admin', label: 'Admin', icon: <img src={AdminIcon} alt="Admin" />, roles: ['admin'] },
 ];
