@@ -1,3 +1,4 @@
+
 // FIX: Restored Supabase v2 User type import.
 import type { User } from '@supabase/supabase-js';
 
@@ -16,8 +17,8 @@ export interface EventVolunteer {
   volunteer_id: number;
   department_id: number;
   present: boolean | null;
-  // FIX: Changed `departments` to `string[]` to match the data from `volunteers` table.
-  volunteers?: { id: number; name: string; email: string; initials: string; departments: string[]; };
+  // FIX: Changed `departments` to `string[]` to match the data from `volunteers` table. Added status.
+  volunteers?: { id: number; name: string; email: string; initials: string; departments: string[]; status?: string; };
 }
 
 export interface EventDepartment {
@@ -144,7 +145,7 @@ export interface Invitation {
     profiles: {
       name: string | null;
     } | null;
-  }
+}
   
 export interface TimelineItem {
   id?: string;
