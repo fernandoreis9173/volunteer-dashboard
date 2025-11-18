@@ -386,139 +386,141 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
     }
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4">
+        <div className="h-full w-full overflow-y-auto bg-gradient-to-br from-slate-50 to-slate-200">
              <style>{`
                 input[type="checkbox"]:checked {
                     background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
                 }
             `}</style>
-            <div className="w-full max-w-md p-6 sm:p-8 space-y-8 bg-white rounded-2xl shadow-lg">
-                <div className="text-center">
-                    <div className="flex justify-center mb-4">
-                      <div className="p-3 bg-blue-600 text-white rounded-xl">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <h1 className="text-3xl font-bold text-slate-800">
-                        Complete seu Cadastro
-                    </h1>
-                    <p className="mt-2 text-slate-500">
-                        Você foi convidado para o Sistema de Voluntários. Preencha seus dados e crie uma senha para começar.
-                    </p>
-                </div>
-
-                {error && !successMessage ? (
-                    <div className="text-center text-red-600 bg-red-50 p-4 rounded-lg">
-                        <p className="font-semibold">Ocorreu um erro</p>
-                        <p className="text-sm mt-1">{error}</p>
-                    </div>
-                ) : (
-                    <form className="mt-8 space-y-6" onSubmit={handleAcceptInvite}>
-                        <InputField 
-                            label="Nome Completo" 
-                            type="text" 
-                            name="fullName" 
-                            value={fullName} 
-                            onChange={(e) => setFullName(e.target.value)} 
-                            required 
-                        />
-                         <InputField 
-                            label="Email" 
-                            type="email" 
-                            name="email" 
-                            value={email} 
-                            onChange={() => {}}
-                            readOnly
-                        />
-                         <InputField 
-                            label="Telefone" 
-                            type="tel" 
-                            name="phone" 
-                            value={phone} 
-                            onChange={handlePhoneChange} 
-                            placeholder="(11) 99876-5432"
-                            required={isVolunteer}
-                        />
-
-                        {isVolunteer && (
-                            <>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
-                                    <SmartSearch
-                                        items={departments.filter(d => d.id != null) as SearchItem[]}
-                                        selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
-                                        onSelectItem={handleSelectDepartment}
-                                        placeholder="Buscar por departamento..."
-                                        disabled={areDepartmentsPreselected}
-                                    />
-                                    <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
-                                        {selectedDepartments.map((department) => (
-                                            <RemovableTag
-                                                key={department.id}
-                                                text={department.name}
-                                                color="yellow"
-                                                onRemove={() => handleRemoveDepartment(department.id!)}
-                                                disabled={areDepartmentsPreselected}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <TagInputField 
-                                    label="Habilidades e Talentos" 
-                                    placeholder="Ex: Música, Tecnologia, Liderança..." 
-                                    tags={skills}
-                                    setTags={setSkills}
-                                    color="blue"
-                                />
-
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                        <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} />
-                                        <CheckboxField label="Segunda" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} />
-                                        <CheckboxField label="Terça" name="terca" checked={availability.terca} onChange={handleCheckboxChange} />
-                                        <CheckboxField label="Quarta" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} />
-                                        <CheckboxField label="Quinta" name="quinta" checked={availability.quinta} onChange={handleCheckboxChange} />
-                                        <CheckboxField label="Sexta" name="sexta" checked={availability.sexta} onChange={handleCheckboxChange} />
-                                        <CheckboxField label="Sábado" name="sabado" checked={availability.sabado} onChange={handleCheckboxChange} />
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-                        <InputField 
-                            label="Crie sua Senha"
-                            type="password"
-                            name="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Mínimo de 6 caracteres"
-                            required
-                        />
-                        
-                        <InputField 
-                            label="Confirme sua Senha"
-                            type="password"
-                            name="confirmPassword"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            placeholder="Repita a senha"
-                            required
-                        />
-
-                        {error && <p className="text-sm text-red-600 text-center pt-4">{error}</p>}
-                        {successMessage && <p className="text-sm text-green-600 text-center pt-4">{successMessage}</p>}
-
-                        <div className="pt-2">
-                            <button type="submit" disabled={loading || !!successMessage} className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400">
-                                {loading ? 'Criando Conta...' : 'Criar Conta'}
-                            </button>
+            <div className="min-h-full flex items-center justify-center p-4">
+                <div className="w-full max-w-md p-6 sm:p-8 space-y-8 bg-white rounded-2xl shadow-lg my-8">
+                    <div className="text-center">
+                        <div className="flex justify-center mb-4">
+                          <div className="p-3 bg-blue-600 text-white rounded-xl">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                            </svg>
+                          </div>
                         </div>
-                    </form>
-                )}
+                        <h1 className="text-3xl font-bold text-slate-800">
+                            Complete seu Cadastro
+                        </h1>
+                        <p className="mt-2 text-slate-500">
+                            Você foi convidado para o Sistema de Voluntários. Preencha seus dados e crie uma senha para começar.
+                        </p>
+                    </div>
+
+                    {error && !successMessage ? (
+                        <div className="text-center text-red-600 bg-red-50 p-4 rounded-lg">
+                            <p className="font-semibold">Ocorreu um erro</p>
+                            <p className="text-sm mt-1">{error}</p>
+                        </div>
+                    ) : (
+                        <form className="mt-8 space-y-6" onSubmit={handleAcceptInvite}>
+                            <InputField 
+                                label="Nome Completo" 
+                                type="text" 
+                                name="fullName" 
+                                value={fullName} 
+                                onChange={(e) => setFullName(e.target.value)} 
+                                required 
+                            />
+                             <InputField 
+                                label="Email" 
+                                type="email" 
+                                name="email" 
+                                value={email} 
+                                onChange={() => {}}
+                                readOnly
+                            />
+                             <InputField 
+                                label="Telefone" 
+                                type="tel" 
+                                name="phone" 
+                                value={phone} 
+                                onChange={handlePhoneChange} 
+                                placeholder="(11) 99876-5432"
+                                required={isVolunteer}
+                            />
+
+                            {isVolunteer && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
+                                        <SmartSearch
+                                            items={departments.filter(d => d.id != null) as SearchItem[]}
+                                            selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
+                                            onSelectItem={handleSelectDepartment}
+                                            placeholder="Buscar por departamento..."
+                                            disabled={areDepartmentsPreselected}
+                                        />
+                                        <div className="mt-2 flex flex-wrap gap-2 min-h-[2.5rem]">
+                                            {selectedDepartments.map((department) => (
+                                                <RemovableTag
+                                                    key={department.id}
+                                                    text={department.name}
+                                                    color="yellow"
+                                                    onRemove={() => handleRemoveDepartment(department.id!)}
+                                                    disabled={areDepartmentsPreselected}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <TagInputField 
+                                        label="Habilidades e Talentos" 
+                                        placeholder="Ex: Música, Tecnologia, Liderança..." 
+                                        tags={skills}
+                                        setTags={setSkills}
+                                        color="blue"
+                                    />
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                            <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} />
+                                            <CheckboxField label="Segunda" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} />
+                                            <CheckboxField label="Terça" name="terca" checked={availability.terca} onChange={handleCheckboxChange} />
+                                            <CheckboxField label="Quarta" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} />
+                                            <CheckboxField label="Quinta" name="quinta" checked={availability.quinta} onChange={handleCheckboxChange} />
+                                            <CheckboxField label="Sexta" name="sexta" checked={availability.sexta} onChange={handleCheckboxChange} />
+                                            <CheckboxField label="Sábado" name="sabado" checked={availability.sabado} onChange={handleCheckboxChange} />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            <InputField 
+                                label="Crie sua Senha"
+                                type="password"
+                                name="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Mínimo de 6 caracteres"
+                                required
+                            />
+                            
+                            <InputField 
+                                label="Confirme sua Senha"
+                                type="password"
+                                name="confirmPassword"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="Repita a senha"
+                                required
+                            />
+
+                            {error && <p className="text-sm text-red-600 text-center pt-4">{error}</p>}
+                            {successMessage && <p className="text-sm text-green-600 text-center pt-4">{successMessage}</p>}
+
+                            <div className="pt-2">
+                                <button type="submit" disabled={loading || !!successMessage} className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400">
+                                    {loading ? 'Criando Conta...' : 'Criar Conta'}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
             </div>
         </div>
     );
