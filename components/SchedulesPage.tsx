@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import EventCard from './EventCard';
 import NewEventForm from './NewScheduleForm';
@@ -528,14 +526,24 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
 
   const handleConfirmDelete = async () => {
     if (!eventToDeleteId) return;
-    const { error: deleteError } = await supabase.from('events').delete().eq('id', eventToDeleteId);
-    if (deleteError) {
-      alert(`Falha ao excluir evento: ${getErrorMessage(deleteError)}`);
-    } else {
+    try {
+      // Must delete from linking tables first to satisfy foreign key constraints
+      await supabase.from('event_departments').delete().eq('event_id', eventToDeleteId);
+      await supabase.from('event_volunteers').delete().eq('event_id', eventToDeleteId);
+      await supabase.from('notifications').delete().eq('related_event_id', eventToDeleteId);
+      
+      // Now it's safe to delete the event itself
+      const { error: deleteError } = await supabase.from('events').delete().eq('id', eventToDeleteId);
+      if (deleteError) throw deleteError;
+
       await fetchEvents();
+
+    } catch (err) {
+        alert(`Falha ao excluir evento: ${getErrorMessage(err)}`);
+    } finally {
+        setIsDeleteModalOpen(false);
+        setEventToDeleteId(null);
     }
-    setIsDeleteModalOpen(false);
-    setEventToDeleteId(null);
   };
 
     const createAndSendNotifications = async (notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[]) => {
@@ -550,51 +558,59 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
         }
     };
 
-    const handleSaveEvent = async (eventPayload: any) => {
+    const handleSaveEvent = async (eventData: any) => {
         setIsSaving(true);
         setSaveError(null);
         try {
-            const isSchedulingMode = isLeader && eventPayload.id && eventPayload.scheduling_department_id;
-    
+            const isSchedulingMode = isLeader && eventData.id;
             if (isSchedulingMode) {
-                const eventId = eventPayload.id;
-                const eventName = eventPayload.name;
-                const schedulingDepartmentId = eventPayload.scheduling_department_id;
-                const newVolunteerIds = new Set(eventPayload.volunteer_ids || []);
+                const eventId = eventData.id;
+                const eventName = eventData.name;
+                const newVolunteerIds = new Set(eventData.volunteer_ids || []);
     
                 const { data: currentVolunteersData, error: currentVolError } = await supabase
                     .from('event_volunteers')
                     .select('volunteer_id, volunteers(user_id, name)')
                     .eq('event_id', eventId)
-                    .eq('department_id', schedulingDepartmentId);
+                    .eq('department_id', leaderDepartmentId);
     
                 if (currentVolError) throw currentVolError;
-    
-                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', schedulingDepartmentId);
-                if (deleteError) throw deleteError;
                 
-                if (eventPayload.volunteer_ids && eventPayload.volunteer_ids.length > 0) {
-                    const volunteersToInsert = eventPayload.volunteer_ids.map((vol_id: number) => ({
-                        event_id: eventId, volunteer_id: vol_id, department_id: schedulingDepartmentId,
-                    }));
-                    const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
-                    if (insertError) throw insertError;
-                }
-    
                 const currentVolunteers = currentVolunteersData || [];
                 const currentVolunteerIds = new Set(currentVolunteers.map(v => v.volunteer_id));
     
                 const addedVolunteerIds = [...newVolunteerIds].filter(id => !currentVolunteerIds.has(id));
                 const removedVolunteers = currentVolunteers.filter(v => !newVolunteerIds.has(v.volunteer_id));
     
+                const { error: deleteError } = await supabase.from('event_volunteers').delete().eq('event_id', eventId).eq('department_id', leaderDepartmentId);
+                if (deleteError) throw deleteError;
+    
+                if (eventData.volunteer_ids && eventData.volunteer_ids.length > 0) {
+                    const volunteersToInsert = eventData.volunteer_ids.map((vol_id: number) => ({
+                        event_id: eventId, volunteer_id: vol_id, department_id: leaderDepartmentId,
+                    }));
+                    const { error: insertError } = await supabase.from('event_volunteers').insert(volunteersToInsert);
+                    if (insertError) throw insertError;
+                }
+    
                 const notifications: Omit<NotificationRecord, 'id' | 'created_at' | 'is_read'>[] = [];
     
                 if (addedVolunteerIds.length > 0) {
-                    const { data: addedUsers, error: usersError } = await supabase.from('volunteers').select('user_id').in('id', addedVolunteerIds);
-                    if (usersError) console.error("Error fetching added volunteers for notification", usersError);
-                    else if (addedUsers) {
-                        addedUsers.forEach(u => {
-                            if (u.user_id) notifications.push({ user_id: u.user_id, message: `Você foi escalado(a) para o evento "${eventName}".`, type: 'new_schedule', related_event_id: eventId });
+                    const { data: addedUsers, error: usersError } = await supabase
+                        .from('volunteers')
+                        .select('user_id')
+                        .in('id', addedVolunteerIds);
+                    
+                    if (usersError) {
+                        console.error("Could not fetch added volunteers for notification:", usersError);
+                    } else if (addedUsers) {
+                        addedUsers.filter(u => u.user_id).forEach(u => {
+                            notifications.push({
+                                user_id: u.user_id!,
+                                message: `Você foi escalado(a) para o evento "${eventName}".`,
+                                type: 'new_schedule' as const,
+                                related_event_id: eventId,
+                            });
                         });
                     }
                 }
@@ -602,69 +618,66 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
                 removedVolunteers.forEach(v => {
                     const volunteer = Array.isArray(v.volunteers) ? v.volunteers[0] : v.volunteers;
                     if (volunteer?.user_id) {
-                        notifications.push({ user_id: volunteer.user_id, message: `Você foi removido(a) da escala do evento "${eventName}".`, type: 'event_update', related_event_id: eventId });
+                        notifications.push({
+                            user_id: volunteer.user_id,
+                            message: `Você foi removido(a) da escala do evento "${eventName}".`,
+                            type: 'event_update' as const,
+                            related_event_id: eventId,
+                        });
                     }
                 });
                 
                 if (notifications.length > 0) {
                     await createAndSendNotifications(notifications);
                 }
-            
-            } else if (isAdmin) {
-                const { department_ids, volunteer_ids, scheduling_department_id, ...eventDetails } = eventPayload;
-                
-                let conflictQuery = supabase.from('events').select('id, name, start_time, end_time').eq('date', eventDetails.date).lt('start_time', eventDetails.end_time).gt('end_time', eventDetails.start_time);
-                if (eventDetails.id) conflictQuery = conflictQuery.neq('id', eventDetails.id);
-                const { data: conflicts, error: conflictError } = await conflictQuery;
-                if (conflictError) throw conflictError;
-                if (conflicts && conflicts.length > 0) {
-                    const c = conflicts[0];
-                    throw new Error(`Conflito de horário com "${c.name}" (${c.start_time.substring(0,5)} - ${c.end_time.substring(0,5)}).`);
-                }
     
-                let savedEvent;
+            } else { // Admin creating or editing an event
+                const { department_ids, volunteer_ids, ...eventDetails } = eventData;
+                
                 const isCreating = !eventDetails.id;
+                const oldEventForNotification = isCreating ? null : masterEvents.find(e => e.id === eventDetails.id);
     
-                if (isCreating) {
-                    const { id, ...insertPayload } = eventDetails;
-                    const { data: newEvent, error } = await supabase.from('events').insert(insertPayload).select().single();
-                    if (error) throw error;
-                    if (!newEvent) throw new Error("Falha ao criar o evento.");
-                    savedEvent = newEvent;
-                } else { // Updating
-                    const eventId = eventDetails.id;
-                    const { id, ...updatePayload } = eventDetails;
-                    const { data: updatedEvent, error } = await supabase.from('events').update(updatePayload).eq('id', eventId).select().single();
-                    if (error) throw error;
-                    if (!updatedEvent) throw new Error("Falha ao atualizar o evento.");
-                    savedEvent = updatedEvent;
+                // 1. Upsert the main event data (insert or update)
+                const { data: savedEvent, error: upsertError } = await supabase
+                    .from('events')
+                    .upsert(eventDetails)
+                    .select()
+                    .single();
+    
+                if (upsertError) {
+                    // Handle unique constraint violation on name gracefully
+                    if (upsertError.message.includes('duplicate key value violates unique constraint')) {
+                         throw new Error(`O nome do evento "${eventDetails.name}" já está em uso.`);
+                    }
+                    throw upsertError;
                 }
+                if (!savedEvent) throw new Error("Falha ao salvar o evento.");
                 
-                // Sync departments
+                // 2. Sync departments in the event_departments table
                 const eventId = savedEvent.id;
                 const { error: deleteDeptError } = await supabase.from('event_departments').delete().eq('event_id', eventId);
                 if (deleteDeptError) throw deleteDeptError;
-
+    
                 if (department_ids && department_ids.length > 0) {
                     const assignments = department_ids.map((deptId: number) => ({ event_id: eventId, department_id: deptId }));
                     const { error: insertDeptError } = await supabase.from('event_departments').insert(assignments);
                     if (insertDeptError) throw insertDeptError;
                 }
-
+    
+                // 3. Trigger notifications via Edge Function
                 const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
                     body: { 
                         notifyType: isCreating ? 'event_created' : 'event_updated',
                         event: savedEvent,
+                        oldEvent: oldEventForNotification,
                     },
                 });
                 if (notifyError) {
                     console.error("Falha ao acionar notificações:", getErrorMessage(notifyError));
                 }
             }
-    
-            hideForm();
-            onDataChange();
             await fetchEvents();
+            hideForm();
         } catch (err) {
             setSaveError(getErrorMessage(err));
         } finally {

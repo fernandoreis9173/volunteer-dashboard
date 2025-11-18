@@ -386,7 +386,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     }, [volunteerSearch, unselectedVolunteers]);
 
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setSaveError(null);
         
@@ -395,75 +395,25 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
             return;
         }
     
-        try {
-            const { data: rpcData, error: fetchError } = await supabase.rpc('get_events_for_user');
-            if (fetchError) {
-                throw new Error(`Não foi possível verificar conflitos: ${fetchError.message}`);
-            }
-            const allEvents = (rpcData as unknown as Event[]) || [];
-    
-            const newEventStartLocal = new Date(`${formData.date}T${formData.start_time}`);
-            let newEventEndLocal = new Date(`${formData.date}T${formData.end_time}`);
-    
-            if (newEventEndLocal < newEventStartLocal) {
-                newEventEndLocal.setDate(newEventEndLocal.getDate() + 1);
-            }
-            
-            const newStartTimestamp = newEventStartLocal.getTime();
-            const newEndTimestamp = newEventEndLocal.getTime();
-    
-            const conflictingEvent = allEvents.find(existingEvent => {
-                if (isEditing && existingEvent.id === initialData?.id) {
-                    return false;
-                }
-    
-                const { dateTime: existingStartLocal, isValid: startIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.start_time);
-                let { dateTime: existingEndLocal, isValid: endIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.end_time);
-    
-                if (!startIsValid || !endIsValid || !existingStartLocal || !existingEndLocal) {
-                    console.warn(`Could not parse dates for existing event ID ${existingEvent.id}. Skipping conflict check.`);
-                    return false;
-                }
-    
-                if (existingEndLocal < existingStartLocal) {
-                    existingEndLocal.setDate(existingEndLocal.getDate() + 1);
-                }
-    
-                const existingStartTimestamp = existingStartLocal.getTime();
-                const existingEndTimestamp = existingEndLocal.getTime();
-    
-                return (newStartTimestamp < existingEndTimestamp) && (newEndTimestamp > existingStartTimestamp);
-            });
-    
-            if (conflictingEvent) {
-                const { time: conflictStartTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.start_time);
-                const { time: conflictEndTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.end_time);
-                throw new Error(`Não é possível agendar. O horário conflita com o evento "${conflictingEvent.name}" (das ${conflictStartTime} às ${conflictEndTime}).`);
-            }
-    
-            const payload: any = { 
-                ...formData,
-                cronograma_principal_id: formData.cronograma_principal_id || null,
-                cronograma_kids_id: formData.cronograma_kids_id || null,
-            };
+        const payload: any = { 
+            ...formData,
+            cronograma_principal_id: formData.cronograma_principal_id || null,
+            cronograma_kids_id: formData.cronograma_kids_id || null,
+        };
 
-            if (isEditing) {
-                payload.id = initialData?.id;
-            }
-    
-            if (isSchedulingMode) {
-                payload.volunteer_ids = selectedVolunteers.map(v => v.id);
-                payload.scheduling_department_id = leaderDepartmentId;
-            }
-    
-            if (isAdminMode) {
-                payload.department_ids = selectedDepartments.map(d => d.id);
-            }
-            onSave(payload);
-    
-        } catch (err) {
-            setSaveError(getErrorMessage(err));
+        if (isEditing) {
+            payload.id = initialData?.id;
         }
+
+        if (isSchedulingMode) {
+            payload.volunteer_ids = selectedVolunteers.map(v => v.id);
+            payload.scheduling_department_id = leaderDepartmentId;
+        }
+
+        if (isAdminMode) {
+            payload.department_ids = selectedDepartments.map(d => d.id);
+        }
+        onSave(payload);
     };
 
     let title = isEditing ? "Editar Evento" : "Novo Evento";
