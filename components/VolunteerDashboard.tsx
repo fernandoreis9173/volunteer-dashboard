@@ -500,7 +500,13 @@ const EventCard: React.FC<{
     onRequestSwap: (event: VolunteerSchedule) => void;
     onViewTimeline: (event: VolunteerSchedule) => void;
 }> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline }) => {
+    const [now, setNow] = useState(new Date());
     
+    useEffect(() => {
+        const interval = setInterval(() => setNow(new Date()), 10000); // Check every 10s
+        return () => clearInterval(interval);
+    }, []);
+
     const { fullDate: formattedDate, dateTime: startDateTime, time: startTime } = convertUTCToLocal(event.date, event.start_time);
     const { dateTime: endDateTime, time: endTime } = convertUTCToLocal(event.date, event.end_time);
 
@@ -509,9 +515,9 @@ const EventCard: React.FC<{
         endDateTime.setDate(endDateTime.getDate() + 1);
     }
 
-    const now = new Date();
     const isFinished = endDateTime ? now > endDateTime : false;
     const isLive = startDateTime && endDateTime ? now >= startDateTime && now < endDateTime : false;
+    const isWaitingToStart = isToday && !isLive && !isFinished;
 
     const myAttendance = event.present;
 
@@ -580,10 +586,17 @@ const EventCard: React.FC<{
                         >
                             Gerar QR Code
                         </button>
+                    ) : isWaitingToStart ? (
+                         <button
+                            disabled
+                            className="flex-1 text-center px-4 py-2 text-sm bg-slate-100 text-slate-400 font-semibold rounded-lg cursor-not-allowed border border-slate-200"
+                        >
+                            Check-in às {startTime}
+                        </button>
                     ) : (
                         <button
                             onClick={() => onRequestSwap(event)}
-                            className="flex-1 text-center px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 shadow-sm disabled:bg-orange-300 disabled:cursor-not-allowed"
+                            className="flex-1 text-center px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 shadow-sm"
                         >
                             Preciso Trocar
                         </button>

@@ -76,34 +76,59 @@ interface EventCardProps {
     onDelete: (id: number) => void;
     onAddDepartment: (event: Event) => void;
     onMarkAttendance: (event: Event) => void; // New prop
+    onGenerateQrCode?: (event: Event) => void; // Added optional prop for volunteers
+    onRequestSwap?: (event: Event) => void; // Added optional prop for volunteers
+    onViewTimeline?: (event: Event) => void;
+    volunteerId?: number | null;
+    isToday?: boolean;
     isHighlighted?: boolean;
     isFilteredByMyDepartment?: boolean;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartmentId, onEdit, onDelete, onAddDepartment, onMarkAttendance, isHighlighted = false, isFilteredByMyDepartment = false }) => {
+const EventCard: React.FC<EventCardProps> = ({ 
+    event, 
+    userRole, 
+    leaderDepartmentId, 
+    onEdit, 
+    onDelete, 
+    onAddDepartment, 
+    onMarkAttendance,
+    onGenerateQrCode,
+    onRequestSwap,
+    onViewTimeline,
+    isHighlighted = false, 
+    isFilteredByMyDepartment = false 
+}) => {
     const [expanded, setExpanded] = useState(false);
     const [expandedDepartments, setExpandedDepartments] = useState<Set<number>>(new Set());
+    const [now, setNow] = useState(new Date());
     
     const isLeader = userRole === 'leader' || userRole === 'lider';
     const isAdmin = userRole === 'admin';
     const isDepartmentInvolved = isLeader && leaderDepartmentId ? event.event_departments.some(ed => ed.department_id === leaderDepartmentId) : false;
     
+    // Refresh 'now' every 10 seconds to ensure buttons update automatically when event starts/ends
+    useEffect(() => {
+        const interval = setInterval(() => setNow(new Date()), 10000); 
+        return () => clearInterval(interval);
+    }, []);
+
     const { dateTime: startDateTime, fullDate: localFullDate, time: localStartTime } = convertUTCToLocal(event.date, event.start_time);
     const { dateTime: endDateTime, time: localEndTime } = convertUTCToLocal(event.date, event.end_time);
 
     // FIX: Handle events that cross midnight in UTC timezone.
-    // If the end time is before the start time, it means the event ends on the next day in UTC.
     if (startDateTime && endDateTime && endDateTime < startDateTime) {
         endDateTime.setDate(endDateTime.getDate() + 1);
     }
 
-    const now = new Date();
     const hasEventStarted = startDateTime ? now >= startDateTime : false;
     const isToday = startDateTime ? startDateTime.toLocaleDateString() === now.toLocaleDateString() : false;
     const isLive = startDateTime && endDateTime ? now >= startDateTime && now < endDateTime : false;
     const isFinished = endDateTime ? now > endDateTime : false;
 
     const canLeaderSchedule = isLeader && event.status === 'Confirmado' && !hasEventStarted;
+    const isVolunteer = !isLeader && !isAdmin && onGenerateQrCode; // Helper to identify volunteer view
+    const isWaitingToStart = isToday && !isLive && !isFinished;
 
     const departmentsToDisplay = useMemo(() => {
         if (isLeader && isFilteredByMyDepartment && leaderDepartmentId) {
@@ -158,21 +183,29 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
                 </div>
             </div>
 
-            {/* --- Leader Action Buttons --- */}
+            {/* --- Action Buttons --- */}
             <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 {isFinished ? (
-                    <div className="flex items-center space-x-2 text-sm text-slate-500 font-medium bg-slate-100 px-4 py-2 rounded-lg">
+                    <div className="flex items-center space-x-2 text-sm text-slate-500 font-medium bg-slate-100 px-4 py-2 rounded-lg w-full sm:w-auto justify-center sm:justify-start">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span>Este evento já foi encerrado.</span>
+                        <span>Encerrado</span>
                     </div>
                 ) : (
                     <>
+                        {/* Leader Actions */}
                         {isLeader && isToday && isDepartmentInvolved && (
-                            <button onClick={() => onMarkAttendance(event)} className="text-center px-4 py-2 text-sm bg-teal-500 text-white font-semibold rounded-lg hover:bg-teal-600 shadow-sm">
-                                Marcar Presença
-                            </button>
+                            hasEventStarted ? (
+                                <button onClick={() => onMarkAttendance(event)} className="text-center px-4 py-2 text-sm bg-teal-500 text-white font-semibold rounded-lg hover:bg-teal-600 shadow-sm transition-colors">
+                                    Marcar Presença
+                                </button>
+                            ) : (
+                                <div className="text-center px-4 py-2 text-sm bg-slate-100 text-slate-500 font-semibold rounded-lg border border-slate-200 cursor-not-allowed flex items-center justify-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                    Aguardando Início
+                                </div>
+                            )
                         )}
                         {isLeader && canLeaderSchedule && isDepartmentInvolved && (
                              <button onClick={() => onEdit(event)} className="text-center px-4 py-2 text-sm bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 shadow-sm">
@@ -183,6 +216,34 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
                             <button onClick={() => onAddDepartment(event)} className="text-center px-4 py-2 text-sm bg-indigo-500 text-white font-semibold rounded-lg hover:bg-indigo-600 shadow-sm">
                                 Adicionar meu Departamento
                             </button>
+                        )}
+
+                        {/* Volunteer Actions */}
+                        {isVolunteer && onGenerateQrCode && onRequestSwap && (
+                            <div className="flex flex-col sm:flex-row gap-3 w-full">
+                                {isLive ? (
+                                    <button
+                                        onClick={() => onGenerateQrCode(event)}
+                                        className="flex-1 text-center px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-sm"
+                                    >
+                                        Gerar QR Code
+                                    </button>
+                                ) : isWaitingToStart ? (
+                                    <button
+                                        disabled
+                                        className="flex-1 text-center px-4 py-2 text-sm bg-slate-100 text-slate-400 font-semibold rounded-lg cursor-not-allowed border border-slate-200"
+                                    >
+                                        Check-in às {localStartTime}
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => onRequestSwap(event)}
+                                        className="flex-1 text-center px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 shadow-sm"
+                                    >
+                                        Preciso Trocar
+                                    </button>
+                                )}
+                            </div>
                         )}
                     </>
                 )}
@@ -221,7 +282,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, userRole, leaderDepartment
                                     )}
                                 </div>
                                 <span className={`flex items-center space-x-1.5 text-sm font-semibold ${hasScheduled ? 'text-green-600' : 'text-amber-600'}`}>
-                                    {hasScheduled ? <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                                    {hasScheduled ? <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0 1 18 0Z" /></svg>}
                                     <span>{hasScheduled ? `Presentes: ${presentCount}/${volunteersForDept.length}` : 'Pendente'}</span>
                                 </span>
                             </div>
