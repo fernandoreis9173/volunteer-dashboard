@@ -782,18 +782,66 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setIsSaving(true);
         setSaveError(null);
         try {
-            const { volunteer_ids, scheduling_department_id, ...eventDetails } = eventPayload;
+            const { department_ids, volunteer_ids, ...eventDetails } = eventPayload;
+            
+            // Conflict Check
+            let conflictQuery = supabase
+                .from('events')
+                .select('id, name, start_time, end_time')
+                .eq('date', eventDetails.date)
+                .lt('start_time', eventDetails.end_time)
+                .gt('end_time', eventDetails.start_time);
+            
+            if (eventDetails.id) {
+                conflictQuery = conflictQuery.neq('id', eventDetails.id);
+            }
+            const { data: conflictingEvents, error: conflictError } = await conflictQuery;
+            if (conflictError) throw new Error(`Erro ao verificar conflitos: ${getErrorMessage(conflictError)}`);
+            if (conflictingEvents && conflictingEvents.length > 0) {
+                const conflict = conflictingEvents[0];
+                const conflictMessage = `Conflito de horário com o evento "${conflict.name}" (${conflict.start_time.substring(0,5)} - ${conflict.end_time.substring(0,5)}).`;
+                throw new Error(conflictMessage);
+            }
     
-            // The times from the form are local. We just need to save them.
-            const { data, error: fetchError } = await supabase.rpc('get_events_for_user');
-            if (fetchError) throw new Error(`Não foi possível verificar conflitos: ${fetchError.message}`);
-            const allDbEvents = (fetchError as unknown as Event[]) || [];
+            let savedEvent: Event;
+            const isCreating = !eventDetails.id;
+            const oldEventForNotification = isCreating ? null : allEvents.find(e => e.id === eventDetails.id);
     
-            const { error: saveError } = await supabase.functions.invoke('save-event', {
-                body: { eventDetails, department_ids: eventPayload.department_ids, allEvents: allDbEvents },
+            if (isCreating) {
+                const { id, ...insertPayload } = eventDetails;
+                const { data, error } = await supabase.from('events').insert(insertPayload).select().single();
+                if (error) throw error;
+                savedEvent = data as Event;
+            } else {
+                const { id, ...updatePayload } = eventDetails;
+                const { data, error } = await supabase.from('events').update(updatePayload).eq('id', id).select().single();
+                if (error) throw error;
+                savedEvent = data as Event;
+            }
+    
+            if (!savedEvent || !savedEvent.id) {
+                throw new Error("Falha ao salvar o evento.");
+            }
+            
+            const eventId = savedEvent.id;
+            await supabase.from('event_departments').delete().eq('event_id', eventId);
+    
+            if (department_ids && department_ids.length > 0) {
+                const assignments = department_ids.map((deptId: number) => ({ event_id: eventId, department_id: deptId }));
+                const { error: insertDeptError } = await supabase.from('event_departments').insert(assignments);
+                if (insertDeptError) throw insertDeptError;
+            }
+    
+            const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
+                body: { 
+                    notifyType: isCreating ? 'event_created' : 'event_updated',
+                    event: savedEvent,
+                    oldEvent: oldEventForNotification,
+                },
             });
-    
-            if (saveError) throw saveError;
+            if (notifyError) {
+                console.error("Falha ao acionar notificações:", getErrorMessage(notifyError));
+            }
     
             handleCloseForm();
             onDataChange();
