@@ -129,6 +129,17 @@ const App: React.FC = () => {
   const hasLoginRedirected = useRef(false);
   const [theme, setTheme] = useState(getInitialTheme());
 
+  const useIsMobile = (breakpoint = 1024) => {
+    const [isMobile, setIsMobile] = useState(window.innerWidth < breakpoint);
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [breakpoint]);
+    return isMobile;
+  };
+  const isMobile = useIsMobile();
+
   // VAPID key is now hardcoded for production
   const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
 
@@ -827,7 +838,7 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className="flex h-screen bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300">
+        <div className="flex h-full w-full bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300">
             <Sidebar
                 activePage={activePage}
                 onNavigate={handleNavigate}
@@ -846,9 +857,9 @@ const App: React.FC = () => {
                 toggleTheme={toggleTheme}
             />
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-                <Header onMenuClick={() => setIsSidebarOpen(true)} />
-                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 lg:p-8">
+            <div className="flex-1 flex flex-col overflow-hidden w-full">
+                {!(isMobile && activePage === 'calendar') && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
+                <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900 ${isMobile && (activePage === 'calendar' || activePage === 'events' || activePage === 'frequency') ? '' : 'p-4 sm:p-6 lg:p-8'}`}>
                     {renderPage()}
                 </main>
             </div>

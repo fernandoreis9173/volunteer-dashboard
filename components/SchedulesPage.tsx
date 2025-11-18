@@ -6,6 +6,7 @@ import CustomDatePicker from './CustomDatePicker'; // Import the new component
 import QRScannerModal from './QRScannerModal'; // Import the QR scanner modal
 import { Event, NotificationRecord, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
+// FIX: Import 'convertUTCToLocal' to resolve 'Cannot find name' errors.
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 import Pagination from './Pagination';
 import jsPDF from 'jspdf';
@@ -427,7 +428,6 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
         doc.text(event.name, 20, y);
         y += 8;
 
-        // FIX: Destructure `fullDate` as `eventDate` to match the return type of `convertUTCToLocal`.
         const { fullDate: eventDate, time: startTime } = convertUTCToLocal(event.date, event.start_time);
         const { time: endTime } = convertUTCToLocal(event.date, event.end_time);
         const eventTime = `${startTime} - ${endTime}`;
@@ -527,12 +527,10 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
   const handleConfirmDelete = async () => {
     if (!eventToDeleteId) return;
     try {
-      // Must delete from linking tables first to satisfy foreign key constraints
       await supabase.from('event_departments').delete().eq('event_id', eventToDeleteId);
       await supabase.from('event_volunteers').delete().eq('event_id', eventToDeleteId);
       await supabase.from('notifications').delete().eq('related_event_id', eventToDeleteId);
       
-      // Now it's safe to delete the event itself
       const { error: deleteError } = await supabase.from('events').delete().eq('id', eventToDeleteId);
       if (deleteError) throw deleteError;
 
@@ -634,37 +632,55 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
             } else { // Admin creating or editing an event
                 const { department_ids, volunteer_ids, ...eventDetails } = eventData;
                 
+                // Conflict Check
+                let conflictQuery = supabase
+                    .from('events')
+                    .select('id, name, start_time, end_time')
+                    .eq('date', eventDetails.date)
+                    .lt('start_time', eventDetails.end_time)
+                    .gt('end_time', eventDetails.start_time);
+                
+                if (eventDetails.id) {
+                    conflictQuery = conflictQuery.neq('id', eventDetails.id);
+                }
+                const { data: conflictingEvents, error: conflictError } = await conflictQuery;
+                if (conflictError) throw new Error(`Erro ao verificar conflitos: ${getErrorMessage(conflictError)}`);
+                if (conflictingEvents && conflictingEvents.length > 0) {
+                    const conflict = conflictingEvents[0];
+                    const conflictMessage = `Conflito de horário com o evento "${conflict.name}" (${conflict.start_time.substring(0,5)} - ${conflict.end_time.substring(0,5)}).`;
+                    throw new Error(conflictMessage);
+                }
+                
+                let savedEvent: Event;
                 const isCreating = !eventDetails.id;
                 const oldEventForNotification = isCreating ? null : masterEvents.find(e => e.id === eventDetails.id);
     
-                // 1. Upsert the main event data (insert or update)
-                const { data: savedEvent, error: upsertError } = await supabase
-                    .from('events')
-                    .upsert(eventDetails)
-                    .select()
-                    .single();
-    
-                if (upsertError) {
-                    // Handle unique constraint violation on name gracefully
-                    if (upsertError.message.includes('duplicate key value violates unique constraint')) {
-                         throw new Error(`O nome do evento "${eventDetails.name}" já está em uso.`);
-                    }
-                    throw upsertError;
+                if (isCreating) {
+                    const { id, ...insertPayload } = eventDetails;
+                    const { data, error } = await supabase.from('events').insert(insertPayload).select().single();
+                    if (error) throw error;
+                    savedEvent = data as Event;
+                } else {
+                    const { id, ...updatePayload } = eventDetails;
+                    const { data, error } = await supabase.from('events').update(updatePayload).eq('id', id).select().single();
+                    if (error) throw error;
+                    savedEvent = data as Event;
                 }
-                if (!savedEvent) throw new Error("Falha ao salvar o evento.");
-                
-                // 2. Sync departments in the event_departments table
-                const eventId = savedEvent.id;
-                const { error: deleteDeptError } = await supabase.from('event_departments').delete().eq('event_id', eventId);
-                if (deleteDeptError) throw deleteDeptError;
     
+                if (!savedEvent || !savedEvent.id) {
+                    throw new Error("Falha ao salvar o evento.");
+                }
+                
+                // Sync departments
+                const eventId = savedEvent.id;
+                await supabase.from('event_departments').delete().eq('event_id', eventId);
                 if (department_ids && department_ids.length > 0) {
                     const assignments = department_ids.map((deptId: number) => ({ event_id: eventId, department_id: deptId }));
                     const { error: insertDeptError } = await supabase.from('event_departments').insert(assignments);
                     if (insertDeptError) throw insertDeptError;
                 }
-    
-                // 3. Trigger notifications via Edge Function
+                
+                // Trigger notifications
                 const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
                     body: { 
                         notifyType: isCreating ? 'event_created' : 'event_updated',
@@ -826,7 +842,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 p-4 sm:p-6 lg:p-0 w-full overflow-x-hidden">
              {notification && (
                 <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
                     {notification.message}

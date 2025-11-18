@@ -155,7 +155,7 @@ const FrequencyPage: React.FC = () => {
 
             docInstance.setFontSize(10);
             docInstance.setTextColor(150);
-            docInstance.text('Relatório de Frequência', 14, 10);
+            docInstance.text('Frequência', 14, 10);
             docInstance.text(`Gerado em: ${today}`, docInstance.internal.pageSize.width - 14, 10, { align: 'right' });
             docInstance.setDrawColor(226, 232, 240);
             docInstance.line(14, 13, docInstance.internal.pageSize.width - 14, 13);
@@ -166,7 +166,7 @@ const FrequencyPage: React.FC = () => {
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(40);
-        doc.text('Relatório de Frequência', doc.internal.pageSize.width / 2, 25, { align: 'center' });
+        doc.text('Frequência', doc.internal.pageSize.width / 2, 25, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
@@ -440,10 +440,10 @@ const FrequencyPage: React.FC = () => {
     const selectedAttendanceLabel = attendanceFilterOptions.find(o => o.value === attendanceFilter)?.label;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 p-4 sm:p-6 lg:p-0 w-full overflow-x-hidden">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Relatório de Frequência</h1>
+                    <h1 className="text-3xl font-bold text-slate-800">Frequência</h1>
                     <p className="text-slate-500 mt-1">Monitore a presença dos voluntários nos eventos confirmados.</p>
                 </div>
                 <button 

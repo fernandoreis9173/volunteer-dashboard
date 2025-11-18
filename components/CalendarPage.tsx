@@ -920,7 +920,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
 
     if (isMobile) {
         return (
-            <div className={`bg-white flex flex-col ${mobileView === 'dayGridMonth' ? '' : 'h-full'}`}>
+            <div className="bg-white flex flex-col h-full">
                 <style>{calendarStyles}</style>
                 <MobileHeader
                     title={calendarTitle}
@@ -934,8 +934,8 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                     onStatusFilterChange={handleStatusFilterChange}
                 />
                 {mobileView === 'dayGridMonth' ? (
-                    <div className="flex flex-col">
-                         <div className={`mobile-calendar-view month-view`}>
+                    <div className="flex flex-col flex-1 overflow-y-auto">
+                         <div className="mobile-calendar-view month-view">
                             <FullCalendar
                                 key={`month-${monthViewDate.toISOString()}`}
                                 ref={calendarRef}
