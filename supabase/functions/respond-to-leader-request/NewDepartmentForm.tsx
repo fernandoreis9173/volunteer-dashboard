@@ -166,9 +166,10 @@ interface NewDepartmentFormProps {
     isSaving: boolean;
     saveError: string | null;
     leaders: User[];
+    leaderAssignments: Map<string, number>;
 }
 
-const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, leaders }) => {
+const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError, leaders, leaderAssignments }) => {
     const [formData, setFormData] = useState({ name: '', description: '' });
     const [skills, setSkills] = useState<string[]>([]);
     const [meetingDays, setMeetingDays] = useState({
@@ -218,10 +219,34 @@ const NewDepartmentForm: React.FC<NewDepartmentFormProps> = ({ initialData, onCa
     
     const availableLeaders = useMemo(() => {
         const selectedIds = new Set(selectedLeaders.map(l => l.id));
+        const currentDeptId = initialData?.id;
+    
         return leaders
-            .filter(l => (l.user_metadata?.role === 'leader' || l.user_metadata?.role === 'lider'))
-            .filter(l => !selectedIds.has(l.id));
-    }, [leaders, selectedLeaders]);
+            .filter(l => (l.user_metadata?.role === 'leader' || l.user_metadata?.role === 'lider' || l.user_metadata?.role === 'admin'))
+            .filter(l => {
+                // Exclude if already selected in the current form session
+                if (selectedIds.has(l.id)) {
+                    return false;
+                }
+    
+                // Get the department this leader is currently assigned to
+                const assignedDeptId = leaderAssignments.get(l.id);
+    
+                // If they are not assigned anywhere, they are available.
+                if (assignedDeptId === undefined) {
+                    return true;
+                }
+                
+                // If they are assigned, they are only available if they are assigned to the CURRENT department we are editing.
+                // This case handles the scenario where a leader is already in the department, and we want to keep them selected.
+                if (isEditing && currentDeptId !== undefined && assignedDeptId === currentDeptId) {
+                    return true;
+                }
+                
+                // Otherwise, they are assigned to a DIFFERENT department and are not available.
+                return false;
+            });
+    }, [leaders, selectedLeaders, leaderAssignments, initialData?.id, isEditing]);
 
     const filteredLeaders = useMemo(() => {
         if (!leaderSearch) return availableLeaders;

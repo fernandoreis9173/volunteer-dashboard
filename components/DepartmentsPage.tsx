@@ -21,7 +21,6 @@ const ITEMS_PER_PAGE = 9;
 const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepartmentId, leaders, onLeadersChange }) => {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [masterDepartments, setMasterDepartments] = useState<Department[]>([]);
-  const [leaderAssignments, setLeaderAssignments] = useState<{ leader_id: string; department_id: number; }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -32,6 +31,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [departmentToDeleteId, setDepartmentToDeleteId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [leaderAssignments, setLeaderAssignments] = useState<Map<string, number>>(new Map());
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
 
@@ -64,11 +64,10 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
         .select('department_id, leader_id');
       
       if (leadersError) throw leadersError;
-      setLeaderAssignments(leadersData || []);
 
       // Step 3: Join them in the client
       const leadersByDept = new Map<number, { id: string; name: string }[]>();
-      leadersData.forEach(rel => {
+      (leadersData || []).forEach(rel => {
         if (!leadersByDept.has(rel.department_id)) {
           leadersByDept.set(rel.department_id, []);
         }
@@ -92,11 +91,27 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
     }
   }, []);
 
+  const fetchAssignments = useCallback(async () => {
+    const { data, error } = await supabase
+        .from('department_leaders')
+        .select('leader_id, department_id');
+    if (error) {
+        console.error("Failed to fetch leader assignments", error);
+    } else {
+        const assignments = new Map<string, number>();
+        (data || []).forEach(a => {
+            assignments.set(a.leader_id, a.department_id);
+        });
+        setLeaderAssignments(assignments);
+    }
+  }, []);
+
 
   // FIX: Removed internal fetchLeaders logic as leaders are now passed via props.
   useEffect(() => {
     fetchDepartments();
-  }, [fetchDepartments]);
+    fetchAssignments();
+  }, [fetchDepartments, fetchAssignments]);
   
   const enrichedDepartments = useMemo(() => {
     return masterDepartments.map(dept => {
@@ -220,6 +235,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
         }
         
         await fetchDepartments(); // Refetch all department data
+        await fetchAssignments(); // Refetch assignments
         onLeadersChange(); // Trigger refetch of global leader list in App.tsx
         hideForm();
 
@@ -244,7 +260,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
                 </div>
                 <input 
                     type="text"
-                    placeholder="Buscar por nome ou departamento..."
+                    placeholder="Buscar por nome ou líder do departamento..."
                     className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
