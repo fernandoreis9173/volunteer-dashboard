@@ -1,8 +1,9 @@
+
 // sw.js
 
 // --- Configuration ---
 // Incrementing the cache name invalidates previous caches.
-const CACHE_NAME = 'volunteer-dashboard-v6'; // VERSÃO CORRIGIDA
+const CACHE_NAME = 'volunteer-dashboard-v9'; // VERSÃO ATUALIZADA PARA FORÇAR REFRESH
 const urlsToCache = [
   '/',
   '/index.html',

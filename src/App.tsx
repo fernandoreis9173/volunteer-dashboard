@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -141,6 +142,17 @@ const App: React.FC = () => {
   const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
   const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
   const isUserDisabled = useMemo(() => userProfile?.status === 'Inativo', [userProfile]);
+
+  // --- NEW: Force reload on Service Worker Update ---
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('Service Worker controller changed. Reloading page...');
+            window.location.reload();
+        });
+    }
+  }, []);
+  // ---------------------------------------------------
 
   useEffect(() => {
     const isVolunteer = userProfile?.role === 'volunteer';
@@ -363,7 +375,7 @@ const App: React.FC = () => {
     const userDepartmentId = userProfile?.department_id;
     const userVolunteerId = userProfile?.volunteer_id;
 
-    // REFACTORED: Fetch DB Data - Only runs on mount or when Realtime triggers
+    // REFACTORED: Fetch DB Data - Only runs on mount
     const fetchTodaysEvents = useCallback(async () => {
         if (!userId || !userRole) {
             // Only clear if we are definitely logged out or role missing
@@ -456,30 +468,10 @@ const App: React.FC = () => {
         setActiveEvent(liveEvent || null);
     }, [todaysEvents]);
     
-    // Effect 1: Initial Fetch & Realtime Subscription (Replaces Polling)
+    // Effect 1: Initial Fetch (Realtime disabled for performance)
     useEffect(() => {
         if (!userId) return;
-
-        // Fetch immediately on mount/profile load
         fetchTodaysEvents();
-        
-        // Subscribe to changes in the 'events' table
-        const channel = supabase
-            .channel('public:events')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'events' },
-                (payload) => {
-                    // Trigger a re-fetch only when data actually changes on the server
-                    console.log('Change detected in events table. Refetching today events...');
-                    fetchTodaysEvents();
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
     }, [userId, fetchTodaysEvents]);
 
     // Effect 2: Check local time against cached data frequently (e.g., every 1 minute)
