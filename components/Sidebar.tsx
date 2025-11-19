@@ -29,7 +29,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, page, activePage, onNavi
     </div>
     {badgeCount > 0 && (
         <span className="bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-            {badgeCount > 9 ? '9+' : badgeCount}
+            {badgeCount >= 100 ? '99+' : badgeCount}
         </span>
     )}
   </button>
