@@ -40,8 +40,19 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const [broadcastError, setBroadcastError] = useState<string | null>(null);
     const [broadcastSuccess, setBroadcastSuccess] = useState<string | null>(null);
 
+    // Cache Ref for Users
+    const usersCache = useRef<{ data: EnrichedUser[], timestamp: number } | null>(null);
+    const CACHE_DURATION = 60000; // 1 minute
+
     // Fetch Logic for User Management
-    const fetchInvitedUsers = useCallback(async () => {
+    const fetchInvitedUsers = useCallback(async (force = false) => {
+        // Check cache first
+        if (!force && usersCache.current && (Date.now() - usersCache.current.timestamp < CACHE_DURATION)) {
+            setInvitedUsers(usersCache.current.data);
+            setListLoading(false);
+            return;
+        }
+
         setListLoading(true);
         setListError(null);
         
@@ -54,7 +65,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             setListError(`Erro retornado pela função: ${data.error}`);
             setInvitedUsers([]);
         } else {
-            setInvitedUsers(data.users || []);
+            const users = data.users || [];
+            setInvitedUsers(users);
+            // Update cache
+            usersCache.current = { data: users, timestamp: Date.now() };
         }
         setListLoading(false);
     }, []);
@@ -120,7 +134,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             setEmail('');
             setName('');
             setRole('leader');
-            await fetchInvitedUsers();
+            await fetchInvitedUsers(true); // Force refetch
         } catch (err) {
             setInviteError(`Falha ao enviar convite: ${getErrorMessage(err)}`);
         } finally {
@@ -135,7 +149,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
         if (error) {
             alert(`Falha ao atualizar permissões: ${getErrorMessage(error)}`);
         } else {
-            await fetchInvitedUsers();
+            await fetchInvitedUsers(true); // Force refetch
             setIsEditModalOpen(false);
         }
     };
@@ -157,7 +171,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             if (error) {
                 alert(`Falha ao rebaixar líder: ${getErrorMessage(error)}`);
             } else {
-                await fetchInvitedUsers();
+                await fetchInvitedUsers(true); // Force refetch
                 onDataChange(); // Refetch leaders list in App.tsx
             }
         } else {
@@ -169,7 +183,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             if (error) {
                 alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
             } else {
-                await fetchInvitedUsers();
+                await fetchInvitedUsers(true); // Force refetch
             }
         }
     

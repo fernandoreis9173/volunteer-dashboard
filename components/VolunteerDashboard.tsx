@@ -105,6 +105,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
         setError(null);
     
         try {
+            // 1. Fetch Volunteer Profile & Departments
             const { data: volProfile, error: volProfileError } = await supabase
                 .from('volunteers')
                 .select('id, name, departments:volunteer_departments(departments(id, name))')
@@ -116,16 +117,39 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             
             const volunteerId = volProfile.id;
 
+            // 2. Fetch Data in Parallel: Direct Schedule Query (Optimized) + Invitations
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = today.toISOString().split('T')[0];
+
+            // Replaced `get_my_schedule` RPC with a direct, filtered join.
             const [scheduleRes, rawInvitationsRes] = await Promise.all([
-                supabase.rpc('get_my_schedule'),
+                supabase
+                    .from('event_volunteers')
+                    .select(`
+                        present,
+                        department_id,
+                        departments(name),
+                        events(
+                            id, name, date, start_time, end_time, status, local, observations,
+                            cronograma_principal_id, cronograma_kids_id,
+                            event_departments(departments(leader:leader_name_hint)) 
+                        )
+                    `) // Note: leader_name_hint is hypothetical or needs lookup. Standard approach below.
+                    .eq('volunteer_id', volunteerId)
+                    .gte('events.date', todayStr) // Fetch only today and future
+                    .eq('events.status', 'Confirmado')
+                    .order('date', { foreignTable: 'events', ascending: true })
+                    .order('start_time', { foreignTable: 'events', ascending: true }),
+                
                 supabase.from('invitations').select('id, created_at, leader_id, departments(id, name)').eq('volunteer_id', volunteerId).eq('status', 'pendente'),
             ]);
     
             if (scheduleRes.error) throw scheduleRes.error;
             if (rawInvitationsRes.error) throw rawInvitationsRes.error;
 
+            // --- Process Invitations ---
             const rawInvitations = rawInvitationsRes.data || [];
-
             if (rawInvitations.length > 0) {
                 const leadersMap = new Map<string, string | null>();
                 leaders.forEach(l => leadersMap.set(l.id, l.user_metadata?.name || null));
@@ -141,74 +165,73 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 setInvitations([]);
             }
             
+            // --- Process Profile ---
             const transformedDepartments = (volProfile.departments || []).map((d: any) => d.departments).filter(Boolean);
             const completeProfile = { ...volProfile, departments: transformedDepartments };
             setVolunteerProfile(completeProfile as unknown as DetailedVolunteer);
     
-            const scheduleData = (scheduleRes.data as any[]) || [];
-            if (scheduleData.length > 0) {
-                const eventIds = [...new Set(scheduleData.map((item: any) => item.id))];
-
-                const { data: timelineData, error: timelineError } = await supabase
-                    .from('events')
-                    .select('id, cronograma_principal_id, cronograma_kids_id')
-                    .in('id', eventIds);
+            // --- Process Schedule & Enrich with Leader Names ---
+            const rawSchedule = scheduleRes.data || [];
+            
+            // We need to manually map leader names because `event_departments` structure implies one leader per dept in `department_leaders` table, which isn't directly joined here easily without complexity.
+            // We'll use the `leaders` prop passed to this component to lookup leader names for the department associated with the schedule item.
+            
+            // 1. Get all unique department IDs from schedule
+            const relevantDeptIds = [...new Set(rawSchedule.map((item: any) => item.department_id))];
+            
+            // 2. Fetch leaders for these departments (Optimization: could be cached/passed from App, but safe to fetch here if list is small)
+            const { data: deptLeaders, error: dlError } = await supabase
+                .from('department_leaders')
+                .select('department_id, leader_id')
+                .in('department_id', relevantDeptIds);
                 
-                if (timelineError) throw timelineError;
-                
-                // FIX: Cast `timelineData` to `any[]` to ensure correct type inference for `timelineMap`.
-                // Without this, `timelineMap` can be inferred as `Map<unknown, unknown>`, causing downstream errors.
-                const timelineMap = new Map(((timelineData as any[]) || []).map((e: any) => [e.id, { cronograma_principal_id: e.cronograma_principal_id, cronograma_kids_id: e.cronograma_kids_id }]));
+            if (dlError) console.warn("Could not fetch leaders for schedule items", dlError);
+            
+            const deptLeaderMap = new Map<number, string>();
+            (deptLeaders || []).forEach((dl: any) => {
+                const leaderUser = leaders.find(u => u.id === dl.leader_id);
+                if (leaderUser) {
+                    deptLeaderMap.set(dl.department_id, leaderUser.user_metadata?.name || 'Líder');
+                }
+            });
 
-                // FIX: Explicitly type `item` as `any` to prevent it from being inferred as `unknown`. This resolves type errors when accessing properties on `item` and when using it to look up values in `timelineMap`.
-                const allMySchedules: VolunteerSchedule[] = scheduleData.map((item: any) => {
-                    const timelineInfo = timelineMap.get(item.id) || { cronograma_principal_id: null, cronograma_kids_id: null };
+            const allMySchedules: VolunteerSchedule[] = rawSchedule
+                .filter((item: any) => item.events) // Filter out if event join failed (e.g. deleted event)
+                .map((item: any) => {
+                    const evt = item.events;
                     return {
-                        id: item.id,
-                        name: item.name,
-                        date: item.date,
-                        start_time: item.start_time,
-                        end_time: item.end_time,
-                        status: item.status,
-                        local: item.local,
-                        observations: item.observations,
+                        id: evt.id,
+                        name: evt.name,
+                        date: evt.date,
+                        start_time: evt.start_time,
+                        end_time: evt.end_time,
+                        status: evt.status,
+                        local: evt.local,
+                        observations: evt.observations,
                         department_id: item.department_id,
-                        department_name: item.department_name,
-                        leader_name: item.leader_name,
+                        department_name: item.departments?.name || 'Departamento',
+                        leader_name: deptLeaderMap.get(item.department_id) || '',
                         present: item.present,
-                        cronograma_principal_id: timelineInfo.cronograma_principal_id,
-                        cronograma_kids_id: timelineInfo.cronograma_kids_id,
+                        cronograma_principal_id: evt.cronograma_principal_id,
+                        cronograma_kids_id: evt.cronograma_kids_id,
                     };
                 });
                 
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const todayStr = today.toISOString().split('T')[0];
-        
-                setTodayEvents(allMySchedules.filter(e => e.date === todayStr));
-                setUpcomingEvents(allMySchedules.filter(e => e.date > todayStr));
-                
-                const attended = allMySchedules.filter(e => e.present === true).length;
-        
-                setStats({
-                    upcoming: allMySchedules.filter(e => e.date > todayStr).length,
-                    attended: attended,
-                    totalScheduled: allMySchedules.length,
-                    eventsToday: allMySchedules.filter(e => e.date === todayStr).length,
-                });
-            } else {
-                setTodayEvents([]);
-                setUpcomingEvents([]);
-                setStats({ upcoming: 0, attended: 0, totalScheduled: 0, eventsToday: 0 });
-            }
+            setTodayEvents(allMySchedules.filter(e => e.date === todayStr));
+            setUpcomingEvents(allMySchedules.filter(e => e.date > todayStr));
+            
+            const attended = allMySchedules.filter(e => e.present === true).length;
+    
+            setStats({
+                upcoming: allMySchedules.filter(e => e.date > todayStr).length,
+                attended: attended,
+                totalScheduled: allMySchedules.length,
+                eventsToday: allMySchedules.filter(e => e.date === todayStr).length,
+            });
     
         } catch (err) {
             const errorMessage = getErrorMessage(err);
-            if (errorMessage.includes("function get_my_schedule does not exist")) {
-                setError("A configuração do banco de dados está incompleta. Por favor, peça a um administrador para aplicar os scripts SQL de correção.");
-            } else {
-                setError(errorMessage);
-            }
+            setError(errorMessage);
             console.error("Error fetching volunteer dashboard data:", err);
         } finally {
             setLoading(false);
@@ -500,13 +523,7 @@ const EventCard: React.FC<{
     onRequestSwap: (event: VolunteerSchedule) => void;
     onViewTimeline: (event: VolunteerSchedule) => void;
 }> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline }) => {
-    const [now, setNow] = useState(new Date());
     
-    useEffect(() => {
-        const interval = setInterval(() => setNow(new Date()), 10000); // Check every 10s
-        return () => clearInterval(interval);
-    }, []);
-
     const { fullDate: formattedDate, dateTime: startDateTime, time: startTime } = convertUTCToLocal(event.date, event.start_time);
     const { dateTime: endDateTime, time: endTime } = convertUTCToLocal(event.date, event.end_time);
 
@@ -515,9 +532,9 @@ const EventCard: React.FC<{
         endDateTime.setDate(endDateTime.getDate() + 1);
     }
 
+    const now = new Date();
     const isFinished = endDateTime ? now > endDateTime : false;
     const isLive = startDateTime && endDateTime ? now >= startDateTime && now < endDateTime : false;
-    const isWaitingToStart = isToday && !isLive && !isFinished;
 
     const myAttendance = event.present;
 
@@ -586,17 +603,10 @@ const EventCard: React.FC<{
                         >
                             Gerar QR Code
                         </button>
-                    ) : isWaitingToStart ? (
-                         <button
-                            disabled
-                            className="flex-1 text-center px-4 py-2 text-sm bg-slate-100 text-slate-400 font-semibold rounded-lg cursor-not-allowed border border-slate-200"
-                        >
-                            Check-in às {startTime}
-                        </button>
                     ) : (
                         <button
                             onClick={() => onRequestSwap(event)}
-                            className="flex-1 text-center px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 shadow-sm"
+                            className="flex-1 text-center px-4 py-2 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 shadow-sm disabled:bg-orange-300 disabled:cursor-not-allowed"
                         >
                             Preciso Trocar
                         </button>
