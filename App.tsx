@@ -358,10 +358,16 @@ const App: React.FC = () => {
         fetchLeaders();
     }, [fetchLeaders]);
 
-    // REFACTORED: Fetch DB Data - Runs only once every 10 minutes or on session change
+    // Helper variables to stabilize dependencies for the fetch callback
+    const userRole = userProfile?.role;
+    const userDepartmentId = userProfile?.department_id;
+    const userVolunteerId = userProfile?.volunteer_id;
+
+    // REFACTORED: Fetch DB Data - Only runs on mount or when Realtime triggers
     const fetchTodaysEvents = useCallback(async () => {
-        if (!userId || !userProfile) {
-            setTodaysEvents([]);
+        if (!userId || !userRole) {
+            // Only clear if we are definitely logged out or role missing
+            if (!userId) setTodaysEvents([]);
             return;
         }
     
@@ -376,7 +382,7 @@ const App: React.FC = () => {
             const day = String(now.getDate()).padStart(2, '0');
             const todayStr = `${year}-${month}-${day}`;
 
-            if (userProfile.role === 'admin') {
+            if (userRole === 'admin') {
                 // Admin: Direct filtered query instead of full history RPC
                 const { data, error } = await supabase
                     .from('events')
@@ -385,27 +391,28 @@ const App: React.FC = () => {
                     .eq('status', 'Confirmado');
                  allEventsData = data;
                  fetchError = error;
-            } else if ((userProfile.role === 'leader' || userProfile.role === 'lider') && userProfile.department_id) {
+            } else if ((userRole === 'leader' || userRole === 'lider') && userDepartmentId) {
                  // Leader: Direct filtered query (department + today)
                  const { data, error } = await supabase
                     .from('events')
                     .select('*, event_departments!inner(*, departments(*)), event_volunteers(*, volunteers(*))')
                     .eq('date', todayStr)
                     .eq('status', 'Confirmado')
-                    .eq('event_departments.department_id', userProfile.department_id);
+                    .eq('event_departments.department_id', userDepartmentId);
                  allEventsData = data;
                  fetchError = error;
-            } else if (userProfile.role === 'volunteer' && userProfile.volunteer_id) {
+            } else if (userRole === 'volunteer' && userVolunteerId) {
                 // Volunteer: Direct query filtered by volunteer ID + today
                 const { data, error } = await supabase
                     .from('events')
                     .select('*, event_departments(*, departments(*)), event_volunteers!inner(*, volunteers(*))')
-                    .eq('event_volunteers.volunteer_id', userProfile.volunteer_id)
+                    .eq('event_volunteers.volunteer_id', userVolunteerId)
                     .eq('date', todayStr)
                     .eq('status', 'Confirmado');
                 allEventsData = data;
                 fetchError = error;
             } else {
+                // If profile is loaded but no ID (e.g. pending), clear events
                 setTodaysEvents([]);
                 return;
             }
@@ -421,9 +428,9 @@ const App: React.FC = () => {
             console.error("Error fetching today's events:", errorMessage);
             // Don't clear existing events on error to prevent flickering
         }
-    }, [userId, userProfile]);
+    }, [userId, userRole, userDepartmentId, userVolunteerId]);
 
-    // REFACTORED: Check Local Logic - Runs every minute using cached data
+    // REFACTORED: Check Local Logic - Runs every minute using cached data (No DB hits)
     const checkActiveEventLocally = useCallback(() => {
         if (todaysEvents.length === 0) {
             setActiveEvent(null);
@@ -449,17 +456,37 @@ const App: React.FC = () => {
         setActiveEvent(liveEvent || null);
     }, [todaysEvents]);
     
-    // Effect 1: Fetch data from DB less frequently (e.g., every 10 minutes)
+    // Effect 1: Initial Fetch & Realtime Subscription (Replaces Polling)
     useEffect(() => {
-        fetchTodaysEvents(); 
-        const interval = setInterval(fetchTodaysEvents, 600000); // 10 minutes
-        return () => clearInterval(interval);
-    }, [fetchTodaysEvents]);
+        if (!userId) return;
+
+        // Fetch immediately on mount/profile load
+        fetchTodaysEvents();
+        
+        // Subscribe to changes in the 'events' table
+        const channel = supabase
+            .channel('public:events')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'events' },
+                (payload) => {
+                    // Trigger a re-fetch only when data actually changes on the server
+                    console.log('Change detected in events table. Refetching today events...');
+                    fetchTodaysEvents();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [userId, fetchTodaysEvents]);
 
     // Effect 2: Check local time against cached data frequently (e.g., every 1 minute)
+    // This is cheap CPU calculation, does NOT hit the database.
     useEffect(() => {
         checkActiveEventLocally();
-        const interval = setInterval(checkActiveEventLocally, 60000); // 1 minute
+        const interval = setInterval(checkActiveEventLocally, 60000); // 1 minute check (Local only)
         return () => clearInterval(interval);
     }, [checkActiveEventLocally]);
 
