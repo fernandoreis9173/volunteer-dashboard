@@ -94,18 +94,28 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
       const leaderDepartmentId = userProfile.department_id;
 
       try {
-          const [eventsRpcRes, volunteerDepartmentsRes] = await Promise.all([
-              supabase.rpc('get_events_for_user'),
-              supabase.from('volunteer_departments')
-                .select('*, volunteers!inner(*, volunteer_departments(departments(id, name)))')
-                .eq('department_id', leaderDepartmentId)
-                .eq('volunteers.status', 'Ativo')
+            // Optimized: Fetch events only from the start of the year for annual stats
+            const currentYear = new Date().getFullYear();
+            const startOfYear = `${currentYear}-01-01`;
+
+            // Replaced RPC call with direct filtered query
+            const [eventsRes, volunteerDepartmentsRes] = await Promise.all([
+                supabase
+                    .from('events')
+                    .select('*, event_departments!inner(department_id), event_volunteers(volunteer_id, present, volunteers(id, name))')
+                    .eq('event_departments.department_id', leaderDepartmentId)
+                    .gte('date', startOfYear)
+                    .order('date', { ascending: true }),
+                supabase.from('volunteer_departments')
+                    .select('*, volunteers!inner(*, volunteer_departments(departments(id, name)))')
+                    .eq('department_id', leaderDepartmentId)
+                    .eq('volunteers.status', 'Ativo')
           ]);
 
-          if (eventsRpcRes.error) throw eventsRpcRes.error;
+          if (eventsRes.error) throw eventsRes.error;
           if (volunteerDepartmentsRes.error) throw volunteerDepartmentsRes.error;
           
-          const eventsData = (eventsRpcRes.data || []).map(item => item as unknown as DashboardEvent);
+          const eventsData = (eventsRes.data || []).map(item => item as unknown as DashboardEvent);
           setAllDepartmentEvents(eventsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
           
           const leaderVolunteers = (volunteerDepartmentsRes.data || []).map((vd: any) => vd.volunteers).filter(Boolean);

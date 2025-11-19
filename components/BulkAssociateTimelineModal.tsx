@@ -24,18 +24,20 @@ const BulkAssociateTimelineModal: React.FC<BulkAssociateTimelineModalProps> = ({
         setLoading(true);
         setError(null);
         try {
-            const { data: allEvents, error: rpcError } = await supabase.rpc('get_events_for_user');
-            if (rpcError) throw rpcError;
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Optimized: Use direct query with date filtering (today and future only)
+            // Replaced RPC call 'get_events_for_user'
+            const { data: upcomingEvents, error: fetchError } = await supabase
+                .from('events')
+                .select('id, name, date, start_time, cronograma_principal_id, cronograma_kids_id')
+                .gte('date', today)
+                .order('date', { ascending: true })
+                .order('start_time', { ascending: true });
+                
+            if (fetchError) throw fetchError;
     
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-    
-            const upcoming = ((allEvents as AppEvent[]) || []).filter(event => {
-                const eventDate = new Date(event.date + 'T00:00:00');
-                return eventDate >= today;
-            });
-    
-            setEvents(upcoming.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time)));
+            setEvents((upcomingEvents as AppEvent[]) || []);
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {

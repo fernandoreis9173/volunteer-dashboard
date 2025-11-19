@@ -6,7 +6,6 @@ import CustomDatePicker from './CustomDatePicker'; // Import the new component
 import QRScannerModal from './QRScannerModal'; // Import the QR scanner modal
 import { Event, NotificationRecord, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
-// FIX: Import 'convertUTCToLocal' to resolve 'Cannot find name' errors.
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 import Pagination from './Pagination';
 import jsPDF from 'jspdf';
@@ -84,29 +83,46 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
     setLoading(true);
     setError(null);
     try {
-        // Use the secure RPC function to fetch events.
-        // This bypasses faulty RLS and securely filters data on the server.
-        const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
+        // Optimized: Fetch events from the start of the current year to avoid loading full history.
+        const startOfYear = `${new Date().getFullYear()}-01-01`;
+        
+        // Base select with joins
+        // Removed 'departments:departaments' from volunteers selection to fix "column does not exist" error
+        let query = supabase.from('events').select(`
+            *,
+            event_departments(department_id, departments(id, name)),
+            event_volunteers(volunteer_id, department_id, present, volunteers(id, user_id, name, email, initials))
+        `)
+        .gte('date', startOfYear);
 
-        if (rpcError) throw rpcError;
+        if (isLeader && leaderDepartmentId) {
+             // Leader specific query: Filter by department association
+             // Removed 'departments:departaments' here as well
+             query = supabase.from('events').select(`
+                *,
+                event_departments!inner(department_id, departments(id, name)),
+                event_volunteers(volunteer_id, department_id, present, volunteers(id, user_id, name, email, initials))
+            `)
+            .eq('event_departments.department_id', leaderDepartmentId)
+            .gte('date', startOfYear);
+        }
 
-        // The data is returned as an array of JSON objects, cast it to the Event type.
-        // The data is already filtered and enriched by the database function.
-        const eventsData = data.map(item => item as unknown as Event);
-        setMasterEvents(eventsData);
+        const { data, error: fetchError } = await query
+            .order('date', { ascending: true })
+            .order('start_time', { ascending: true });
+
+        if (fetchError) throw fetchError;
+
+        setMasterEvents((data as Event[]) || []);
 
     } catch (err) {
         const errorMessage = getErrorMessage(err);
-        console.error('Error fetching events via RPC:', errorMessage);
-        if (errorMessage.includes("failed to run function")) {
-            setError('Falha ao carregar eventos: A função do banco de dados (get_events_for_user) não foi encontrada ou falhou. Peça a um administrador para aplicar o script SQL.');
-        } else {
-            setError(`Falha ao carregar eventos: ${errorMessage}`);
-        }
+        console.error('Error fetching events:', errorMessage);
+        setError(`Falha ao carregar eventos: ${errorMessage}`);
     } finally {
         setLoading(false);
     }
-  }, []);
+  }, [isLeader, leaderDepartmentId]);
   
   const fetchAllDepartments = useCallback(async () => {
     const { data, error } = await supabase.from('departments').select('id, name');
@@ -395,6 +411,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
                 margin: { left: 14, right: 14 },
                 didDrawPage: () => pageHeader(doc)
             });
+            // @ts-ignore
             y = (doc as any).lastAutoTable.finalY + 15;
         } else {
             doc.setFontSize(10);
@@ -419,6 +436,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
 
         const eventColor = event.color || '#e2e8f0'; 
         doc.setFillColor(eventColor);
+        // @ts-ignore
         const lineHeight16 = doc.getTextDimensions('T', { fontSize: 16 }).h;
         doc.rect(14, y - lineHeight16 + 2, 3, lineHeight16, 'F');
 
@@ -428,6 +446,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
         doc.text(event.name, 20, y);
         y += 8;
 
+        // FIX: Destructure `fullDate` as `eventDate` to match the return type of `convertUTCToLocal`.
         const { fullDate: eventDate, time: startTime } = convertUTCToLocal(event.date, event.start_time);
         const { time: endTime } = convertUTCToLocal(event.date, event.end_time);
         const eventTime = `${startTime} - ${endTime}`;
@@ -500,6 +519,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
                 margin: { left: 14, right: 14 },
                 didDrawPage: () => pageHeader(doc)
             });
+            // @ts-ignore
             y = (doc as any).lastAutoTable.finalY + 15;
         } else {
              doc.setFontSize(10);
@@ -527,10 +547,12 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
   const handleConfirmDelete = async () => {
     if (!eventToDeleteId) return;
     try {
+      // Must delete from linking tables first to satisfy foreign key constraints
       await supabase.from('event_departments').delete().eq('event_id', eventToDeleteId);
       await supabase.from('event_volunteers').delete().eq('event_id', eventToDeleteId);
       await supabase.from('notifications').delete().eq('related_event_id', eventToDeleteId);
       
+      // Now it's safe to delete the event itself
       const { error: deleteError } = await supabase.from('events').delete().eq('id', eventToDeleteId);
       if (deleteError) throw deleteError;
 
@@ -842,7 +864,7 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
     };
 
     return (
-        <div className="space-y-6 p-4 sm:p-6 lg:p-0 w-full overflow-x-hidden">
+        <div className="space-y-6">
              {notification && (
                 <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
                     {notification.message}

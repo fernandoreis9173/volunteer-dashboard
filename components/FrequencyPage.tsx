@@ -48,23 +48,26 @@ const FrequencyPage: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            // Use the secure RPC function to fetch events.
-            const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
-    
-            if (rpcError) throw rpcError;
+            // Optimized: Fetch only confirmed events from the start of the current year.
+            const startOfYear = `${new Date().getFullYear()}-01-01`;
             
-            // The data is already filtered, enriched, and ready to use.
-            const eventsData = data.map(item => item as unknown as Event);
+            // Use direct query instead of RPC
+            const { data, error: fetchError } = await supabase
+                .from('events')
+                .select('*, event_departments(department_id, departments(id, name)), event_volunteers(volunteer_id, department_id, present, volunteers(id, name))')
+                .eq('status', 'Confirmado')
+                .gte('date', startOfYear) // Optimization
+                .order('date', { ascending: false });
+    
+            if (fetchError) throw fetchError;
+            
+            const eventsData = (data as Event[]) || [];
             setMasterEvents(eventsData);
 
         } catch (err) {
             const errorMessage = getErrorMessage(err);
-            console.error('Error fetching events for frequency page via RPC:', errorMessage);
-             if (errorMessage.includes("failed to run function")) {
-                setError('Falha ao carregar eventos: A função do banco de dados (get_events_for_user) não foi encontrada ou falhou. Peça a um administrador para aplicar o script SQL.');
-            } else {
-                setError(`Falha ao carregar eventos: ${errorMessage}`);
-            }
+            console.error('Error fetching events for frequency page:', errorMessage);
+            setError(`Falha ao carregar eventos: ${errorMessage}`);
         } finally {
             setLoading(false);
         }
@@ -77,7 +80,7 @@ const FrequencyPage: React.FC = () => {
     const filteredEvents = useMemo(() => {
         let events = [...masterEvents];
         
-        // This page is now only for confirmed events, simplifying the view.
+        // This page is now only for confirmed events (already filtered by query, but good for safety)
         events = events.filter(event => event.status === 'Confirmado');
         
         // If no date filters are set, default to showing the entire current year.
@@ -155,7 +158,7 @@ const FrequencyPage: React.FC = () => {
 
             docInstance.setFontSize(10);
             docInstance.setTextColor(150);
-            docInstance.text('Frequência', 14, 10);
+            docInstance.text('Relatório de Frequência', 14, 10);
             docInstance.text(`Gerado em: ${today}`, docInstance.internal.pageSize.width - 14, 10, { align: 'right' });
             docInstance.setDrawColor(226, 232, 240);
             docInstance.line(14, 13, docInstance.internal.pageSize.width - 14, 13);
@@ -166,7 +169,7 @@ const FrequencyPage: React.FC = () => {
         doc.setFontSize(22);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(40);
-        doc.text('Frequência', doc.internal.pageSize.width / 2, 25, { align: 'center' });
+        doc.text('Relatório de Frequência', doc.internal.pageSize.width / 2, 25, { align: 'center' });
 
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
@@ -440,10 +443,10 @@ const FrequencyPage: React.FC = () => {
     const selectedAttendanceLabel = attendanceFilterOptions.find(o => o.value === attendanceFilter)?.label;
 
     return (
-        <div className="space-y-6 p-4 sm:p-6 lg:p-0 w-full overflow-x-hidden">
+        <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Frequência</h1>
+                    <h1 className="text-3xl font-bold text-slate-800">Relatório de Frequência</h1>
                     <p className="text-slate-500 mt-1">Monitore a presença dos voluntários nos eventos confirmados.</p>
                 </div>
                 <button 

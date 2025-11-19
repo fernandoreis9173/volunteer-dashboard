@@ -540,13 +540,33 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         if (setLoadingState) setLoading(true);
         setError(null);
         try {
-            // Use the secure RPC function to fetch events for the current user (admin or leader).
-            // This bypasses potential RLS issues.
-            const { data, error: rpcError } = await supabase.rpc('get_events_for_user');
+            // Optimization: Fetch only events from current year onwards to reduce initial load
+            // A more aggressive optimization could be current month -1 / +1, but year is safer for a calendar.
+            const startOfYear = `${new Date().getFullYear()}-01-01`;
+
+            // Use direct query instead of RPC for better control and performance
+            let query = supabase.from('events').select(`
+                *,
+                event_departments (department_id, departments (id, name)),
+                event_volunteers (volunteer_id, department_id, present, volunteers (id, name, initials))
+            `)
+            .gte('date', startOfYear);
+
+            if (isLeader && leaderDepartmentId) {
+                // Filter for leader's department
+                query = supabase.from('events').select(`
+                    *,
+                    event_departments!inner (department_id, departments (id, name)),
+                    event_volunteers (volunteer_id, department_id, present, volunteers (id, name, initials))
+                `)
+                .eq('event_departments.department_id', leaderDepartmentId)
+                .gte('date', startOfYear);
+            }
+
+            const { data, error } = await query.order('date', { ascending: true });
             
-            if (rpcError) throw rpcError;
+            if (error) throw error;
             
-            // The RPC function returns data already filtered and enriched.
             setAllEvents((data as unknown as Event[]) || []);
 
         } catch (err) {
@@ -554,7 +574,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         } finally {
             if (setLoadingState) setLoading(false);
         }
-    }, []);
+    }, [isLeader, leaderDepartmentId]);
 
     useEffect(() => { 
         fetchAllEvents();
@@ -920,7 +940,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
 
     if (isMobile) {
         return (
-            <div className="bg-white flex flex-col h-full">
+            <div className={`bg-white flex flex-col ${mobileView === 'dayGridMonth' ? '' : 'h-full'}`}>
                 <style>{calendarStyles}</style>
                 <MobileHeader
                     title={calendarTitle}
@@ -934,8 +954,8 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                     onStatusFilterChange={handleStatusFilterChange}
                 />
                 {mobileView === 'dayGridMonth' ? (
-                    <div className="flex flex-col flex-1 overflow-y-auto">
-                         <div className="mobile-calendar-view month-view">
+                    <div className="flex flex-col">
+                         <div className={`mobile-calendar-view month-view`}>
                             <FullCalendar
                                 key={`month-${monthViewDate.toISOString()}`}
                                 ref={calendarRef}

@@ -36,6 +36,7 @@ import { supabase } from './lib/supabaseClient';
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
 
+
 // FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
 const areApiKeysConfigured = 
     import.meta.env.VITE_SUPABASE_URL &&
@@ -128,17 +129,6 @@ const App: React.FC = () => {
   const lastUserId = useRef<string | null>(null);
   const hasLoginRedirected = useRef(false);
   const [theme, setTheme] = useState(getInitialTheme());
-
-  const useIsMobile = (breakpoint = 1024) => {
-    const [isMobile, setIsMobile] = useState(window.innerWidth < breakpoint);
-    useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [breakpoint]);
-    return isMobile;
-  };
-  const isMobile = useIsMobile();
 
   // VAPID key is now hardcoded for production
   const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
@@ -376,22 +366,43 @@ const App: React.FC = () => {
             let allEventsData: any[] | null = null;
             let fetchError: any = null;
 
-            // FIX: Use a different data fetching strategy for volunteers to avoid an "ambiguous user_id" error
-            // in the 'get_events_for_user' RPC function. Admins and leaders continue to use the RPC.
-            if (userProfile.role === 'admin' || userProfile.role === 'leader' || userProfile.role === 'lider') {
-                const { data, error } = await supabase.rpc('get_events_for_user');
-                allEventsData = data;
-                fetchError = error;
+            // Performance optimization: Only fetch events for TODAY
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const todayStr = `${year}-${month}-${day}`;
+
+            if (userProfile.role === 'admin') {
+                // Admin: Direct filtered query instead of full history RPC
+                const { data, error } = await supabase
+                    .from('events')
+                    .select('*, event_departments(*, departments(*)), event_volunteers(*, volunteers(*))')
+                    .eq('date', todayStr)
+                    .eq('status', 'Confirmado');
+                 allEventsData = data;
+                 fetchError = error;
+            } else if ((userProfile.role === 'leader' || userProfile.role === 'lider') && userProfile.department_id) {
+                 // Leader: Direct filtered query (department + today)
+                 const { data, error } = await supabase
+                    .from('events')
+                    .select('*, event_departments!inner(*, departments(*)), event_volunteers(*, volunteers(*))')
+                    .eq('date', todayStr)
+                    .eq('status', 'Confirmado')
+                    .eq('event_departments.department_id', userProfile.department_id);
+                 allEventsData = data;
+                 fetchError = error;
             } else if (userProfile.role === 'volunteer' && userProfile.volunteer_id) {
-                // Volunteers use a direct query filtered by their volunteer ID.
+                // Volunteer: Direct query filtered by volunteer ID + today
                 const { data, error } = await supabase
                     .from('events')
                     .select('*, event_departments(*, departments(*)), event_volunteers!inner(*, volunteers(*))')
-                    .eq('event_volunteers.volunteer_id', userProfile.volunteer_id);
+                    .eq('event_volunteers.volunteer_id', userProfile.volunteer_id)
+                    .eq('date', todayStr)
+                    .eq('status', 'Confirmado');
                 allEventsData = data;
                 fetchError = error;
             } else {
-                // Fallback for any other case
                 setActiveEvent(null);
                 return;
             }
@@ -405,16 +416,11 @@ const App: React.FC = () => {
     
             const allEvents: AppEvent[] = (allEventsData as any[]).map(item => item as unknown as AppEvent);
     
-            const now = new Date();
             const liveEvent = allEvents.find(event => {
-                // We only care about confirmed events for the "live" status
-                if (event.status !== 'Confirmado') return false;
-
                 const { dateTime: startDateTime, isValid: startIsValid } = convertUTCToLocal(event.date, event.start_time);
                 const { dateTime: endDateTime, isValid: endIsValid } = convertUTCToLocal(event.date, event.end_time);
     
                 if (!startIsValid || !endIsValid || !startDateTime || !endDateTime) {
-                    console.warn(`Skipping event ID ${event.id} due to invalid date/time.`);
                     return false;
                 }
                 
@@ -436,7 +442,8 @@ const App: React.FC = () => {
     
     useEffect(() => {
         checkForActiveEvent(); // Check immediately on session change/load
-        const interval = setInterval(checkForActiveEvent, 10000); // And then check every 10 seconds
+        // Polling interval set to 60 seconds to reduce DB load
+        const interval = setInterval(checkForActiveEvent, 60000); 
         return () => clearInterval(interval);
     }, [checkForActiveEvent]);
 
@@ -838,7 +845,7 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className="flex h-full w-full bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300">
+        <div className="flex h-screen bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300">
             <Sidebar
                 activePage={activePage}
                 onNavigate={handleNavigate}
@@ -857,9 +864,9 @@ const App: React.FC = () => {
                 toggleTheme={toggleTheme}
             />
 
-            <div className="flex-1 flex flex-col overflow-hidden w-full">
-                {!(isMobile && activePage === 'calendar') && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
-                <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900 ${isMobile && (activePage === 'calendar' || activePage === 'events' || activePage === 'frequency') ? '' : 'p-4 sm:p-6 lg:p-8'}`}>
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <Header onMenuClick={() => setIsSidebarOpen(true)} />
+                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 lg:p-8">
                     {renderPage()}
                 </main>
             </div>

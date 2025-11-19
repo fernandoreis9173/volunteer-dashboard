@@ -60,12 +60,11 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) =>
 
 
 interface AdminDashboardProps {
-  onDataChange: () => void;
   activeEvent: Event | null;
   onNavigate: (page: Page) => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEvent, onNavigate }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate }) => {
     const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
     const [dashboardData, setDashboardData] = useState<Partial<DashboardData>>({});
     const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -81,43 +80,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onDataChange, activeEve
         setDashboardError(null);
     
         try {
-            // --- Fetch non-event data and all events in parallel ---
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = today.toISOString().split('T')[0];
+            
+            const last30Days = new Date(today);
+            last30Days.setDate(today.getDate() - 29);
+            const last30DaysStr = last30Days.toISOString().split('T')[0];
+
+            // --- Fetch non-event data and only recent/future events in parallel ---
+            // Replaced RPC call with direct query filtered by date (last 30 days + future)
             const [
                 activeVolunteersCountRes,
                 departmentsCountRes,
-                eventsRpcRes,
+                eventsRes,
                 activeLeadersRes,
             ] = await Promise.all([
                 supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
                 supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                supabase.rpc('get_events_for_user'), // This is the key change to use a server-side function
+                supabase
+                    .from('events')
+                    .select('*, event_departments(*, departments(*)), event_volunteers(*, volunteers(*))')
+                    .gte('date', last30DaysStr) // Optimized: Fetch only relevant range
+                    .order('date', { ascending: true }),
                 supabase.functions.invoke('list-users', { body: { context: 'dashboard' } }),
             ]);
     
             // --- Error Handling ---
             if (activeVolunteersCountRes.error) throw activeVolunteersCountRes.error;
             if (departmentsCountRes.error) throw departmentsCountRes.error;
-            if (eventsRpcRes.error) throw eventsRpcRes.error;
+            if (eventsRes.error) throw eventsRes.error;
             if (activeLeadersRes.error) throw activeLeadersRes.error;
     
             // --- Process Data ---
-            const allEvents = (eventsRpcRes.data as unknown as DashboardEvent[]) || [];
-            
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayStr = today.toISOString().split('T')[0];
+            const allEvents = (eventsRes.data as unknown as DashboardEvent[]) || [];
             
             const next7Days = new Date(today);
             next7Days.setDate(today.getDate() + 7);
             const next7DaysStr = next7Days.toISOString().split('T')[0];
     
-            const last30Days = new Date(today);
-            last30Days.setDate(today.getDate() - 29);
-            const last30DaysStr = last30Days.toISOString().split('T')[0];
-    
             const todaySchedules = allEvents.filter(e => e.date === todayStr);
             const upcomingSchedules = allEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr);
-            const chartEvents = allEvents.filter(e => e.date >= last30DaysStr && e.date <= todayStr);
+            // Chart events are all events fetched since we filtered by last30DaysStr in the query
+            const chartEvents = allEvents.filter(e => e.date <= todayStr); 
     
             // --- Set Stats ---
             const stats: DashboardData['stats'] = {
