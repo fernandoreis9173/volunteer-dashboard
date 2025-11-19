@@ -36,7 +36,6 @@ import { supabase } from './lib/supabaseClient';
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
 
-
 // FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
 const areApiKeysConfigured = 
     import.meta.env.VITE_SUPABASE_URL &&
@@ -129,6 +128,9 @@ const App: React.FC = () => {
   const lastUserId = useRef<string | null>(null);
   const hasLoginRedirected = useRef(false);
   const [theme, setTheme] = useState(getInitialTheme());
+  
+  // State to cache today's events locally to avoid frequent DB hits
+  const [todaysEvents, setTodaysEvents] = useState<AppEvent[]>([]);
 
   // VAPID key is now hardcoded for production
   const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
@@ -356,9 +358,10 @@ const App: React.FC = () => {
         fetchLeaders();
     }, [fetchLeaders]);
 
-    const checkForActiveEvent = useCallback(async () => {
+    // REFACTORED: Fetch DB Data - Runs only once every 10 minutes or on session change
+    const fetchTodaysEvents = useCallback(async () => {
         if (!userId || !userProfile) {
-            setActiveEvent(null);
+            setTodaysEvents([]);
             return;
         }
     
@@ -403,49 +406,62 @@ const App: React.FC = () => {
                 allEventsData = data;
                 fetchError = error;
             } else {
-                setActiveEvent(null);
+                setTodaysEvents([]);
                 return;
             }
     
             if (fetchError) throw fetchError;
     
-            if (!allEventsData || allEventsData.length === 0) {
-                setActiveEvent(null);
-                return;
-            }
-    
-            const allEvents: AppEvent[] = (allEventsData as any[]).map(item => item as unknown as AppEvent);
-    
-            const liveEvent = allEvents.find(event => {
-                const { dateTime: startDateTime, isValid: startIsValid } = convertUTCToLocal(event.date, event.start_time);
-                const { dateTime: endDateTime, isValid: endIsValid } = convertUTCToLocal(event.date, event.end_time);
-    
-                if (!startIsValid || !endIsValid || !startDateTime || !endDateTime) {
-                    return false;
-                }
-                
-                if (endDateTime < startDateTime) {
-                    endDateTime.setDate(endDateTime.getDate() + 1);
-                }
-    
-                return now >= startDateTime && now <= endDateTime;
-            });
-    
-            setActiveEvent(liveEvent || null);
+            // Map raw data to AppEvent type
+            const eventsList: AppEvent[] = (allEventsData || []).map(item => item as unknown as AppEvent);
+            setTodaysEvents(eventsList);
     
         } catch (err) {
             const errorMessage = getErrorMessage(err);
-            console.error("Error checking for active event:", errorMessage);
-            setActiveEvent(null);
+            console.error("Error fetching today's events:", errorMessage);
+            // Don't clear existing events on error to prevent flickering
         }
     }, [userId, userProfile]);
+
+    // REFACTORED: Check Local Logic - Runs every minute using cached data
+    const checkActiveEventLocally = useCallback(() => {
+        if (todaysEvents.length === 0) {
+            setActiveEvent(null);
+            return;
+        }
+
+        const now = new Date();
+        const liveEvent = todaysEvents.find(event => {
+            const { dateTime: startDateTime, isValid: startIsValid } = convertUTCToLocal(event.date, event.start_time);
+            const { dateTime: endDateTime, isValid: endIsValid } = convertUTCToLocal(event.date, event.end_time);
+
+            if (!startIsValid || !endIsValid || !startDateTime || !endDateTime) {
+                return false;
+            }
+            
+            if (endDateTime < startDateTime) {
+                endDateTime.setDate(endDateTime.getDate() + 1);
+            }
+
+            return now >= startDateTime && now <= endDateTime;
+        });
+
+        setActiveEvent(liveEvent || null);
+    }, [todaysEvents]);
     
+    // Effect 1: Fetch data from DB less frequently (e.g., every 10 minutes)
     useEffect(() => {
-        checkForActiveEvent(); // Check immediately on session change/load
-        // Polling interval set to 60 seconds to reduce DB load
-        const interval = setInterval(checkForActiveEvent, 60000); 
+        fetchTodaysEvents(); 
+        const interval = setInterval(fetchTodaysEvents, 600000); // 10 minutes
         return () => clearInterval(interval);
-    }, [checkForActiveEvent]);
+    }, [fetchTodaysEvents]);
+
+    // Effect 2: Check local time against cached data frequently (e.g., every 1 minute)
+    useEffect(() => {
+        checkActiveEventLocally();
+        const interval = setInterval(checkActiveEventLocally, 60000); // 1 minute
+        return () => clearInterval(interval);
+    }, [checkActiveEventLocally]);
 
     const eventForSidebar = useMemo(() => {
         if (!activeEvent || !userProfile) return null;
