@@ -22,12 +22,12 @@ const formatPhoneNumber = (value: string) => {
 };
 
 const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
-  const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";
-  const colorClasses = {
-    yellow: "bg-yellow-100 text-yellow-800",
-    blue: "bg-blue-100 text-blue-800",
-  };
-  return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
+    const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";
+    const colorClasses = {
+        yellow: "bg-yellow-100 text-yellow-800",
+        blue: "bg-blue-100 text-blue-800",
+    };
+    return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
 };
 
 const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, leaders }) => {
@@ -42,10 +42,10 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
     const [currentPassword, setCurrentPassword] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    
+
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isChangingPassword, setIsChangingPassword] = useState(false);
-    
+
     const userId = session?.user?.id; // Use stable userId for dependency
     const user = session?.user;
     const userRole = user?.user_metadata?.role;
@@ -56,38 +56,54 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
             if (!session?.user) return;
             const currentUser = session.user;
             const currentUserRole = currentUser.user_metadata?.role;
-    
+
             setLoading(true);
             setError(null);
             setName(currentUser.user_metadata?.name || '');
             setPhone(currentUser.user_metadata?.phone || '');
-            
+
             try {
                 if (currentUserRole === 'leader' || currentUserRole === 'lider') {
+                    // 1. Get the leader's department (assuming 1 leader -> 1 department constraint)
                     const { data: leaderDeptRel, error: leaderDeptRelError } = await supabase
                         .from('department_leaders')
                         .select('department_id')
                         .eq('leader_id', currentUser.id)
                         .single();
-        
-                    if (leaderDeptRelError) throw leaderDeptRelError;
-                    
-                    const departmentId = leaderDeptRel.department_id;
-        
+
+                    if (leaderDeptRelError && leaderDeptRelError.code !== 'PGRST116') throw leaderDeptRelError;
+
+                    const departmentId = leaderDeptRel?.department_id;
+
                     if (departmentId) {
+                        // 2. Get department details
                         const { data: departmentData, error: departmentError } = await supabase
                             .from('departments')
                             .select('id, name')
                             .eq('id', departmentId)
                             .single();
-                        
+
                         if (departmentError) throw departmentError;
-        
-                        const leaderForDept = leaders.find(l => l.id === currentUser.id);
-                        
+
+                        // 3. Get ALL leaders for this department
+                        const { data: allLeadersRel, error: allLeadersError } = await supabase
+                            .from('department_leaders')
+                            .select('leader_id')
+                            .eq('department_id', departmentId);
+
+                        if (allLeadersError) throw allLeadersError;
+
+                        // 4. Map leader IDs to names using the 'leaders' prop
+                        const leaderIds = allLeadersRel.map(r => r.leader_id);
+                        const departmentLeadersNames = leaders
+                            .filter(l => leaderIds.includes(l.id))
+                            .map(l => l.user_metadata?.name)
+                            .filter(Boolean)
+                            .join(', ');
+
                         setDepartmentDetails([{
                             name: departmentData.name,
-                            leader: leaderForDept?.user_metadata?.name || 'Não atribuído'
+                            leader: departmentLeadersNames || 'Não atribuído'
                         }]);
                     } else {
                         setDepartmentDetails([]);
@@ -99,15 +115,15 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                 setLoading(false);
             }
         };
-        
+
         if (userId) {
             fetchProfileData();
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId, leaders]);
 
 
-    
+
     const showSuccess = (message: string) => {
         setSuccessMessage(message);
         setTimeout(() => setSuccessMessage(null), 3000);
@@ -121,13 +137,13 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
             // Step 1: Update the user's auth metadata (name, phone)
             // FIX: Updated to Supabase v2 API `updateUser` to match library version.
             const { error: updateError } = await supabase.auth.updateUser({
-                data: { 
+                data: {
                     name: name.trim(),
                     phone: phone.replace(/[^\d]/g, '')
                 }
             });
             if (updateError) throw updateError;
-            
+
             // Step 2: Refresh UI and show success
             onUpdate(); // Refreshes sidebar etc.
             setIsEditingProfile(false);
@@ -193,14 +209,14 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
             setIsSaving(false);
         }
     };
-    
+
     const getInitials = (nameStr?: string): string => {
         if (!nameStr) return '??';
         const parts = nameStr.trim().split(' ');
         if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
         return (parts[0][0] + (parts[parts.length - 1][0] || '')).toUpperCase();
     };
-    
+
     const cancelPasswordChange = () => {
         setIsChangingPassword(false);
         setError(null);
@@ -217,7 +233,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
             <h1 className="text-3xl font-bold text-slate-800">Meu Perfil</h1>
-            
+
             <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                     <div className="w-24 h-24 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-4xl">
@@ -225,8 +241,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                     </div>
                     <div className="flex-1 text-center sm:text-left">
                         {isEditingProfile ? (
-                             <div className="space-y-2">
-                                <input 
+                            <div className="space-y-2">
+                                <input
                                     type="text"
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
@@ -239,7 +255,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                                     placeholder="(xx) xxxxx-xxxx"
                                     className="text-base text-slate-500 border-b-2 border-blue-500 focus:outline-none bg-transparent w-full"
                                 />
-                             </div>
+                            </div>
                         ) : (
                             <>
                                 <h2 className="text-3xl font-bold text-slate-800">{user?.user_metadata?.name}</h2>
@@ -257,7 +273,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                             )}
                         </div>
                     </div>
-                     <div className="flex items-center gap-2 mt-4 sm:mt-0">
+                    <div className="flex items-center gap-2 mt-4 sm:mt-0">
                         {isEditingProfile ? (
                             <>
                                 <button onClick={handleSaveProfile} disabled={isSaving} className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg text-sm disabled:bg-green-300">Salvar</button>
@@ -275,20 +291,20 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                     <h3 className="text-xl font-bold text-slate-800">Segurança</h3>
                     {isChangingPassword ? (
                         <form onSubmit={handleSavePassword} className="mt-4 space-y-4 max-w-sm">
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Senha Atual *</label>
-                                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nova Senha *</label>
-                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="Mínimo de 6 caracteres" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="Mínimo de 6 caracteres" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
                             </div>
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Confirmar Nova Senha *</label>
-                                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"/>
+                                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
                             </div>
                             {error && <p className="text-sm text-red-500">{error}</p>}
-                             <div className="flex items-center gap-2 pt-2">
+                            <div className="flex items-center gap-2 pt-2">
                                 <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg text-sm disabled:bg-blue-400">
                                     {isSaving ? 'Salvando...' : 'Salvar Senha'}
                                 </button>
@@ -308,9 +324,9 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                 </div>
 
                 {successMessage && (
-                     <div className="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-scale">
+                    <div className="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-scale">
                         {successMessage}
-                     </div>
+                    </div>
                 )}
             </div>
             <style>{`

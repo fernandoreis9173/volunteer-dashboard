@@ -23,7 +23,7 @@ export interface EventVolunteer {
 
 export interface EventDepartment {
   department_id: number;
-  departments: { id: number; name:string; leader?: string; };
+  departments: { id: number; name: string; leader?: string; };
 }
 
 export interface Event {
@@ -53,25 +53,25 @@ export interface DashboardEvent {
   status: string;
   local?: string;
   observations?: string;
-  event_departments: { departments: { id: number; name: string; leader?: string; } }[] | null;
-  event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } }[] | null;
+  event_departments: { department_id: number; departments: { id: number; name: string; leader?: string; } | null }[] | null;
+  event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } | null }[] | null;
   cronograma_principal_id?: string | null;
   cronograma_kids_id?: string | null;
 }
 
 export interface DashboardData {
-    stats?: {
-        activeVolunteers: Stat;
-        departments: Stat;
-        schedulesToday: Stat;
-        upcomingSchedules?: Stat;
-        presencesToday?: Stat;
-        annualAttendance?: Stat;
-    };
-    todaySchedules?: DashboardEvent[];
-    upcomingSchedules?: DashboardEvent[];
-    chartData?: ChartDataPoint[];
-    activeLeaders?: EnrichedUser[];
+  stats?: {
+    activeVolunteers: Stat;
+    departments: Stat;
+    schedulesToday: Stat;
+    upcomingSchedules?: Stat;
+    presencesToday?: Stat;
+    annualAttendance?: Stat;
+  };
+  todaySchedules?: DashboardEvent[];
+  upcomingSchedules?: DashboardEvent[];
+  chartData?: ChartDataPoint[];
+  activeLeaders?: EnrichedUser[];
 }
 
 export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin' | 'history' | 'timelines' | 'ranking';
@@ -79,17 +79,17 @@ export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'cale
 export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 
 export interface DetailedVolunteer {
-    id?: number;
-    user_id?: string;
-    name: string;
-    email: string;
-    phone: string;
-    initials: string;
-    status: 'Ativo' | 'Inativo' | 'Pendente';
-    departments: { id: number; name: string; }[];
-    skills: string[];
-    availability: string[] | string;
-    created_at?: string;
+  id?: number;
+  user_id?: string;
+  name: string;
+  email: string;
+  phone: string;
+  initials: string;
+  status: 'Ativo' | 'Inativo' | 'Pendente';
+  departments: { id: number; name: string; }[];
+  skills: string[];
+  availability: string[] | string;
+  created_at?: string;
 }
 
 export interface Department {
@@ -104,16 +104,16 @@ export interface Department {
 }
 
 export interface Stat {
-    value: string;
-    change: number;
+  value: string;
+  change: number;
 }
 
 // FIX: Added ChartDataPoint interface for use in Dashboard and TrafficChart components.
 export interface ChartDataPoint {
-    date: string;
-    scheduledVolunteers: number;
-    involvedDepartments: number;
-    eventNames: string[];
+  date: string;
+  scheduledVolunteers: number;
+  involvedDepartments: number;
+  eventNames: string[];
 }
 
 
@@ -122,31 +122,31 @@ export interface ChartDataPoint {
 // This has been resolved by changing the interface to a type alias using an intersection (`&`),
 // which is a more robust way to extend complex types and ensures all properties from `User` are included.
 export type EnrichedUser = User & {
-    app_status?: 'Ativo' | 'Inativo' | 'Pendente';
+  app_status?: 'Ativo' | 'Inativo' | 'Pendente';
 };
 
 export interface NotificationRecord {
-    id: number;
-    created_at: string;
-    user_id: string;
-    message: string;
-    type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader' | 'invitation_received' | 'shift_swap_request';
-    is_read: boolean;
-    related_event_id: number | null;
-    data?: any;
+  id: number;
+  created_at: string;
+  user_id: string;
+  message: string;
+  type: 'new_schedule' | 'event_update' | 'new_event_for_department' | 'info' | 'new_event_for_leader' | 'invitation_received' | 'shift_swap_request';
+  is_read: boolean;
+  related_event_id: number | null;
+  data?: any;
 }
 
 export interface Invitation {
-    id: number;
-    created_at: string;
-    departments: {
-      name: string;
-    } | null;
-    profiles: {
-      name: string | null;
-    } | null;
+  id: number;
+  created_at: string;
+  departments: {
+    name: string;
+  } | null;
+  profiles: {
+    name: string | null;
+  } | null;
 }
-  
+
 export interface TimelineItem {
   id?: string;
   modelo_id?: string;
@@ -165,18 +165,18 @@ export interface TimelineTemplate {
   created_at?: string;
 }
 export interface VolunteerSchedule {
-    id: number;
-    name: string;
-    date: string;
-    start_time: string;
-    end_time: string;
-    status: string;
-    local?: string;
-    observations?: string;
-    department_id: number;
-    department_name: string;
-    leader_name?: string;
-    present: boolean | null;
-    cronograma_principal_id?: string | null;
-    cronograma_kids_id?: string | null;
+  id: number;
+  name: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  local?: string;
+  observations?: string;
+  department_id: number;
+  department_name: string;
+  leader_name?: string;
+  present: boolean | null;
+  cronograma_principal_id?: string | null;
+  cronograma_kids_id?: string | null;
 }

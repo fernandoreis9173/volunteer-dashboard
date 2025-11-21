@@ -1,8 +1,11 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { queryClient } from './lib/queryClient';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import LeaderDashboard from './components/Dashboard';
+import LeaderDashboard from './components/LeaderDashboard';
 import VolunteersPage from './components/VolunteersPage';
 import DepartmentsPage from './components/DepartmentsPage';
 // FIX: Corrected import name from SchedulesPage to EventsPage to match the component.
@@ -38,17 +41,17 @@ import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
 
 // FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
-const areApiKeysConfigured = 
+const areApiKeysConfigured =
     import.meta.env.VITE_SUPABASE_URL &&
     import.meta.env.VITE_SUPABASE_ANON_KEY &&
     import.meta.env.VITE_VAPID_PUBLIC_KEY;
 // FIX: Reverted UserProfileState to use `department_id` (singular) to enforce the business rule of one leader per department.
 interface UserProfileState {
-  role: string | null;
-  department_id: number | null;
-  volunteer_id: number | null;
-  status: string | null;
-  lgpd_accepted: boolean | null;
+    role: string | null;
+    department_id: number | null;
+    volunteer_id: number | null;
+    status: string | null;
+    lgpd_accepted: boolean | null;
 }
 
 const pagePermissions: Record<Page, string[]> = {
@@ -74,7 +77,7 @@ const getInitialAuthView = (): AuthView => {
 };
 
 const getPageFromHash = (): Page => {
-    const hash = window.location.hash.slice(2); 
+    const hash = window.location.hash.slice(2);
     const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
@@ -92,216 +95,216 @@ const urlBase64ToUint8Array = (base64String: string) => {
 };
 
 const getInitialTheme = (): 'light' | 'dark' => {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const storedPrefs = window.localStorage.getItem('theme');
-    if (storedPrefs === 'light' || storedPrefs === 'dark') {
-      return storedPrefs;
+    if (typeof window !== 'undefined' && window.localStorage) {
+        const storedPrefs = window.localStorage.getItem('theme');
+        if (storedPrefs === 'light' || storedPrefs === 'dark') {
+            return storedPrefs;
+        }
+        const userMedia = window.matchMedia('(prefers-color-scheme: dark)');
+        if (userMedia.matches) {
+            return 'dark';
+        }
     }
-    const userMedia = window.matchMedia('(prefers-color-scheme: dark)');
-    if (userMedia.matches) {
-      return 'dark';
-    }
-  }
-  return 'light'; // default
+    return 'light'; // default
 };
 
 const App: React.FC = () => {
-  // FIX: Use 'any' for Session type due to import errors.
-  const [session, setSession] = useState<Session | null>(null);
-  const [activePage, setActivePage] = useState<Page>(getPageFromHash());
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
-  const [isEventFormOpen, setIsEventFormOpen] = useState(false);
-  const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
-  const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
-  const [notifications, setNotifications] = useState<ToastNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
-  const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
-  // FIX: Use the `AppEvent` alias for the application's event state.
-  const [activeEvent, setActiveEvent] = useState<AppEvent | null>(null);
-  // FIX: Use `any` for `installPromptEvent` state to accommodate the non-standard `BeforeInstallPromptEvent` properties like `prompt()`.
-  const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null);
-  const [isIOSInstallPromptOpen, setIsIOSInstallPromptOpen] = useState(false);
-  // FIX: Use 'any' for User type due to import errors.
-  const [leaders, setLeaders] = useState<User[]>([]);
-  const lastUserId = useRef<string | null>(null);
-  const hasLoginRedirected = useRef(false);
-  const [theme, setTheme] = useState(getInitialTheme());
-  
-  // State to cache today's events locally to avoid frequent DB hits
-  const [todaysEvents, setTodaysEvents] = useState<AppEvent[]>([]);
+    // FIX: Use 'any' for Session type due to import errors.
+    const [session, setSession] = useState<Session | null>(null);
+    const [activePage, setActivePage] = useState<Page>(getPageFromHash());
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isVolunteerFormOpen, setIsVolunteerFormOpen] = useState(false);
+    const [isEventFormOpen, setIsEventFormOpen] = useState(false);
+    const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
+    const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
+    const [notifications, setNotifications] = useState<ToastNotification[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
+    const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
+    // FIX: Use the `AppEvent` alias for the application's event state.
+    const [activeEvent, setActiveEvent] = useState<AppEvent | null>(null);
+    // FIX: Use `any` for `installPromptEvent` state to accommodate the non-standard `BeforeInstallPromptEvent` properties like `prompt()`.
+    const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null);
+    const [isIOSInstallPromptOpen, setIsIOSInstallPromptOpen] = useState(false);
+    // FIX: Use 'any' for User type due to import errors.
+    const [leaders, setLeaders] = useState<User[]>([]);
+    const lastUserId = useRef<string | null>(null);
+    const hasLoginRedirected = useRef(false);
+    const [theme, setTheme] = useState(getInitialTheme());
 
-  // VAPID key is now hardcoded for production
-  const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
+    // State to cache today's events locally to avoid frequent DB hits
+    const [todaysEvents, setTodaysEvents] = useState<AppEvent[]>([]);
 
-  // Optimization: Derive userId to stabilize dependencies and prevent re-fetches on token refresh
-  const userId = session?.user?.id;
+    // VAPID key is now hardcoded for production
+    const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
 
-  const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
-  const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
-  const isUserDisabled = useMemo(() => userProfile?.status === 'Inativo', [userProfile]);
+    // Optimization: Derive userId to stabilize dependencies and prevent re-fetches on token refresh
+    const userId = session?.user?.id;
 
-  // --- NEW: Force reload on Service Worker Update ---
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            console.log('Service Worker controller changed. Reloading page...');
-            window.location.reload();
-        });
-    }
-  }, []);
-  // ---------------------------------------------------
+    const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
+    const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
+    const isUserDisabled = useMemo(() => userProfile?.status === 'Inativo', [userProfile]);
 
-  useEffect(() => {
-    const isVolunteer = userProfile?.role === 'volunteer';
-
-    // Only apply theme if user is a volunteer
-    if (isVolunteer) {
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      localStorage.setItem('theme', theme);
-    } else {
-      // If not a volunteer, ensure light mode and clear storage
-      document.documentElement.classList.remove('dark');
-      localStorage.removeItem('theme');
-    }
-  }, [theme, userProfile?.role]);
-
-  const toggleTheme = useCallback(() => {
-    setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
-  }, []);
-
-  const hasPermission = useMemo(() => {
-    if (!userProfile?.role) {
-        return false;
-    }
-    const normalizedRole = userProfile.role === 'lider' ? 'leader' : userProfile.role;
-    const allowedRolesForPage = pagePermissions[activePage];
-    return allowedRolesForPage && allowedRolesForPage.includes(normalizedRole);
-  }, [userProfile, activePage]);
-
-  // FIX: Use 'any' for Session type due to import errors.
-  const fetchCoreData = useCallback(async (currentSession: Session) => {
-    try {
-        const userStatus = currentSession.user.user_metadata?.status;
-        const userRole = currentSession.user.user_metadata?.role;
-
-        // Fetch LGPD status from the 'profiles' table for all users.
-        const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('lgpd_accepted')
-            .eq('id', currentSession.user.id)
-            .single();
-
-        if (profileError && profileError.code !== 'PGRST116') { // Ignore "row not found" error
-            console.error("Error fetching profile for LGPD check:", getErrorMessage(profileError));
+    // --- NEW: Force reload on Service Worker Update ---
+    useEffect(() => {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('Service Worker controller changed. Reloading page...');
+                window.location.reload();
+            });
         }
+    }, []);
+    // ---------------------------------------------------
 
-        const lgpdAccepted = profileData?.lgpd_accepted ?? false;
+    useEffect(() => {
+        const isVolunteer = userProfile?.role === 'volunteer';
 
-        if (userStatus === 'Inativo') {
-            setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo', lgpd_accepted: lgpdAccepted });
-            setIsLoading(false);
-            return;
+        // Only apply theme if user is a volunteer
+        if (isVolunteer) {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            localStorage.setItem('theme', theme);
+        } else {
+            // If not a volunteer, ensure light mode and clear storage
+            document.documentElement.classList.remove('dark');
+            localStorage.removeItem('theme');
         }
+    }, [theme, userProfile?.role]);
 
-        if (!userRole) {
-            console.error("User role not found in metadata.");
-            setUserProfile(null);
-            return;
-        }
-        
-        if (userStatus === 'Pendente') {
-             setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null, lgpd_accepted: lgpdAccepted });
-             return;
-        }
+    const toggleTheme = useCallback(() => {
+        setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
+    }, []);
 
-        let profile: UserProfileState | null = null;
-        if (userRole === 'volunteer') {
-            const { data: volunteerData, error: volunteerError } = await supabase
-                .from('volunteers')
-                .select('id')
-                .eq('user_id', currentSession.user.id)
+    const hasPermission = useMemo(() => {
+        if (!userProfile?.role) {
+            return false;
+        }
+        const normalizedRole = userProfile.role === 'lider' ? 'leader' : userProfile.role;
+        const allowedRolesForPage = pagePermissions[activePage];
+        return allowedRolesForPage && allowedRolesForPage.includes(normalizedRole);
+    }, [userProfile, activePage]);
+
+    // FIX: Use 'any' for Session type due to import errors.
+    const fetchCoreData = useCallback(async (currentSession: Session) => {
+        try {
+            const userStatus = currentSession.user.user_metadata?.status;
+            const userRole = currentSession.user.user_metadata?.role;
+
+            // Fetch LGPD status from the 'profiles' table for all users.
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('lgpd_accepted')
+                .eq('id', currentSession.user.id)
                 .single();
 
-            if (volunteerError) console.error("Error fetching volunteer profile:", getErrorMessage(volunteerError));
-            
-            profile = {
-                role: userRole,
-                department_id: null,
-                volunteer_id: volunteerData?.id ?? null,
-                status: userStatus,
-                lgpd_accepted: lgpdAccepted
-            };
-
-        } else { // Admin/Leader
-             const { data: leaderDept, error: leaderDeptError } = await supabase
-                .from('department_leaders')
-                .select('department_id')
-                .eq('leader_id', currentSession.user.id)
-                .maybeSingle();
-
-            if (leaderDeptError) {
-                 console.error("Error fetching admin/leader department:", getErrorMessage(leaderDeptError));
+            if (profileError && profileError.code !== 'PGRST116') { // Ignore "row not found" error
+                console.error("Error fetching profile for LGPD check:", getErrorMessage(profileError));
             }
-            
-            profile = {
-                role: userRole,
-                department_id: leaderDept?.department_id || null,
-                volunteer_id: null,
-                status: userStatus,
-                lgpd_accepted: lgpdAccepted
-            };
+
+            const lgpdAccepted = profileData?.lgpd_accepted ?? false;
+
+            if (userStatus === 'Inativo') {
+                setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo', lgpd_accepted: lgpdAccepted });
+                setIsLoading(false);
+                return;
+            }
+
+            if (!userRole) {
+                console.error("User role not found in metadata.");
+                setUserProfile(null);
+                return;
+            }
+
+            if (userStatus === 'Pendente') {
+                setUserProfile({ role: userRole, status: 'Pendente', department_id: null, volunteer_id: null, lgpd_accepted: lgpdAccepted });
+                return;
+            }
+
+            let profile: UserProfileState | null = null;
+            if (userRole === 'volunteer') {
+                const { data: volunteerData, error: volunteerError } = await supabase
+                    .from('volunteers')
+                    .select('id')
+                    .eq('user_id', currentSession.user.id)
+                    .single();
+
+                if (volunteerError) console.error("Error fetching volunteer profile:", getErrorMessage(volunteerError));
+
+                profile = {
+                    role: userRole,
+                    department_id: null,
+                    volunteer_id: volunteerData?.id ?? null,
+                    status: userStatus,
+                    lgpd_accepted: lgpdAccepted
+                };
+
+            } else { // Admin/Leader
+                const { data: leaderDept, error: leaderDeptError } = await supabase
+                    .from('department_leaders')
+                    .select('department_id')
+                    .eq('leader_id', currentSession.user.id)
+                    .maybeSingle();
+
+                if (leaderDeptError) {
+                    console.error("Error fetching admin/leader department:", getErrorMessage(leaderDeptError));
+                }
+
+                profile = {
+                    role: userRole,
+                    department_id: leaderDept?.department_id || null,
+                    volunteer_id: null,
+                    status: userStatus,
+                    lgpd_accepted: lgpdAccepted
+                };
+            }
+            setUserProfile(profile);
+
+            const { count } = await supabase
+                .from('notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', currentSession.user.id)
+                .eq('is_read', false);
+            setUnreadCount(count ?? 0);
+        } catch (err) {
+            console.error("Error fetching core user data:", getErrorMessage(err));
+            setUserProfile(null);
+        } finally {
+            setIsLoading(false);
         }
-        setUserProfile(profile);
+    }, []);
 
-        const { count } = await supabase
-            .from('notifications')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', currentSession.user.id)
-            .eq('is_read', false);
-        setUnreadCount(count ?? 0);
-    } catch (err) {
-        console.error("Error fetching core user data:", getErrorMessage(err));
-        setUserProfile(null);
-    } finally {
-        setIsLoading(false);
-    }
-  }, []);
+    const refetchUserData = useCallback(() => {
+        if (session) {
+            setIsLoading(true);
+            fetchCoreData(session);
+        }
+    }, [session, fetchCoreData]);
 
-  const refetchUserData = useCallback(() => {
-    if (session) {
-        setIsLoading(true);
-        fetchCoreData(session);
-    }
-  }, [session, fetchCoreData]);
-  
-  const handleNavigate = useCallback((page: Page) => {
-    setActivePage(page);
-    window.location.hash = `#/${page}`;
-    setIsSidebarOpen(false);
-  }, []);
+    const handleNavigate = useCallback((page: Page) => {
+        setActivePage(page);
+        window.location.hash = `#/${page}`;
+        setIsSidebarOpen(false);
+    }, []);
 
-  const handleRegistrationComplete = useCallback(() => {
-    refetchUserData();
-    // A navegação para o dashboard será bloqueada pela verificação da LGPD
-  }, [refetchUserData]);
+    const handleRegistrationComplete = useCallback(() => {
+        refetchUserData();
+        // A navegação para o dashboard será bloqueada pela verificação da LGPD
+    }, [refetchUserData]);
 
-  const refetchNotificationCount = useCallback(async () => {
-    if (session) {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', session.user.id)
-        .eq('is_read', false);
-      setUnreadCount(count ?? 0);
-    }
-  }, [session]);
+    const refetchNotificationCount = useCallback(async () => {
+        if (session) {
+            const { count } = await supabase
+                .from('notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', session.user.id)
+                .eq('is_read', false);
+            setUnreadCount(count ?? 0);
+        }
+    }, [session]);
 
     // --- PWA Installation Logic ---
     useEffect(() => {
@@ -346,7 +349,7 @@ const App: React.FC = () => {
     }, []);
 
     const fetchLeaders = useCallback(async () => {
-        if(!userId) {
+        if (!userId) {
             setLeaders([]);
             return;
         }
@@ -354,8 +357,8 @@ const App: React.FC = () => {
             const { data, error: invokeError } = await supabase.functions.invoke('list-users');
             if (invokeError) throw invokeError;
             if (data.users) {
-                 // FIX: Use EnrichedUser type which includes the `app_status` property from the `list-users` function.
-                 const potentialLeaders = data.users.filter((user: EnrichedUser) => {
+                // FIX: Use EnrichedUser type which includes the `app_status` property from the `list-users` function.
+                const potentialLeaders = data.users.filter((user: EnrichedUser) => {
                     const role = user.user_metadata?.role;
                     return (role === 'leader' || role === 'lider' || role === 'admin') && user.app_status === 'Ativo';
                 });
@@ -382,7 +385,7 @@ const App: React.FC = () => {
             if (!userId) setTodaysEvents([]);
             return;
         }
-    
+
         try {
             let allEventsData: any[] | null = null;
             let fetchError: any = null;
@@ -401,18 +404,18 @@ const App: React.FC = () => {
                     .select('*, event_departments(*, departments(*)), event_volunteers(*, volunteers(*))')
                     .eq('date', todayStr)
                     .eq('status', 'Confirmado');
-                 allEventsData = data;
-                 fetchError = error;
+                allEventsData = data;
+                fetchError = error;
             } else if ((userRole === 'leader' || userRole === 'lider') && userDepartmentId) {
-                 // Leader: Direct filtered query (department + today)
-                 const { data, error } = await supabase
+                // Leader: Direct filtered query (department + today)
+                const { data, error } = await supabase
                     .from('events')
                     .select('*, event_departments!inner(*, departments(*)), event_volunteers(*, volunteers(*))')
                     .eq('date', todayStr)
                     .eq('status', 'Confirmado')
                     .eq('event_departments.department_id', userDepartmentId);
-                 allEventsData = data;
-                 fetchError = error;
+                allEventsData = data;
+                fetchError = error;
             } else if (userRole === 'volunteer' && userVolunteerId) {
                 // Volunteer: Direct query filtered by volunteer ID + today
                 const { data, error } = await supabase
@@ -428,13 +431,13 @@ const App: React.FC = () => {
                 setTodaysEvents([]);
                 return;
             }
-    
+
             if (fetchError) throw fetchError;
-    
+
             // Map raw data to AppEvent type
             const eventsList: AppEvent[] = (allEventsData || []).map(item => item as unknown as AppEvent);
             setTodaysEvents(eventsList);
-    
+
         } catch (err) {
             const errorMessage = getErrorMessage(err);
             console.error("Error fetching today's events:", errorMessage);
@@ -457,7 +460,7 @@ const App: React.FC = () => {
             if (!startIsValid || !endIsValid || !startDateTime || !endDateTime) {
                 return false;
             }
-            
+
             if (endDateTime < startDateTime) {
                 endDateTime.setDate(endDateTime.getDate() + 1);
             }
@@ -467,7 +470,7 @@ const App: React.FC = () => {
 
         setActiveEvent(liveEvent || null);
     }, [todaysEvents]);
-    
+
     // Effect 1: Initial Fetch (Realtime disabled for performance)
     useEffect(() => {
         if (!userId) return;
@@ -510,7 +513,7 @@ const App: React.FC = () => {
         // FIX: Supabase v2 onAuthStateChange returns a subscription object inside a data object.
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
             setSession(newSession);
-             // If session becomes null (logout), we're not loading anymore.
+            // If session becomes null (logout), we're not loading anymore.
             if (!newSession) {
                 setIsLoading(false);
                 setUserProfile(null);
@@ -535,13 +538,13 @@ const App: React.FC = () => {
         };
 
         window.addEventListener('hashchange', handleHashChange, false);
-        
+
         return () => {
             subscription.unsubscribe();
             window.removeEventListener('hashchange', handleHashChange, false);
         };
     }, []);
-    
+
     useEffect(() => {
         // This effect runs whenever the session changes to fetch the user profile.
         // We only refetch all data if the user ID has changed, to avoid reloading
@@ -576,7 +579,7 @@ const App: React.FC = () => {
                 handleNavigate('dashboard');
             }
         }
-        
+
         // Reset the redirect flag when the user logs out.
         if (!session) {
             hasLoginRedirected.current = false;
@@ -601,7 +604,7 @@ const App: React.FC = () => {
                 },
                 (payload) => {
                     const newNotification = payload.new as NotificationRecord;
-                    
+
                     // Add to toast notifications
                     setNotifications(prev => [
                         ...prev,
@@ -617,7 +620,7 @@ const App: React.FC = () => {
                 }
             )
             .subscribe();
-        
+
         return () => {
             supabase.removeChannel(channel);
         };
@@ -642,7 +645,7 @@ const App: React.FC = () => {
                 },
                 (payload) => {
                     const updatedVolunteer = payload.new as DetailedVolunteer;
-                    
+
                     if (userProfile && updatedVolunteer.status !== userProfile.status) {
                         if (updatedVolunteer.status === 'Inativo') {
                             setUserProfile(prev => prev ? { ...prev, status: 'Inativo' } : null);
@@ -653,7 +656,7 @@ const App: React.FC = () => {
                 }
             )
             .subscribe();
-        
+
         return () => {
             supabase.removeChannel(channel);
         };
@@ -713,7 +716,7 @@ const App: React.FC = () => {
         }
         setIsPushPromptOpen(false);
     };
-    
+
     const handleNewVolunteer = () => {
         handleNavigate('volunteers');
         setIsVolunteerFormOpen(true);
@@ -732,7 +735,7 @@ const App: React.FC = () => {
         if (!userProfile?.role) return null;
 
         if (userProfile.role === 'volunteer') {
-             switch (activePage) {
+            switch (activePage) {
                 case 'history':
                     return <AttendanceHistoryPage session={session} />;
                 case 'my-profile':
@@ -760,8 +763,8 @@ const App: React.FC = () => {
                 // FIX: Pass the single leaderDepartmentId to DepartmentsPage.
                 return <DepartmentsPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} leaders={leaders} onLeadersChange={fetchLeaders} />;
             case 'events':
-                 // FIX: Pass `leaders` prop to SchedulesPage to satisfy its prop requirements.
-                 return <SchedulesPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} leaders={leaders} />;
+                // FIX: Pass `leaders` prop to SchedulesPage to satisfy its prop requirements.
+                return <SchedulesPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} leaders={leaders} />;
             case 'timelines':
                 return <TimelinesPage />;
             case 'calendar':
@@ -793,15 +796,15 @@ const App: React.FC = () => {
     if (!areApiKeysConfigured) {
         return <ApiConfigPage />;
     }
-    
+
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-900" aria-live="polite" aria-busy="true">
-                <div 
+                <div
                     className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
                     role="status"
                 >
-                   <span className="sr-only">Carregando...</span>
+                    <span className="sr-only">Carregando...</span>
                 </div>
                 <p className="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-300">Carregando...</p>
             </div>
@@ -841,11 +844,11 @@ const App: React.FC = () => {
             <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4 dark:from-slate-900 dark:to-slate-800">
                 <div className="w-full max-w-lg p-8 space-y-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg text-center">
                     <div className="flex justify-center mb-4">
-                      <div className="p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded-xl flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                        </svg>
-                      </div>
+                        <div className="p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded-xl flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                            </svg>
+                        </div>
                     </div>
                     <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Erro ao Carregar Perfil</h1>
                     <p className="text-slate-600 dark:text-slate-300">
@@ -866,7 +869,7 @@ const App: React.FC = () => {
             </div>
         );
     }
-    
+
     if (isUserDisabled) {
         return <DisabledUserPage userRole={userProfile.role} />;
     }
@@ -874,7 +877,7 @@ const App: React.FC = () => {
     if (!userProfile.lgpd_accepted) {
         return <LgpdConsentPage session={session} onConsentAccepted={refetchUserData} />;
     }
-    
+
     if (!hasPermission) {
         return <PermissionDeniedPage onNavigate={handleNavigate} />;
     }
@@ -901,14 +904,14 @@ const App: React.FC = () => {
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 <Header onMenuClick={() => setIsSidebarOpen(true)} />
-                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900 p-4 sm:p-6 lg:p-8">
+                <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900 ${activePage === 'calendar' ? 'p-0' : 'p-4 sm:p-6 lg:p-8'}`}>
                     {renderPage()}
                 </main>
             </div>
 
-             <div className="fixed top-4 right-4 z-[9999] w-full max-w-sm space-y-3">
+            <div className="fixed top-4 right-4 z-[9999] w-full max-w-sm space-y-3">
                 {notifications.map(notification => (
-                    <NotificationToast 
+                    <NotificationToast
                         key={notification.id}
                         notification={notification}
                         onClose={removeNotification}
@@ -921,8 +924,8 @@ const App: React.FC = () => {
                 onConfirm={subscribeToPushNotifications}
                 onClose={() => setIsPushPromptOpen(false)}
             />
-            
-            <IOSInstallPromptModal 
+
+            <IOSInstallPromptModal
                 isOpen={isIOSInstallPromptOpen}
                 onClose={() => setIsIOSInstallPromptOpen(false)}
             />
@@ -930,4 +933,15 @@ const App: React.FC = () => {
     );
 };
 
-export default App;
+// Envolver App com QueryClientProvider para habilitar React Query
+const AppWithProviders = () => {
+    return (
+        <QueryClientProvider client={queryClient}>
+            <App />
+            {/* DevTools apenas em desenvolvimento */}
+            {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
+        </QueryClientProvider>
+    );
+};
+
+export default AppWithProviders;

@@ -10,6 +10,7 @@ import NewEventForm from './NewScheduleForm';
 import { Event, NotificationRecord, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
+import { useEvents, useDepartments, useInvalidateQueries } from '../hooks/useQueries';
 
 // --- Status Filter Component & Options ---
 const statusOptions = [
@@ -57,7 +58,7 @@ const PREDEFINED_COLORS: { [key: string]: { bg: string, text: string, border: st
 };
 
 const PASTEL_COLORS = Object.values(PREDEFINED_COLORS);
-const departmentColorMap = new Map<number, {bg: string, text: string, border: string}>();
+const departmentColorMap = new Map<number, { bg: string, text: string, border: string }>();
 let lastColorIndex = 0;
 
 const getDepartmentColor = (departmentId?: number) => {
@@ -99,9 +100,9 @@ const useIsMobile = (breakpoint = 1024) => { // Using lg breakpoint
 
 type MobileView = 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth';
 
-const MobileHeader: React.FC<{ 
+const MobileHeader: React.FC<{
     title: string;
-    onMenuClick: () => void; 
+    onMenuClick: () => void;
     currentView: MobileView;
     onViewChange: (view: MobileView) => void;
     onPrev: () => void;
@@ -115,7 +116,7 @@ const MobileHeader: React.FC<{
     const viewDropdownRef = useRef<HTMLDivElement>(null);
     const filterDropdownRef = useRef<HTMLDivElement>(null);
 
-    const viewOptions: {key: MobileView, label: string, shortcut: string}[] = [
+    const viewOptions: { key: MobileView, label: string, shortcut: string }[] = [
         { key: 'dayGridMonth', label: 'Mês', shortcut: 'M' },
         { key: 'timeGridWeek', label: 'Semana', shortcut: 'W' },
         { key: 'timeGridDay', label: 'Dia', shortcut: 'D' }
@@ -157,7 +158,7 @@ const MobileHeader: React.FC<{
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
             </div>
-            
+
             {/* Bottom row for controls and filters */}
             <div className="mt-4 flex justify-between items-center">
                 <div className="flex items-center gap-1 sm:gap-2">
@@ -190,7 +191,7 @@ const MobileHeader: React.FC<{
                         )}
                     </div>
                 </div>
-                
+
                 <div className="relative" ref={filterDropdownRef}>
                     <button
                         onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
@@ -264,20 +265,20 @@ const MobileMonthEventList: React.FC<{ events: Event[], selectedDate: Date, onEv
         return events.filter(e => e.date === selectedDateStr).sort((a, b) => a.start_time.localeCompare(b.start_time));
     }, [events, selectedDate]);
 
-    const EventItemCard: React.FC<{event: Event}> = ({ event }) => {
+    const EventItemCard: React.FC<{ event: Event }> = ({ event }) => {
         const colorKey = event.color || ((event.event_departments || [])[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
         const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor((event.event_departments || [])[0]?.department_id);
-        const initials = event.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase() || 'E';
+        const initials = event.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'E';
 
         return (
             <div onClick={() => onEventClick(event)} className="bg-white p-4 rounded-xl shadow-sm flex items-start space-x-4 cursor-pointer border border-slate-100">
-                 <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg flex-shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg flex-shrink-0">
                     {initials}
                 </div>
                 <div className="flex-grow">
                     <p className="font-semibold text-slate-800">{event.name}</p>
                     <p className="text-sm text-slate-500">{(event.event_departments || [])[0]?.departments?.name || 'Geral'}</p>
-                    <div className="mt-2 px-3 py-1 text-sm font-semibold rounded-full inline-block" style={{backgroundColor: colors.bg, color: colors.text}}>
+                    <div className="mt-2 px-3 py-1 text-sm font-semibold rounded-full inline-block" style={{ backgroundColor: colors.bg, color: colors.text }}>
                         {event.start_time} - {event.end_time}
                     </div>
                 </div>
@@ -338,7 +339,7 @@ const CalendarHeader: React.FC<{
 
     return (
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-             <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
                 <button onClick={onToday} className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
                     Hoje
                 </button>
@@ -350,13 +351,13 @@ const CalendarHeader: React.FC<{
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.75 4.5 7.5 7.5-7.5 7.5" /></svg>
                     </button>
                 </div>
-                 <h2 className="text-3xl font-bold text-slate-800 capitalize">{title}</h2>
+                <h2 className="text-3xl font-bold text-slate-800 capitalize">{title}</h2>
             </div>
             <div className="flex items-center flex-wrap justify-center gap-x-6 gap-y-2">
-                 <StatusFilter statusFilters={statusFilters} onStatusFilterChange={onStatusFilterChange} />
-                 <div className="h-6 w-px bg-slate-200 hidden lg:block"></div>
-                 <div className="relative" ref={dropdownRef}>
-                    <button 
+                <StatusFilter statusFilters={statusFilters} onStatusFilterChange={onStatusFilterChange} />
+                <div className="h-6 w-px bg-slate-200 hidden lg:block"></div>
+                <div className="relative" ref={dropdownRef}>
+                    <button
                         onClick={() => setIsViewDropdownOpen(prev => !prev)}
                         className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition-colors shadow-sm"
                         aria-haspopup="true"
@@ -388,8 +389,8 @@ const CalendarHeader: React.FC<{
                 </div>
                 {isAdmin && (
                     <button onClick={onNewEvent} className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                       <span>Novo Evento</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                        <span>Novo Evento</span>
                     </button>
                 )}
             </div>
@@ -401,17 +402,30 @@ const CalendarHeader: React.FC<{
 // --- Main Component ---
 
 interface CalendarPageProps {
-  userRole: string | null;
-  leaderDepartmentId: number | null;
-  onDataChange: () => void;
-  setIsSidebarOpen: (isOpen: boolean) => void;
+    userRole: string | null;
+    leaderDepartmentId: number | null;
+    onDataChange: () => void;
+    setIsSidebarOpen: (isOpen: boolean) => void;
 }
 
 const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentId, onDataChange, setIsSidebarOpen }) => {
-    const [allEvents, setAllEvents] = useState<Event[]>([]);
-    const [allDepartments, setAllDepartments] = useState<Department[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    // React Query hooks - substituindo useState e fetch manual
+    const startOfYear = `${new Date().getFullYear()}-01-01`;
+    const isAdmin = userRole === 'admin';
+    const isLeader = userRole === 'leader' || userRole === 'lider';
+
+    const { data: allEvents = [], isLoading: eventsLoading, error: eventsError } = useEvents({
+        departmentId: isLeader ? leaderDepartmentId : undefined,
+        startDate: startOfYear,
+    });
+
+    const { data: allDepartments = [], isLoading: deptsLoading } = useDepartments();
+    const { invalidateEvents } = useInvalidateQueries();
+
+    const loading = eventsLoading || deptsLoading;
+    const error = eventsError ? getErrorMessage(eventsError) : null;
+
+    // Estados locais do componente
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Event | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -424,14 +438,12 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
     const [desktopView, setDesktopView] = useState('dayGridMonth');
     const [calendarTitle, setCalendarTitle] = useState('');
     const [statusFilters, setStatusFilters] = useState<string[]>(['Confirmado', 'Pendente']);
-    const isAdmin = userRole === 'admin';
-    const isLeader = userRole === 'leader' || userRole === 'lider';
 
     const ptBrLocale = useMemo(() => ({
         ...ptBrBaseLocale,
         week: { dow: 0, doy: 4, },
     }), []);
-    
+
     const handleStatusFilterChange = (status: string) => {
         setStatusFilters(prev =>
             prev.includes(status)
@@ -448,7 +460,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         if (!isMobile && (eventInfo.view.type === 'timeGridWeek' || eventInfo.view.type === 'timeGridDay')) {
             const eventData = eventInfo.event.extendedProps as Event;
             const volunteersByDept = new Map<number, any[]>();
-            
+
             (eventData.event_volunteers || []).forEach(ev => {
                 if (ev.volunteers && ev.department_id) {
                     if (!volunteersByDept.has(ev.department_id)) {
@@ -461,31 +473,31 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             return (
                 <div className="fc-event-main-frame w-full h-full p-1.5 text-xs flex flex-col items-start overflow-y-auto">
                     <div>
-                        <p className="font-bold" style={{color: eventInfo.event.textColor}}>{eventInfo.timeText}</p>
-                        <p className="font-semibold whitespace-normal mt-1" style={{color: eventInfo.event.textColor}}>{eventInfo.event.title}</p>
+                        <p className="font-bold" style={{ color: eventInfo.event.textColor }}>{eventInfo.timeText}</p>
+                        <p className="font-semibold whitespace-normal mt-1" style={{ color: eventInfo.event.textColor }}>{eventInfo.event.title}</p>
                     </div>
-                    
+
                     {((eventData.event_departments || []).length > 0) && (
-                        <div className="mt-2 pt-2 border-t w-full space-y-2" style={{borderColor: eventInfo.event.textColor + '40'}}>
+                        <div className="mt-2 pt-2 border-t w-full space-y-2" style={{ borderColor: eventInfo.event.textColor + '40' }}>
                             {(eventData.event_departments || []).map(({ departments }) => {
                                 if (!departments) return null;
                                 const volunteers = volunteersByDept.get(departments.id) || [];
                                 return (
                                     <div key={departments.id}>
-                                        <p className="font-bold mb-1" style={{color: eventInfo.event.textColor}}>{departments.name}</p>
+                                        <p className="font-bold mb-1" style={{ color: eventInfo.event.textColor }}>{departments.name}</p>
                                         {volunteers.length > 0 ? (
                                             <ul className="space-y-1 pl-1">
                                                 {volunteers.map(v => (
                                                     <li key={v.id} className="flex items-center space-x-1.5">
-                                                        <div className="w-5 h-5 rounded-full bg-black/20 text-white flex-shrink-0 flex items-center justify-center text-[10px] font-bold" style={{color: eventInfo.backgroundColor, backgroundColor: eventInfo.event.textColor}}>
+                                                        <div className="w-5 h-5 rounded-full bg-black/20 text-white flex-shrink-0 flex items-center justify-center text-[10px] font-bold" style={{ color: eventInfo.backgroundColor, backgroundColor: eventInfo.event.textColor }}>
                                                             {v.initials || '??'}
                                                         </div>
-                                                        <span style={{color: eventInfo.event.textColor}}>{v.name}</span>
+                                                        <span style={{ color: eventInfo.event.textColor }}>{v.name}</span>
                                                     </li>
                                                 ))}
                                             </ul>
                                         ) : (
-                                            <p className="text-xs italic pl-1" style={{color: eventInfo.event.textColor + '90'}}>Nenhum voluntário</p>
+                                            <p className="text-xs italic pl-1" style={{ color: eventInfo.event.textColor + '90' }}>Nenhum voluntário</p>
                                         )}
                                     </div>
                                 );
@@ -527,60 +539,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setIsFormOpen(false);
         setEditingEvent(null);
     };
-    const fetchAllDepartments = useCallback(async () => {
-        const { data, error } = await supabase.from('departments').select('id, name');
-        if (error) {
-            console.error("Failed to fetch all departments for form:", getErrorMessage(error));
-        } else {
-            setAllDepartments((data as Department[]) || []);
-        }
-    }, []);
 
-    const fetchAllEvents = useCallback(async (setLoadingState = true) => {
-        if (setLoadingState) setLoading(true);
-        setError(null);
-        try {
-            // Optimization: Fetch only events from current year onwards to reduce initial load
-            // A more aggressive optimization could be current month -1 / +1, but year is safer for a calendar.
-            const startOfYear = `${new Date().getFullYear()}-01-01`;
-
-            // Use direct query instead of RPC for better control and performance
-            let query = supabase.from('events').select(`
-                *,
-                event_departments (department_id, departments (id, name)),
-                event_volunteers (volunteer_id, department_id, present, volunteers (id, name, initials))
-            `)
-            .gte('date', startOfYear);
-
-            if (isLeader && leaderDepartmentId) {
-                // Filter for leader's department
-                query = supabase.from('events').select(`
-                    *,
-                    event_departments!inner (department_id, departments (id, name)),
-                    event_volunteers (volunteer_id, department_id, present, volunteers (id, name, initials))
-                `)
-                .eq('event_departments.department_id', leaderDepartmentId)
-                .gte('date', startOfYear);
-            }
-
-            const { data, error } = await query.order('date', { ascending: true });
-            
-            if (error) throw error;
-            
-            setAllEvents((data as unknown as Event[]) || []);
-
-        } catch (err) {
-            setError(getErrorMessage(err));
-        } finally {
-            if (setLoadingState) setLoading(false);
-        }
-    }, [isLeader, leaderDepartmentId]);
-
-    useEffect(() => { 
-        fetchAllEvents();
-        fetchAllDepartments();
-    }, [fetchAllEvents, fetchAllDepartments]);
-    
     const handleDatesSet = (arg: DatesSetArg) => {
         const view = arg.view;
         let title = view.title;
@@ -618,11 +577,11 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             .map(event => {
                 const colorKey = event.color || ((event.event_departments || [])[0]?.departments?.name.toLowerCase().includes('almoço') ? 'green' : undefined);
                 const colors = colorKey && PREDEFINED_COLORS[colorKey] ? PREDEFINED_COLORS[colorKey] : getDepartmentColor((event.event_departments || [])[0]?.department_id);
-                
+
                 // FIX: Create local Date objects by removing the 'Z' suffix. This ensures FullCalendar interprets event times in the browser's local timezone.
                 const startDate = new Date(`${event.date}T${event.start_time}`);
                 const endDate = new Date(`${event.date}T${event.end_time}`);
-    
+
                 if (endDate < startDate) {
                     endDate.setDate(endDate.getDate() + 1);
                 }
@@ -647,7 +606,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             return;
         }
         if (!isAdmin) return;
-        setEditingEvent({ name: '', date: arg.dateStr.split('T')[0], start_time: arg.date.toTimeString().substring(0, 5), end_time: new Date(arg.date.getTime() + 60*60*1000).toTimeString().substring(0, 5), status: 'Pendente' } as Event);
+        setEditingEvent({ name: '', date: arg.dateStr.split('T')[0], start_time: arg.date.toTimeString().substring(0, 5), end_time: new Date(arg.date.getTime() + 60 * 60 * 1000).toTimeString().substring(0, 5), status: 'Pendente' } as Event);
         setIsFormOpen(true);
     };
 
@@ -671,31 +630,31 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         const { event } = info;
         if (!event.start) { info.revert(); return; }
         const eventId = parseInt(event.id, 10);
-    
+
         const newStartDate = event.start;
         const originalDuration = info.oldEvent.end!.getTime() - info.oldEvent.start!.getTime();
         const newEndDate = event.end ? event.end : new Date(newStartDate.getTime() + originalDuration);
-    
+
         // --- NEW: Client-side conflict check ---
         const conflictingEvent = allEvents.find(existingEvent => {
             if (existingEvent.id === eventId) return false;
-            
+
             const { dateTime: existingStartLocal, isValid: startIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.start_time);
             let { dateTime: existingEndLocal, isValid: endIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.end_time);
-    
+
             if (!startIsValid || !endIsValid || !existingStartLocal || !existingEndLocal) {
                 console.warn(`Skipping conflict check for event ID ${existingEvent.id} due to invalid date/time.`);
                 return false;
             }
-    
+
             if (existingEndLocal < existingStartLocal) {
                 existingEndLocal.setDate(existingEndLocal.getDate() + 1);
             }
-    
+
             // The overlap condition: (StartA < EndB) and (EndA > StartB)
             return (newStartDate < existingEndLocal && newEndDate > existingStartLocal);
         });
-    
+
         if (conflictingEvent) {
             const { time: conflictStartTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.start_time);
             const { time: conflictEndTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.end_time);
@@ -703,22 +662,22 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             info.revert();
             return;
         }
-    
+
         // --- If no conflict, proceed with saving ---
         const formatDateLocal = (d: Date) => d.toISOString().split('T')[0];
         const formatTimeLocal = (d: Date) => d.toTimeString().substring(0, 8); // HH:mm:ss
-    
+
         const newDate = formatDateLocal(newStartDate);
         const newStartTime = formatTimeLocal(newStartDate);
         const newEndTime = formatTimeLocal(newEndDate);
-    
+
         try {
             const { error: updateError } = await supabase.from('events').update({ date: newDate, start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
             if (updateError) throw updateError;
-    
-            await fetchAllEvents(false);
+
+            invalidateEvents();
             onDataChange();
-    
+
             const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
                 body: {
                     notifyType: 'event_updated',
@@ -726,41 +685,41 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                 },
             });
             if (notifyError) console.error("Falha ao notificar sobre reagendamento:", getErrorMessage(notifyError));
-    
+
         } catch (err) {
             alert('Erro ao mover evento: ' + getErrorMessage(err));
             info.revert();
         }
     };
-    
+
     const handleEventResize = async (info: EventResizeDoneArg) => {
         if (!isAdmin) { info.revert(); return; }
         const { event } = info;
         if (!event.start || !event.end) { info.revert(); return; }
         const eventId = parseInt(event.id, 10);
-    
+
         const newStartDate = event.start;
         const newEndDate = event.end;
-    
+
         // --- NEW: Client-side conflict check ---
         const conflictingEvent = allEvents.find(existingEvent => {
             if (existingEvent.id === eventId) return false;
-            
+
             const { dateTime: existingStartLocal, isValid: startIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.start_time);
             let { dateTime: existingEndLocal, isValid: endIsValid } = convertUTCToLocal(existingEvent.date, existingEvent.end_time);
-    
+
             if (!startIsValid || !endIsValid || !existingStartLocal || !existingEndLocal) {
                 console.warn(`Skipping conflict check for event ID ${existingEvent.id} due to invalid date/time.`);
                 return false;
             }
-    
+
             if (existingEndLocal < existingStartLocal) {
                 existingEndLocal.setDate(existingEndLocal.getDate() + 1);
             }
-    
+
             return (newStartDate < existingEndLocal && newEndDate > existingStartLocal);
         });
-    
+
         if (conflictingEvent) {
             const { time: conflictStartTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.start_time);
             const { time: conflictEndTime } = convertUTCToLocal(conflictingEvent.date, conflictingEvent.end_time);
@@ -768,22 +727,22 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             info.revert();
             return;
         }
-    
+
         // --- If no conflict, proceed with saving ---
         const formatTimeLocal = (d: Date) => d.toTimeString().substring(0, 8); // HH:mm:ss
-        
+
         const newStartTime = formatTimeLocal(event.start);
         const newEndTime = formatTimeLocal(event.end);
-        
+
         const eventDate = (event.extendedProps as Event).date;
-    
+
         try {
             const { error: updateError } = await supabase.from('events').update({ start_time: newStartTime, end_time: newEndTime }).eq('id', eventId);
             if (updateError) throw updateError;
-            
-            await fetchAllEvents(false);
+
+            invalidateEvents();
             onDataChange();
-    
+
             const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
                 body: {
                     notifyType: 'event_updated',
@@ -791,7 +750,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                 },
             });
             if (notifyError) console.error("Falha ao notificar sobre alteração de horário:", getErrorMessage(notifyError));
-    
+
         } catch (err) {
             alert('Erro ao redimensionar evento: ' + getErrorMessage(err));
             info.revert();
@@ -803,7 +762,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         setSaveError(null);
         try {
             const { department_ids, volunteer_ids, ...eventDetails } = eventPayload;
-            
+
             // Conflict Check
             let conflictQuery = supabase
                 .from('events')
@@ -811,7 +770,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                 .eq('date', eventDetails.date)
                 .lt('start_time', eventDetails.end_time)
                 .gt('end_time', eventDetails.start_time);
-            
+
             if (eventDetails.id) {
                 conflictQuery = conflictQuery.neq('id', eventDetails.id);
             }
@@ -819,14 +778,14 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             if (conflictError) throw new Error(`Erro ao verificar conflitos: ${getErrorMessage(conflictError)}`);
             if (conflictingEvents && conflictingEvents.length > 0) {
                 const conflict = conflictingEvents[0];
-                const conflictMessage = `Conflito de horário com o evento "${conflict.name}" (${conflict.start_time.substring(0,5)} - ${conflict.end_time.substring(0,5)}).`;
+                const conflictMessage = `Conflito de horário com o evento "${conflict.name}" (${conflict.start_time.substring(0, 5)} - ${conflict.end_time.substring(0, 5)}).`;
                 throw new Error(conflictMessage);
             }
-    
+
             let savedEvent: Event;
             const isCreating = !eventDetails.id;
             const oldEventForNotification = isCreating ? null : allEvents.find(e => e.id === eventDetails.id);
-    
+
             if (isCreating) {
                 const { id, ...insertPayload } = eventDetails;
                 const { data, error } = await supabase.from('events').insert(insertPayload).select().single();
@@ -838,22 +797,22 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                 if (error) throw error;
                 savedEvent = data as Event;
             }
-    
+
             if (!savedEvent || !savedEvent.id) {
                 throw new Error("Falha ao salvar o evento.");
             }
-            
+
             const eventId = savedEvent.id;
             await supabase.from('event_departments').delete().eq('event_id', eventId);
-    
+
             if (department_ids && department_ids.length > 0) {
                 const assignments = department_ids.map((deptId: number) => ({ event_id: eventId, department_id: deptId }));
                 const { error: insertDeptError } = await supabase.from('event_departments').insert(assignments);
                 if (insertDeptError) throw insertDeptError;
             }
-    
+
             const { error: notifyError } = await supabase.functions.invoke('create-notifications', {
-                body: { 
+                body: {
                     notifyType: isCreating ? 'event_created' : 'event_updated',
                     event: savedEvent,
                     oldEvent: oldEventForNotification,
@@ -862,25 +821,25 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
             if (notifyError) {
                 console.error("Falha ao acionar notificações:", getErrorMessage(notifyError));
             }
-    
+
             handleCloseForm();
             onDataChange();
-            await fetchAllEvents(false);
-    
+            invalidateEvents();
+
         } catch (err) {
             setSaveError(getErrorMessage(err));
         } finally {
             setIsSaving(false);
         }
     };
-    
+
 
     const handleAddNewEvent = () => {
         const date = selectedDate.toISOString().split('T')[0];
         setEditingEvent({ name: '', date: date, start_time: '09:00', end_time: '10:00', status: 'Pendente' } as Event);
         setIsFormOpen(true);
     };
-    
+
     const handlePrev = () => calendarRef.current?.getApi().prev();
     const handleNext = () => calendarRef.current?.getApi().next();
     const handleToday = () => calendarRef.current?.getApi().today();
@@ -894,13 +853,13 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         return (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={handleCloseForm}>
                 <div className="w-full max-w-4xl my-8" onClick={e => e.stopPropagation()}>
-                    <NewEventForm 
-                        initialData={editingEvent} 
-                        onCancel={handleCloseForm} 
-                        onSave={handleSaveEvent} 
-                        isSaving={isSaving} 
+                    <NewEventForm
+                        initialData={editingEvent}
+                        onCancel={handleCloseForm}
+                        onSave={handleSaveEvent}
+                        isSaving={isSaving}
                         saveError={saveError || ''}
-                        userRole={userRole} 
+                        userRole={userRole}
                         leaderDepartmentId={leaderDepartmentId}
                         allDepartments={allDepartments}
                     />
@@ -955,7 +914,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
                 />
                 {mobileView === 'dayGridMonth' ? (
                     <div className="flex flex-col">
-                         <div className={`mobile-calendar-view month-view`}>
+                        <div className={`mobile-calendar-view month-view`}>
                             <FullCalendar
                                 key={`month-${monthViewDate.toISOString()}`}
                                 ref={calendarRef}
@@ -1024,7 +983,7 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
     return (
         <div className="bg-white p-6 rounded-2xl shadow-sm h-full flex flex-col">
             <style>{calendarStyles}</style>
-             <CalendarHeader
+            <CalendarHeader
                 title={calendarTitle}
                 currentView={desktopView}
                 onPrev={handlePrev}

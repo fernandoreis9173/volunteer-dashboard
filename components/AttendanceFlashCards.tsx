@@ -3,23 +3,27 @@ import type { DashboardEvent } from '../types';
 
 // FIX: Reverted UserProfileState to use a single `department_id` to match the rest of the application.
 interface UserProfileState {
-  role: string | null;
-  department_id: number | null;
-  volunteer_id: number | null;
-  status: string | null;
+    role: string | null;
+    department_id: number | null;
+    volunteer_id: number | null;
+    status: string | null;
 }
 
 interface AttendanceFlashCardsProps {
-  schedules: DashboardEvent[] | undefined;
-  userProfile: UserProfileState | null;
+    schedules: DashboardEvent[] | undefined;
+    userProfile: UserProfileState | null;
+    departmentVolunteers?: { id: number; name: string; }[];
 }
 
-const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, userProfile }) => {
-    
+const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, userProfile, departmentVolunteers = [] }) => {
+
     const attendanceData = useMemo(() => {
         if (!schedules || !userProfile?.department_id) {
             return { present: 0, absent: 0, total: 0 };
         }
+
+        // Get IDs of volunteers who BELONG to this department
+        const departmentVolunteerIds = new Set(departmentVolunteers.map(v => v.id));
 
         let present = 0;
         let absent = 0;
@@ -27,11 +31,12 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
 
         schedules.forEach(event => {
             if (event.status !== 'Confirmado') return;
-            
+
             const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
-            
+
             (event.event_volunteers || []).forEach(ev => {
-                if (ev.department_id === userProfile.department_id) {
+                // Count volunteers who BELONG to this department, regardless of which department they were assigned to
+                if (departmentVolunteerIds.has(ev.volunteer_id)) {
                     total++;
                     if (ev.present) {
                         present++;
@@ -44,7 +49,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
         });
 
         return { present, absent, total };
-    }, [schedules, userProfile]);
+    }, [schedules, userProfile, departmentVolunteers]);
 
     const { present, absent, total } = attendanceData;
     const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
@@ -81,7 +86,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
                         <p className="text-sm text-slate-500">Desempenho do seu departamento</p>
                     </div>
                     <button className="text-slate-400 hover:text-slate-600 p-1">
-                      
+
                     </button>
                 </div>
             </div>
@@ -100,14 +105,14 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
                     <span className="text-5xl font-bold text-slate-800">{percentage}<span className="text-3xl text-slate-400">%</span></span>
                 </div>
             </div>
-            
+
             <p className="text-center text-sm text-slate-600 px-6 -mt-4">
-              Você tem <strong>{present} de {total}</strong> presenças confirmadas em seu departamento. Mantenha o bom trabalho!
+                Você tem <strong>{present} de {total}</strong> presenças confirmadas em seu departamento. Mantenha o bom trabalho!
             </p>
 
             {/* Bottom Section */}
             <div className="mt-auto pt-6">
-                 <div className="bg-slate-50/70 -mx-0 -mb-0 px-6 py-4 rounded-b-2xl border-t border-slate-200">
+                <div className="bg-slate-50/70 -mx-0 -mb-0 px-6 py-4 rounded-b-2xl border-t border-slate-200">
                     <div className="flex justify-around items-center text-center">
                         <div>
                             <p className="text-xs text-slate-500 font-semibold uppercase">Escalados</p>

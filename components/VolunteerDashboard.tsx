@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DetailedVolunteer, DashboardEvent, Page, Event as VolunteerEvent, Invitation, VolunteerSchedule } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -117,13 +118,14 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             
             const volunteerId = volProfile.id;
 
-            // 2. Fetch Data in Parallel: Direct Schedule Query (Optimized) + Invitations
+            // 2. Fetch Data in Parallel: Direct Schedule Query (Optimized) + Invitations + Stats Counts
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const todayStr = today.toISOString().split('T')[0];
 
             // Replaced `get_my_schedule` RPC with a direct, filtered join.
-            const [scheduleRes, rawInvitationsRes] = await Promise.all([
+            const [scheduleRes, rawInvitationsRes, totalPresencesRes, totalScheduledRes] = await Promise.all([
+                // List of Today + Upcoming events (Detailed data)
                 supabase
                     .from('event_volunteers')
                     .select(`
@@ -132,10 +134,9 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                         departments(name),
                         events(
                             id, name, date, start_time, end_time, status, local, observations,
-                            cronograma_principal_id, cronograma_kids_id,
-                            event_departments(departments(leader:leader_name_hint)) 
+                            cronograma_principal_id, cronograma_kids_id
                         )
-                    `) // Note: leader_name_hint is hypothetical or needs lookup. Standard approach below.
+                    `)
                     .eq('volunteer_id', volunteerId)
                     .gte('events.date', todayStr) // Fetch only today and future
                     .eq('events.status', 'Confirmado')
@@ -143,10 +144,27 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                     .order('start_time', { foreignTable: 'events', ascending: true }),
                 
                 supabase.from('invitations').select('id, created_at, leader_id, departments(id, name)').eq('volunteer_id', volunteerId).eq('status', 'pendente'),
+                
+                // Count Total Confirmed Presences (All Time)
+                supabase
+                    .from('event_volunteers')
+                    .select('events!inner(id)', { count: 'exact', head: true })
+                    .eq('volunteer_id', volunteerId)
+                    .eq('present', true)
+                    .eq('events.status', 'Confirmado'),
+
+                // Count Total Scheduled (All Time)
+                supabase
+                    .from('event_volunteers')
+                    .select('events!inner(id)', { count: 'exact', head: true })
+                    .eq('volunteer_id', volunteerId)
+                    .eq('events.status', 'Confirmado'),
             ]);
     
             if (scheduleRes.error) throw scheduleRes.error;
             if (rawInvitationsRes.error) throw rawInvitationsRes.error;
+            if (totalPresencesRes.error) console.error("Error fetching total presences:", totalPresencesRes.error);
+            if (totalScheduledRes.error) console.error("Error fetching total scheduled:", totalScheduledRes.error);
 
             // --- Process Invitations ---
             const rawInvitations = rawInvitationsRes.data || [];
@@ -173,13 +191,10 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             // --- Process Schedule & Enrich with Leader Names ---
             const rawSchedule = scheduleRes.data || [];
             
-            // We need to manually map leader names because `event_departments` structure implies one leader per dept in `department_leaders` table, which isn't directly joined here easily without complexity.
-            // We'll use the `leaders` prop passed to this component to lookup leader names for the department associated with the schedule item.
-            
             // 1. Get all unique department IDs from schedule
             const relevantDeptIds = [...new Set(rawSchedule.map((item: any) => item.department_id))];
             
-            // 2. Fetch leaders for these departments (Optimization: could be cached/passed from App, but safe to fetch here if list is small)
+            // 2. Fetch leaders for these departments
             const { data: deptLeaders, error: dlError } = await supabase
                 .from('department_leaders')
                 .select('department_id, leader_id')
@@ -220,12 +235,11 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             setTodayEvents(allMySchedules.filter(e => e.date === todayStr));
             setUpcomingEvents(allMySchedules.filter(e => e.date > todayStr));
             
-            const attended = allMySchedules.filter(e => e.present === true).length;
-    
+            // Use accurate counts from the DB for stats
             setStats({
                 upcoming: allMySchedules.filter(e => e.date > todayStr).length,
-                attended: attended,
-                totalScheduled: allMySchedules.length,
+                attended: totalPresencesRes.count ?? 0,
+                totalScheduled: totalScheduledRes.count ?? 0,
                 eventsToday: allMySchedules.filter(e => e.date === todayStr).length,
             });
     
