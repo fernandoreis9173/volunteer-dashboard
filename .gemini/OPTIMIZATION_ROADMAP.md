@@ -125,30 +125,43 @@ useEffect(() => {
 
 ---
 
-## 📝 Checklist de Migração
+## 3. Plano de Ação e Status
 
-### SchedulesPage.tsx
-- [x] Substituir `useState` de eventos por `useEvents()`
-- [x] Substituir `useState` de departamentos por `useDepartments()`
-- [x] Remover `fetchEvents()` e `fetchAllDepartments()`
-- [x] Remover useEffect de fetch
-- [x] Substituir `fetchEvents()` por `invalidateEvents()` após mutations
-- [x] Testar filtros e paginação
+### Fase 1: Infraestrutura e CalendarPage (✅ Concluído)
+- [x] Configurar `QueryClient` e `QueryClientProvider`.
+- [x] Criar hooks customizados (`useEvents`, `useDepartments`).
+- [x] Migrar `CalendarPage.tsx`.
+- [x] Validar cache e deduplicação.
 
-### LeaderDashboard.tsx
-- [ ] Substituir fetch manual por `useEvents({ departmentId })`
-- [ ] Remover useEffect de fetch
-- [ ] Testar estatísticas e gráficos
+### Fase 2: SchedulesPage (✅ Concluído)
+- [x] Substituir `fetchEvents` por `useEvents`.
+- [x] Substituir `fetchAllDepartments` por `useDepartments`.
+- [x] Remover `useEffect` de carregamento inicial.
+- [x] Substituir chamadas de refresh manual por `invalidateEvents()`.
 
-### AdminDashboard.tsx
-- [ ] Substituir fetch manual por `useEvents()`
-- [ ] Remover useEffect de fetch
-- [ ] Testar visão geral
+### Fase 3: Dashboards (✅ Concluído)
+#### LeaderDashboard.tsx
+- [x] Migrar busca de eventos do departamento para `useEvents` (filtrado).
+- [x] Otimizar cálculo de estatísticas usando dados em cache.
 
-### VolunteerDashboard.tsx
-- [ ] Criar hook ou usar `useEvents()` com filtro
-- [ ] Remover useEffect de fetch
-- [ ] Testar "Meus Eventos"
+#### AdminDashboard.tsx
+- [x] Migrar busca de eventos globais para `useEvents`.
+- [x] Manter fetches específicos (logs, métricas puras) isolados ou migrar se frequentes.
+
+#### VolunteerDashboard.tsx
+- [x] Avaliar migração da busca de escalas pessoais.
+    *   *Decisão*: Mantido fetch específico otimizado para não carregar todos os eventos desnecessariamente, mas adicionado `invalidateEvents` nas ações de mutação.
+
+### Fase 4: Limpeza e Monitoramento (✅ Concluído)
+- [x] Remover funções de fetch antigas não utilizadas.
+- [x] Verificar logs do Supabase para confirmar redução de requests.
+- [x] Criar índices de banco de dados para otimizar queries lentas identificadas.
+
+## 4. Estimativa de Impacto Final
+- **Redução de Código**: ~300-400 linhas removidas no total.
+- **Redução de Requisições**: Estimativa de 60-80% de redução em navegação comum.
+- **Performance**: Carregamento instantâneo ao voltar para páginas já visitadas.
+- **Banco de Dados**: Queries críticas agora indexadas, reduzindo latência e CPU.
 
 ---
 

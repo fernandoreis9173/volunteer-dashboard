@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 // FIX: Restored Supabase v2 types for type safety.
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
+import { useInvalidateQueries } from '../hooks/useQueries';
 import LiveEventDetailsModal from './LiveEventDetailsModal';
 import QRCodeDisplayModal from './QRCodeDisplayModal';
 import RequestSwapModal from './RequestSwapModal';
@@ -12,8 +13,8 @@ import VolunteerStatCard from './VolunteerStatCard';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
 
 interface LiveEventTimerProps {
-  event: VolunteerEvent;
-  onShowDetails: () => void;
+    event: VolunteerEvent;
+    onShowDetails: () => void;
 }
 
 const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onShowDetails }) => {
@@ -34,7 +35,7 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onShowDetails })
                         <p className="text-sm text-red-700 dark:text-red-400 truncate" title={event.name}>{event.name}</p>
                     </div>
                 </div>
-                 <button onClick={handleClick} className="p-2 text-red-600 hover:text-red-800 bg-red-100 hover:bg-red-200 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 flex-shrink-0 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50" aria-label="Ver detalhes do evento">
+                <button onClick={handleClick} className="p-2 text-red-600 hover:text-red-800 bg-red-100 hover:bg-red-200 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 flex-shrink-0 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50" aria-label="Ver detalhes do evento">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
@@ -46,10 +47,10 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onShowDetails })
 
 
 interface VolunteerDashboardProps {
-  session: Session | null;
-  activeEvent: VolunteerEvent | null;
-  onNavigate: (page: Page) => void;
-  leaders: User[];
+    session: Session | null;
+    activeEvent: VolunteerEvent | null;
+    onNavigate: (page: Page) => void;
+    leaders: User[];
 }
 
 const getShortName = (fullName?: string | null): string => {
@@ -86,15 +87,17 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [qrCodeData, setQrCodeData] = useState<object | null>(null);
     const [qrCodeEvent, setQrCodeEvent] = useState<VolunteerSchedule | null>(null);
-    
+
     const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
     const [swapRequestEvent, setSwapRequestEvent] = useState<VolunteerSchedule | null>(null);
     const [isSubmittingSwap, setIsSubmittingSwap] = useState(false);
-    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+    const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<VolunteerSchedule | null>(null);
 
+    const { invalidateEvents } = useInvalidateQueries();
+
     const userId = session?.user?.id;
-    
+
     const showNotification = useCallback((message: string, type: 'success' | 'error') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 5000);
@@ -104,7 +107,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
         if (!userId) return;
         setLoading(true);
         setError(null);
-    
+
         try {
             // 1. Fetch Volunteer Profile & Departments
             const { data: volProfile, error: volProfileError } = await supabase
@@ -112,10 +115,10 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 .select('id, name, departments:volunteer_departments(departments(id, name))')
                 .eq('user_id', userId)
                 .single();
-    
+
             if (volProfileError) throw volProfileError;
             if (!volProfile) throw new Error("Perfil de voluntário não encontrado.");
-            
+
             const volunteerId = volProfile.id;
 
             // 2. Fetch Data in Parallel: Direct Schedule Query (Optimized) + Invitations + Stats Counts
@@ -142,9 +145,9 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                     .eq('events.status', 'Confirmado')
                     .order('date', { foreignTable: 'events', ascending: true })
                     .order('start_time', { foreignTable: 'events', ascending: true }),
-                
+
                 supabase.from('invitations').select('id, created_at, leader_id, departments(id, name)').eq('volunteer_id', volunteerId).eq('status', 'pendente'),
-                
+
                 // Count Total Confirmed Presences (All Time)
                 supabase
                     .from('event_volunteers')
@@ -160,7 +163,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                     .eq('volunteer_id', volunteerId)
                     .eq('events.status', 'Confirmado'),
             ]);
-    
+
             if (scheduleRes.error) throw scheduleRes.error;
             if (rawInvitationsRes.error) throw rawInvitationsRes.error;
             if (totalPresencesRes.error) console.error("Error fetching total presences:", totalPresencesRes.error);
@@ -171,7 +174,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             if (rawInvitations.length > 0) {
                 const leadersMap = new Map<string, string | null>();
                 leaders.forEach(l => leadersMap.set(l.id, l.user_metadata?.name || null));
-    
+
                 const enrichedInvitations: Invitation[] = rawInvitations.map((inv: any) => ({
                     id: inv.id,
                     created_at: inv.created_at,
@@ -182,26 +185,26 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             } else {
                 setInvitations([]);
             }
-            
+
             // --- Process Profile ---
             const transformedDepartments = (volProfile.departments || []).map((d: any) => d.departments).filter(Boolean);
             const completeProfile = { ...volProfile, departments: transformedDepartments };
             setVolunteerProfile(completeProfile as unknown as DetailedVolunteer);
-    
+
             // --- Process Schedule & Enrich with Leader Names ---
             const rawSchedule = scheduleRes.data || [];
-            
+
             // 1. Get all unique department IDs from schedule
             const relevantDeptIds = [...new Set(rawSchedule.map((item: any) => item.department_id))];
-            
+
             // 2. Fetch leaders for these departments
             const { data: deptLeaders, error: dlError } = await supabase
                 .from('department_leaders')
                 .select('department_id, leader_id')
                 .in('department_id', relevantDeptIds);
-                
+
             if (dlError) console.warn("Could not fetch leaders for schedule items", dlError);
-            
+
             const deptLeaderMap = new Map<number, string>();
             (deptLeaders || []).forEach((dl: any) => {
                 const leaderUser = leaders.find(u => u.id === dl.leader_id);
@@ -231,10 +234,10 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                         cronograma_kids_id: evt.cronograma_kids_id,
                     };
                 });
-                
+
             setTodayEvents(allMySchedules.filter(e => e.date === todayStr));
             setUpcomingEvents(allMySchedules.filter(e => e.date > todayStr));
-            
+
             // Use accurate counts from the DB for stats
             setStats({
                 upcoming: allMySchedules.filter(e => e.date > todayStr).length,
@@ -242,7 +245,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 totalScheduled: totalScheduledRes.count ?? 0,
                 eventsToday: allMySchedules.filter(e => e.date === todayStr).length,
             });
-    
+
         } catch (err) {
             const errorMessage = getErrorMessage(err);
             setError(errorMessage);
@@ -264,13 +267,17 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             });
             if (error) throw error;
             showNotification(`Convite ${response === 'aceito' ? 'aceito' : 'recusado'} com sucesso!`, 'success');
-            // Refetch all data to update department list, schedules, etc.
-            fetchDashboardData(); 
+
+            // Invalidate queries to refresh data across the app
+            invalidateEvents();
+
+            // Refetch local dashboard data
+            fetchDashboardData();
         } catch (err) {
             showNotification(`Erro ao responder ao convite: ${getErrorMessage(err)}`, 'error');
         }
     };
-    
+
     const departmentNames = useMemo(() => {
         if (loading || !volunteerProfile || !Array.isArray(volunteerProfile.departments)) return [];
         return volunteerProfile.departments.map(d => d.name).filter(Boolean);
@@ -283,13 +290,13 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             const scheduleDetails = activeEvent.event_volunteers.find(
                 ev => ev.volunteer_id === volunteerProfile.id
             );
-    
+
             if (scheduleDetails) {
                 const cardId = `event-card-${activeEvent.id}-${scheduleDetails.department_id}`;
                 const cardElement = document.getElementById(cardId);
                 if (cardElement) {
                     cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    
+
                     // Add a temporary highlight effect for better UX. Using classes for cleaner state management.
                     cardElement.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2', 'transition-shadow', 'duration-300');
                     setTimeout(() => {
@@ -308,7 +315,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
         setQrCodeEvent(event);
         setIsQrModalOpen(true);
     };
-    
+
     const handleRequestSwap = (event: VolunteerSchedule) => {
         setSwapRequestEvent(event);
         setIsSwapModalOpen(true);
@@ -323,6 +330,10 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             });
             if (error) throw error;
             showNotification('Sua solicitação de troca foi enviada ao líder.', 'success');
+
+            // Invalidate queries to refresh data
+            invalidateEvents();
+
             await fetchDashboardData(); // Refetch to update status
         } catch (err) {
             showNotification(`Erro ao solicitar troca: ${getErrorMessage(err)}`, 'error');
@@ -332,7 +343,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             setSwapRequestEvent(null);
         }
     };
-    
+
     const statCardsData = [
         { key: 'upcoming', title: 'Próximos Eventos', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" /></svg>, color: 'blue' as const },
         { key: 'attended', title: 'Presenças Confirmadas', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>, color: 'green' as const },
@@ -342,7 +353,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
 
 
     const userName = getShortName(session?.user?.user_metadata?.name);
-    
+
     return (
         <div className="space-y-6">
             {notification && (
@@ -363,7 +374,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-x sm:divide-y-0 divide-slate-200 dark:divide-slate-700">
                     {statCardsData.map(card => (
-                        <VolunteerStatCard 
+                        <VolunteerStatCard
                             key={card.key}
                             title={card.title}
                             value={stats[card.key as keyof typeof stats]}
@@ -383,11 +394,11 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                     ))}
                 </div>
             )}
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                     {(loading || todayEvents.length > 0) && (
-                        <EventList 
+                        <EventList
                             title="Minhas Escalas de Hoje"
                             events={todayEvents}
                             volunteerId={volunteerProfile?.id}
@@ -399,7 +410,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                         />
                     )}
                     {(loading || upcomingEvents.length > 0) && (
-                        <EventList 
+                        <EventList
                             title="Próximas Escalas"
                             events={upcomingEvents}
                             volunteerId={volunteerProfile?.id}
@@ -410,19 +421,19 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                             loading={loading}
                         />
                     )}
-                     {!loading && todayEvents.length === 0 && upcomingEvents.length === 0 && (
+                    {!loading && todayEvents.length === 0 && upcomingEvents.length === 0 && (
                         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm text-center">
                             <h3 className="text-lg font-medium text-slate-800 dark:text-slate-100">Nenhuma escala encontrada</h3>
                             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Você não está escalado para nenhum evento futuro no momento.</p>
                         </div>
                     )}
                 </div>
-                
+
                 <div className="lg:col-span-1">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Meus Departamentos</h2>
                         {loading ? (
-                             <div className="space-y-3 animate-pulse">
+                            <div className="space-y-3 animate-pulse">
                                 <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
                                 <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
                             </div>
@@ -448,14 +459,14 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 data={qrCodeData}
                 title={`QR Code para ${qrCodeEvent?.name}`}
             />
-             <RequestSwapModal 
+            <RequestSwapModal
                 isOpen={isSwapModalOpen}
                 onClose={() => setIsSwapModalOpen(false)}
                 onSubmit={handleSubmitSwapRequest}
                 event={swapRequestEvent}
                 isSubmitting={isSubmittingSwap}
             />
-             <EventTimelineViewerModal 
+            <EventTimelineViewerModal
                 isOpen={!!viewingTimelineFor}
                 onClose={() => setViewingTimelineFor(null)}
                 event={viewingTimelineFor}
@@ -496,7 +507,7 @@ const EventList: React.FC<{
     isToday: boolean;
     loading: boolean;
 }> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline, isToday, loading }) => {
-    
+
     if (loading) {
         return (
             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm animate-pulse">
@@ -514,7 +525,7 @@ const EventList: React.FC<{
             <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">{title}</h2>
             <div className="space-y-4">
                 {events.map(event => (
-                    <EventCard 
+                    <EventCard
                         key={`${event.id}-${event.department_id}`}
                         event={event}
                         isToday={isToday}
@@ -537,7 +548,7 @@ const EventCard: React.FC<{
     onRequestSwap: (event: VolunteerSchedule) => void;
     onViewTimeline: (event: VolunteerSchedule) => void;
 }> = ({ event, isToday, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline }) => {
-    
+
     const { fullDate: formattedDate, dateTime: startDateTime, time: startTime } = convertUTCToLocal(event.date, event.start_time);
     const { dateTime: endDateTime, time: endTime } = convertUTCToLocal(event.date, event.end_time);
 
@@ -559,23 +570,23 @@ const EventCard: React.FC<{
                     <p className="font-bold text-slate-800 dark:text-slate-100 truncate" title={event.name}>{event.name}</p>
                     <div className="mt-2 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
                         <div className="flex items-center gap-2">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
                             </svg>
-                           <span>{formattedDate}</span>
+                            <span>{formattedDate}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                           <span>{startTime} - {endTime}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                            <span>{startTime} - {endTime}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             {getDepartmentIcon(event.department_name)}
-                           <span className="font-medium">{event.department_name}</span>
+                            <span className="font-medium">{event.department_name}</span>
                         </div>
                         {event.leader_name && (
                             <div className="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
-                               <span className="font-medium">Líder: {event.leader_name}</span>
+                                <span className="font-medium">Líder: {event.leader_name}</span>
                             </div>
                         )}
                         {(event.cronograma_principal_id || event.cronograma_kids_id) && !isFinished && (
@@ -603,7 +614,7 @@ const EventCard: React.FC<{
                     )}
                 </div>
             </div>
-             {/* Show buttons container if event is not finished, or if it is today (to show the "Encerrado" state) */}
+            {/* Show buttons container if event is not finished, or if it is today (to show the "Encerrado" state) */}
             {(isToday || !isFinished) && (
                 <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-3">
                     {isFinished ? (

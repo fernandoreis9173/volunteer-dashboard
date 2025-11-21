@@ -10,6 +10,7 @@ import { AnalysisChart } from './TrafficChart';
 import ActivityFeed from './ActivityFeed';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
+import { useEvents, useDepartments, useInvalidateQueries } from '../hooks/useQueries';
 import QRScannerModal from './QRScannerModal';
 import QRCodeDisplayModal from './QRCodeDisplayModal';
 import AttendanceFlashCards from './AttendanceFlashCards';
@@ -77,9 +78,9 @@ interface LeaderDashboardProps {
 
 const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEvent, onNavigate }) => {
     const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
-    const [allDepartmentEvents, setAllDepartmentEvents] = useState<DashboardEvent[]>([]);
+    // const [allDepartmentEvents, setAllDepartmentEvents] = useState<DashboardEvent[]>([]); // Removed in favor of React Query
     const [departmentVolunteers, setDepartmentVolunteers] = useState<DetailedVolunteer[]>([]);
-    const [error, setError] = useState<string | null>(null);
+    // const [error, setError] = useState<string | null>(null); // Managed by React Query
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
@@ -88,37 +89,28 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
     const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
     const [departmentName, setDepartmentName] = useState<string>('');
 
-    const fetchDashboardData = useCallback(async () => {
-        if (!userProfile?.department_id) return;
+    const { invalidateEvents } = useInvalidateQueries();
 
-        setError(null);
+    // React Query for Events
+    const currentYear = new Date().getFullYear();
+    const startOfYear = `${currentYear}-01-01`;
+
+    const { data: eventsData = [], isLoading: eventsLoading, error: eventsError } = useEvents({
+        departmentId: userProfile?.department_id || undefined,
+        startDate: startOfYear
+    });
+
+    const allDepartmentEvents = useMemo(() => {
+        return (eventsData as unknown as DashboardEvent[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [eventsData]);
+
+    // Fetch Volunteers and Department Name manually for now (could be optimized later)
+    const fetchVolunteersAndDept = useCallback(async () => {
+        if (!userProfile?.department_id) return;
         const leaderDepartmentId = userProfile.department_id;
 
         try {
-            // Optimized: Fetch events only from the start of the year for annual stats
-            const currentYear = new Date().getFullYear();
-            const startOfYear = `${currentYear}-01-01`;
-
-            // Replaced RPC call with direct filtered query
-            const [eventsRes, volunteerDepartmentsRes, departmentRes] = await Promise.all([
-                supabase
-                    .from('events')
-                    .select(`
-                        *,
-                        event_departments!inner(
-                            department_id,
-                            departments(id, name)
-                        ),
-                        event_volunteers(
-                            department_id,
-                            volunteer_id,
-                            present,
-                            volunteers(id, name)
-                        )
-                    `)
-                    .eq('event_departments.department_id', leaderDepartmentId)
-                    .gte('date', startOfYear)
-                    .order('date', { ascending: true }),
+            const [volunteerDepartmentsRes, departmentRes] = await Promise.all([
                 supabase.from('volunteer_departments')
                     .select('*, volunteers!inner(*, volunteer_departments(departments(id, name)))')
                     .eq('department_id', leaderDepartmentId)
@@ -130,7 +122,6 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
                     .single()
             ]);
 
-            if (eventsRes.error) throw eventsRes.error;
             if (volunteerDepartmentsRes.error) throw volunteerDepartmentsRes.error;
             if (departmentRes.error) throw departmentRes.error;
 
@@ -138,27 +129,20 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
                 setDepartmentName(departmentRes.data.name);
             }
 
-            // The query already filters by department, so we can use the data directly
-            const eventsData = (eventsRes.data || []).map(item => item as unknown as DashboardEvent);
-
-            setAllDepartmentEvents(eventsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-
             const leaderVolunteers = (volunteerDepartmentsRes.data || []).map((vd: any) => vd.volunteers).filter(Boolean);
             const transformedVols = (leaderVolunteers || []).map((v: any) => ({ ...v, departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean) }));
             setDepartmentVolunteers(transformedVols);
 
         } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            console.error("Failed to fetch leader dashboard data:", errorMessage);
-            setError(`Falha ao carregar dados do dashboard: ${errorMessage}`);
+            console.error("Failed to fetch volunteers/dept:", getErrorMessage(err));
         }
-    }, [userProfile]);
+    }, [userProfile?.department_id]);
 
     useEffect(() => {
-        if (userProfile?.department_id) {
-            fetchDashboardData();
-        }
-    }, [userProfile, fetchDashboardData]);
+        fetchVolunteersAndDept();
+    }, [fetchVolunteersAndDept]);
+
+    const error = eventsError ? getErrorMessage(eventsError) : null;
 
     const dashboardData = useMemo(() => {
         if (!userProfile?.department_id) {
@@ -293,7 +277,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
             const volunteerName = scanningEvent?.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
             showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
 
-            fetchDashboardData();
+            invalidateEvents();
 
         } catch (err: any) {
             if (err.context && typeof err.context.json === 'function') {
@@ -315,7 +299,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
             setIsQrDisplayOpen(false);
             setScanningEvent(null);
         }
-    }, [scannedQrData, scanningEvent, userProfile, showNotification, fetchDashboardData]);
+    }, [scannedQrData, scanningEvent, userProfile, showNotification, invalidateEvents]);
 
     const scannedVolunteerName = useMemo(() => {
         if (!scannedQrData || !scanningEvent) return 'Voluntário';

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { EnrichedUser, DashboardData, DashboardEvent, ChartDataPoint, Page, Event } from '../types';
 import { getErrorMessage } from '../lib/utils';
+import { useEvents, useInvalidateQueries } from '../hooks/useQueries';
 import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
 import { AnalysisChart } from './TrafficChart';
@@ -13,8 +14,8 @@ import EventTimelineViewerModal from './EventTimelineViewerModal';
 import QRScannerModal from './QRScannerModal';
 
 interface LiveEventTimerProps {
-  event: Event;
-  onNavigate: (page: Page) => void;
+    event: Event;
+    onNavigate: (page: Page) => void;
 }
 
 const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) => {
@@ -42,7 +43,7 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) =>
                         <p className="text-sm text-red-700 truncate" title={event.name}>{event.name}</p>
                     </div>
                 </div>
-                
+
                 {/* Right side: Action Button */}
                 <button
                     onClick={handleClick}
@@ -60,115 +61,65 @@ const LiveEventTimer: React.FC<LiveEventTimerProps> = ({ event, onNavigate }) =>
 
 
 interface AdminDashboardProps {
-  activeEvent: Event | null;
-  onNavigate: (page: Page) => void;
+    activeEvent: Event | null;
+    onNavigate: (page: Page) => void;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate }) => {
     const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
-    const [dashboardData, setDashboardData] = useState<Partial<DashboardData>>({});
+    const [otherDashboardData, setOtherDashboardData] = useState<Partial<DashboardData>>({});
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [isQrDisplayOpen, setIsQrDisplayOpen] = useState(false);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
-    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+    const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [scannedQrData, setScannedQrData] = useState<string | null>(null);
 
-    const fetchDashboardData = useCallback(async () => {
-        setDashboardData({}); 
-        setDashboardError(null);
-    
-        try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayStr = today.toISOString().split('T')[0];
-            
-            const last30Days = new Date(today);
-            last30Days.setDate(today.getDate() - 29);
-            const last30DaysStr = last30Days.toISOString().split('T')[0];
+    const { invalidateEvents } = useInvalidateQueries();
 
-            // --- Fetch non-event data and only recent/future events in parallel ---
-            // Replaced RPC call with direct query filtered by date (last 30 days + future)
+    // React Query for Events
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+
+    const last30Days = new Date(today);
+    last30Days.setDate(today.getDate() - 29);
+    const last30DaysStr = last30Days.toISOString().split('T')[0];
+
+    const { data: eventsData = [], isLoading: eventsLoading, error: eventsError } = useEvents({
+        startDate: last30DaysStr
+    });
+
+    const fetchNonEventData = useCallback(async () => {
+        setOtherDashboardData(prev => ({ ...prev }));
+        setDashboardError(null);
+
+        try {
             const [
                 activeVolunteersCountRes,
                 departmentsCountRes,
-                eventsRes,
                 activeLeadersRes,
             ] = await Promise.all([
                 supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
                 supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                supabase
-                    .from('events')
-                    .select('*, event_departments(*, departments(*)), event_volunteers(*, volunteers(*))')
-                    .gte('date', last30DaysStr) // Optimized: Fetch only relevant range
-                    .order('date', { ascending: true }),
                 supabase.functions.invoke('list-users', { body: { context: 'dashboard' } }),
             ]);
-    
-            // --- Error Handling ---
+
             if (activeVolunteersCountRes.error) throw activeVolunteersCountRes.error;
             if (departmentsCountRes.error) throw departmentsCountRes.error;
-            if (eventsRes.error) throw eventsRes.error;
             if (activeLeadersRes.error) throw activeLeadersRes.error;
-    
-            // --- Process Data ---
-            const allEvents = (eventsRes.data as unknown as DashboardEvent[]) || [];
-            
-            const next7Days = new Date(today);
-            next7Days.setDate(today.getDate() + 7);
-            const next7DaysStr = next7Days.toISOString().split('T')[0];
-    
-            const todaySchedules = allEvents.filter(e => e.date === todayStr);
-            const upcomingSchedules = allEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr);
-            // Chart events are all events fetched since we filtered by last30DaysStr in the query
-            const chartEvents = allEvents.filter(e => e.date <= todayStr); 
-    
-            // --- Set Stats ---
-            const stats: DashboardData['stats'] = {
-                activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
-                departments: { value: String(departmentsCountRes.count ?? 0), change: 0 },
-                schedulesToday: { value: String(todaySchedules.length), change: 0 },
-                upcomingSchedules: { value: String(upcomingSchedules.length), change: 0 },
-            };
-            
-            // --- Process Chart Data ---
-            const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
-            for (const event of chartEvents) {
-                const date = event.date;
-                if (!chartDataMap.has(date)) {
-                    chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
-                }
-                const entry = chartDataMap.get(date)!;
-                entry.scheduledVolunteers += (event.event_volunteers || []).length;
-                (event.event_departments || []).forEach(ed => {
-                    if (ed.departments?.id) entry.involvedDepartments.add(ed.departments.id)
-                });
-                entry.eventNames.push(event.name);
-            }
-    
-            const chartData: ChartDataPoint[] = Array.from({ length: 30 }, (_, i) => {
-                const day = new Date(last30Days);
-                day.setDate(last30Days.getDate() + i);
-                const dateStr = day.toISOString().split('T')[0];
-                const dataForDay = chartDataMap.get(dateStr);
-                return {
-                    date: dateStr,
-                    scheduledVolunteers: dataForDay?.scheduledVolunteers || 0,
-                    involvedDepartments: dataForDay?.involvedDepartments.size || 0,
-                    eventNames: dataForDay?.eventNames || [],
-                };
-            });
-    
-            // --- Set Final State ---
-            setDashboardData({
-                stats,
-                todaySchedules,
-                upcomingSchedules: upcomingSchedules.slice(0, 10),
+
+            setOtherDashboardData({
+                stats: {
+                    activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
+                    departments: { value: String(departmentsCountRes.count ?? 0), change: 0 },
+                    schedulesToday: { value: '0', change: 0 }, // Will be updated with event data
+                    upcomingSchedules: { value: '0', change: 0 }, // Will be updated with event data
+                },
                 activeLeaders: activeLeadersRes.data?.users || [],
-                chartData,
             });
-            
+
         } catch (err) {
             const errorMessage = getErrorMessage(err);
             console.error("Error fetching admin dashboard data:", errorMessage);
@@ -177,8 +128,63 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
     }, []);
 
     useEffect(() => {
-        fetchDashboardData();
-    }, [fetchDashboardData]);
+        fetchNonEventData();
+    }, [fetchNonEventData]);
+
+    const dashboardData = useMemo(() => {
+        const allEvents = (eventsData as unknown as DashboardEvent[]) || [];
+
+        const next7Days = new Date(today);
+        next7Days.setDate(today.getDate() + 7);
+        const next7DaysStr = next7Days.toISOString().split('T')[0];
+
+        const todaySchedules = allEvents.filter(e => e.date === todayStr);
+        const upcomingSchedules = allEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr);
+        const chartEvents = allEvents.filter(e => e.date <= todayStr);
+
+        // --- Process Chart Data ---
+        const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
+        for (const event of chartEvents) {
+            const date = event.date;
+            if (!chartDataMap.has(date)) {
+                chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
+            }
+            const entry = chartDataMap.get(date)!;
+            entry.scheduledVolunteers += (event.event_volunteers || []).length;
+            (event.event_departments || []).forEach(ed => {
+                if (ed.departments?.id) entry.involvedDepartments.add(ed.departments.id)
+            });
+            entry.eventNames.push(event.name);
+        }
+
+        const chartData: ChartDataPoint[] = Array.from({ length: 30 }, (_, i) => {
+            const day = new Date(last30Days);
+            day.setDate(last30Days.getDate() + i);
+            const dateStr = day.toISOString().split('T')[0];
+            const dataForDay = chartDataMap.get(dateStr);
+            return {
+                date: dateStr,
+                scheduledVolunteers: dataForDay?.scheduledVolunteers || 0,
+                involvedDepartments: dataForDay?.involvedDepartments.size || 0,
+                eventNames: dataForDay?.eventNames || [],
+            };
+        });
+
+        return {
+            ...otherDashboardData,
+            stats: {
+                ...otherDashboardData.stats,
+                schedulesToday: { value: String(todaySchedules.length), change: 0 },
+                upcomingSchedules: { value: String(upcomingSchedules.length), change: 0 },
+                activeVolunteers: otherDashboardData.stats?.activeVolunteers || { value: '0', change: 0 },
+                departments: otherDashboardData.stats?.departments || { value: '0', change: 0 },
+            },
+            todaySchedules,
+            upcomingSchedules: upcomingSchedules.slice(0, 10),
+            chartData,
+        } as DashboardData;
+
+    }, [eventsData, otherDashboardData, todayStr, last30DaysStr]);
 
     const showNotification = useCallback((message: string, type: 'success' | 'error') => {
         setNotification({ message, type });
@@ -205,7 +211,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
             showNotification("Dados insuficientes para confirmar presença.", 'error');
             return;
         }
-        
+
         try {
             const data = JSON.parse(scannedQrData);
             if (!data.vId || !data.eId || !data.dId) {
@@ -214,7 +220,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
             if (data.eId !== scanningEvent?.id) {
                 throw new Error("Este QR Code é para um evento diferente.");
             }
-            
+
             const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !sessionData.session) {
                 throw new Error("Sessão de usuário não encontrada. Por favor, faça login novamente.");
@@ -228,11 +234,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
             });
 
             if (invokeError) throw invokeError;
-            
+
             const volunteerName = scanningEvent?.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
             showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
-            
-            fetchDashboardData();
+
+            invalidateEvents();
 
         } catch (err: any) {
             if (err.context && typeof err.context.json === 'function') {
@@ -254,7 +260,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
             setIsQrDisplayOpen(false);
             setScanningEvent(null);
         }
-      }, [scannedQrData, scanningEvent, showNotification, fetchDashboardData]);
+    }, [scannedQrData, scanningEvent, showNotification, invalidateEvents]);
 
     const scannedVolunteerName = useMemo(() => {
         if (!scannedQrData || !scanningEvent) return 'Voluntário';
@@ -269,7 +275,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
 
     return (
         <div className="space-y-8">
-             {notification && (
+            {notification && (
                 <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
                     {notification.message}
                 </div>
@@ -279,10 +285,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                     <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
                     <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
                 </div>
-                 <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
+                <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
                     {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
                     {activeEvent && (
-                        <button 
+                        <button
                             onClick={() => handleMarkAttendance(activeEvent as DashboardEvent)}
                             className="p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors flex flex-row items-center justify-center gap-3 w-full md:w-auto md:px-6"
                             aria-label="Marcar Presença"
@@ -295,7 +301,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                     )}
                 </div>
             </div>
-            
+
             {dashboardError && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{dashboardError}</div>}
             <StatsRow stats={dashboardData.stats} userRole="admin" />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
@@ -313,7 +319,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                         upcomingSchedules={dashboardData.upcomingSchedules}
                         onViewDetails={setSelectedEvent}
                         userRole={'admin'}
-                        onMarkAttendance={() => {}} // No-op for admin
+                        onMarkAttendance={() => { }} // No-op for admin
                         onViewTimeline={setViewingTimelineFor}
                     />
                 </div>
@@ -325,7 +331,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
             {isScannerOpen && (
                 <QRScannerModal
                     isOpen={isScannerOpen}
-                    onClose={() => {setIsScannerOpen(false); setScanningEvent(null);}}
+                    onClose={() => { setIsScannerOpen(false); setScanningEvent(null); }}
                     onScanSuccess={handleScanSuccess}
                     scanningEventName={scanningEvent?.name}
                 />
@@ -344,7 +350,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                     onConfirm={handleConfirmAttendance}
                 />
             )}
-            <EventTimelineViewerModal 
+            <EventTimelineViewerModal
                 isOpen={!!viewingTimelineFor}
                 onClose={() => setViewingTimelineFor(null)}
                 event={viewingTimelineFor}

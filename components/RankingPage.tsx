@@ -7,6 +7,7 @@ import { Medalha01Icon, Medalha02Icon, Medalha03Icon } from '../assets/icons';
 
 interface UserProfile {
     volunteer_id: number | null;
+    role?: 'admin' | 'leader' | 'volunteer' | 'lider';
 }
 
 const MedalIcon: React.FC<{ rank: number }> = ({ rank }) => {
@@ -15,9 +16,9 @@ const MedalIcon: React.FC<{ rank: number }> = ({ rank }) => {
         2: Medalha02Icon,
         3: Medalha03Icon,
     };
-    
+
     const iconSrc = icons[rank as keyof typeof icons];
-    
+
     if (!iconSrc) return null;
 
     return <img src={iconSrc} alt={`Medalha ${rank}`} className="h-8 w-8" />;
@@ -70,12 +71,12 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
     const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    
+
     // Filter and Sort States
     const [selectedDepartment, setSelectedDepartment] = useState('all');
     const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
     const [sortBy, setSortBy] = useState<'most' | 'least' | 'name'>('most');
-    
+
     const [viewingVolunteer, setViewingVolunteer] = useState<RankedVolunteer | null>(null);
 
     // Dropdown States and Refs
@@ -211,7 +212,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
         return rankedVolunteers.sort((a, b) => {
             const percentageA = a.totalScheduled > 0 ? a.totalPresent / a.totalScheduled : 0;
             const percentageB = b.totalScheduled > 0 ? b.totalPresent / b.totalScheduled : 0;
-            
+
             switch (sortBy) {
                 case 'least':
                     if (a.totalPresent !== b.totalPresent) return a.totalPresent - b.totalPresent;
@@ -243,6 +244,15 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
     const selectedYearLabel = yearOptions.find(y => y.value === selectedYear)?.label || 'Ano';
     const selectedSortLabel = sortOptions.find(s => s.value === sortBy)?.label || 'Ordenar';
 
+    const handleVolunteerClick = (volunteer: RankedVolunteer) => {
+        const isCurrentUser = userProfile?.volunteer_id === volunteer.id;
+        // Check for both English and Portuguese role names to be safe
+        const isAdminOrLeader = userProfile?.role === 'admin' || userProfile?.role === 'leader' || userProfile?.role === 'lider';
+
+        if (isCurrentUser || isAdminOrLeader) {
+            setViewingVolunteer(volunteer);
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -256,7 +266,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                     <p className="font-semibold text-blue-800 dark:text-blue-300">Parabéns! Você está na <span className="text-xl">{currentUserRank}ª</span> posição no ranking atual.</p>
                 </div>
             )}
-            
+
             <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-4">
                 <Dropdown buttonLabel={selectedDeptLabel} options={departmentOptions} selectedValue={selectedDepartment} onSelect={setSelectedDepartment} isOpen={isDeptDropdownOpen} setIsOpen={setIsDeptDropdownOpen} dropdownRef={deptDropdownRef} />
                 <Dropdown buttonLabel={selectedYearLabel} options={yearOptions} selectedValue={selectedYear} onSelect={setSelectedYear} isOpen={isYearDropdownOpen} setIsOpen={setIsYearDropdownOpen} dropdownRef={yearDropdownRef} />
@@ -272,7 +282,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                             const topScore = processedRanking.length > 0 ? processedRanking[0].totalPresent : 0;
                             const progressBarWidth = topScore > 0 ? Math.round((volunteer.totalPresent / topScore) * 100) : 0;
                             const isCurrentUser = volunteer.id === userProfile?.volunteer_id;
-                            
+
                             const points = volunteer.totalPresent;
                             const level = Math.floor(points / 5) + 1;
 
@@ -292,7 +302,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                                                 </div>
                                             )}
                                         </div>
-            
+
                                         <div className="text-right flex-shrink-0 ml-auto w-24">
                                             <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{points} pts</p>
                                             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Nível {level}</p>
@@ -304,8 +314,11 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                             return (
                                 <div
                                     key={volunteer.id}
-                                    onClick={() => setViewingVolunteer(volunteer)}
-                                    className={`p-4 flex items-center gap-4 transition-colors cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 ${isCurrentUser ? 'bg-blue-50 dark:bg-blue-900/50' : ''}`}
+                                    onClick={() => handleVolunteerClick(volunteer)}
+                                    className={`p-4 flex items-center gap-4 transition-colors ${(userProfile?.volunteer_id === volunteer.id || userProfile?.role === 'admin' || userProfile?.role === 'leader' || userProfile?.role === 'lider')
+                                        ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                                        : 'cursor-default'
+                                        } ${isCurrentUser ? 'bg-blue-50 dark:bg-blue-900/50' : ''}`}
                                 >
                                     <div className="flex-shrink-0 w-12 flex items-center justify-center">
                                         {isTop3 ? (
@@ -328,7 +341,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                     )}
                 </div>
             )}
-             <VolunteerStatsModal
+            <VolunteerStatsModal
                 isOpen={!!viewingVolunteer}
                 onClose={() => setViewingVolunteer(null)}
                 volunteer={viewingVolunteer}
