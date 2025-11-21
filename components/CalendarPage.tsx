@@ -100,119 +100,6 @@ const useIsMobile = (breakpoint = 1024) => { // Using lg breakpoint
 
 type MobileView = 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth';
 
-const MobileHeader: React.FC<{
-    title: string;
-    onMenuClick: () => void;
-    currentView: MobileView;
-    onViewChange: (view: MobileView) => void;
-    onPrev: () => void;
-    onNext: () => void;
-    onToday: () => void;
-    statusFilters: string[];
-    onStatusFilterChange: (status: string) => void;
-}> = ({ title, onMenuClick, currentView, onViewChange, onPrev, onNext, onToday, statusFilters, onStatusFilterChange }) => {
-    const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
-    const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-    const viewDropdownRef = useRef<HTMLDivElement>(null);
-    const filterDropdownRef = useRef<HTMLDivElement>(null);
-
-    const viewOptions: { key: MobileView, label: string, shortcut: string }[] = [
-        { key: 'dayGridMonth', label: 'Mês', shortcut: 'M' },
-        { key: 'timeGridWeek', label: 'Semana', shortcut: 'W' },
-        { key: 'timeGridDay', label: 'Dia', shortcut: 'D' }
-    ];
-    const currentViewLabel = viewOptions.find(v => v.key === currentView)?.label || 'Dia';
-
-    const handleViewSelect = (view: MobileView) => {
-        onViewChange(view);
-        setIsViewDropdownOpen(false);
-    };
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (viewDropdownRef.current && !viewDropdownRef.current.contains(event.target as Node)) {
-                setIsViewDropdownOpen(false);
-            }
-            if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
-                setIsFilterDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    return (
-        <div className="px-4 py-3 bg-white border-b border-slate-200">
-            {/* Top row for navigation */}
-            <div className="flex justify-between items-center gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                    <button onClick={onPrev} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Anterior">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.25 19.5 7.75 12l7.5-7.5" /></svg>
-                    </button>
-                    <h2 className="text-base font-bold text-slate-800 capitalize text-center truncate">{title}</h2>
-                    <button onClick={onNext} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Próximo">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.75 4.5 7.5 7.5-7.5 7.5" /></svg>
-                    </button>
-                </div>
-                <button onClick={onMenuClick} className="p-2 text-slate-600 hover:text-slate-900 flex-shrink-0" aria-label="Open menu">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                </button>
-            </div>
-
-            {/* Bottom row for controls and filters */}
-            <div className="mt-4 flex justify-between items-center">
-                <div className="flex items-center gap-1 sm:gap-2">
-                    <button onClick={onToday} className="bg-white border border-slate-300 text-slate-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-slate-50 text-sm">
-                        Hoje
-                    </button>
-                    <div className="relative" ref={viewDropdownRef}>
-                        <button
-                            onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors"
-                            aria-haspopup="true"
-                            aria-expanded={isViewDropdownOpen}
-                        >
-                            <span>{currentViewLabel}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-500 transition-transform ${isViewDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                        </button>
-                        {isViewDropdownOpen && (
-                            <div className="absolute left-0 mt-2 w-36 bg-white rounded-lg shadow-lg border border-slate-200 z-10" role="menu">
-                                <ul className="py-1">
-                                    {viewOptions.map((viewOption) => (
-                                        <li key={viewOption.key}>
-                                            <button onClick={() => handleViewSelect(viewOption.key)} className={`w-full text-left px-4 py-2 text-sm flex justify-between items-center transition-colors ${currentView === viewOption.key ? 'font-semibold text-blue-600 bg-blue-50' : 'text-slate-700 hover:bg-slate-100'}`} role="menuitem">
-                                                <span>{viewOption.label}</span>
-                                                <span className="text-xs text-slate-400">{viewOption.shortcut}</span>
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="relative" ref={filterDropdownRef}>
-                    <button
-                        onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-                        className="p-2 text-slate-600 hover:text-slate-900"
-                        aria-label="Filtrar eventos"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
-                        </svg>
-                    </button>
-                    {isFilterDropdownOpen && (
-                        <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-10 p-4">
-                            <h4 className="text-sm font-bold text-slate-800 mb-3">Filtrar por Status</h4>
-                            <StatusFilter statusFilters={statusFilters} onStatusFilterChange={onStatusFilterChange} isMobile={true} />
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const DateScroller: React.FC<{ selectedDate: Date; onDateSelect: (date: Date) => void; }> = ({ selectedDate, onDateSelect }) => {
     const weekDates = useMemo(() => {
@@ -901,17 +788,91 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ userRole, leaderDepartmentI
         return (
             <div className={`bg-white flex flex-col ${mobileView === 'dayGridMonth' ? '' : 'h-full'}`}>
                 <style>{calendarStyles}</style>
-                <MobileHeader
-                    title={calendarTitle}
-                    onMenuClick={() => setIsSidebarOpen(true)}
-                    currentView={mobileView}
-                    onViewChange={setMobileView}
-                    onPrev={handlePrev}
-                    onNext={handleNext}
-                    onToday={handleToday}
-                    statusFilters={statusFilters}
-                    onStatusFilterChange={handleStatusFilterChange}
-                />
+
+                {/* Controles de navegação e filtros */}
+                <div className="px-4 py-3 bg-white border-b border-slate-200">
+                    {/* Navegação */}
+                    <div className="flex justify-between items-center gap-2 mb-4">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <button onClick={handlePrev} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Anterior">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.25 19.5 7.75 12l7.5-7.5" /></svg>
+                            </button>
+                            <h2 className="text-base font-bold text-slate-800 capitalize text-center truncate">{calendarTitle}</h2>
+                            <button onClick={handleNext} className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0" aria-label="Próximo">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m8.75 4.5 7.5 7.5-7.5 7.5" /></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Controles e filtros */}
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-1 sm:gap-2">
+                            <button onClick={handleToday} className="bg-white border border-slate-300 text-slate-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-slate-50 text-sm">
+                                Hoje
+                            </button>
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        const dropdown = document.getElementById('mobile-view-dropdown');
+                                        if (dropdown) dropdown.classList.toggle('hidden');
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors"
+                                >
+                                    <span>{mobileView === 'dayGridMonth' ? 'Mês' : mobileView === 'timeGridWeek' ? 'Semana' : 'Dia'}</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+                                <div id="mobile-view-dropdown" className="hidden absolute left-0 mt-2 w-36 bg-white rounded-lg shadow-lg border border-slate-200 z-10">
+                                    <ul className="py-1">
+                                        {[
+                                            { key: 'dayGridMonth' as MobileView, label: 'Mês' },
+                                            { key: 'timeGridWeek' as MobileView, label: 'Semana' },
+                                            { key: 'timeGridDay' as MobileView, label: 'Dia' }
+                                        ].map((option) => (
+                                            <li key={option.key}>
+                                                <button
+                                                    onClick={() => {
+                                                        setMobileView(option.key);
+                                                        document.getElementById('mobile-view-dropdown')?.classList.add('hidden');
+                                                    }}
+                                                    className={`w-full text-left px-4 py-2 text-sm flex justify-between items-center transition-colors ${mobileView === option.key
+                                                        ? 'font-semibold text-blue-600 bg-blue-50'
+                                                        : 'text-slate-700 hover:bg-slate-100'
+                                                        }`}
+                                                >
+                                                    <span>{option.label}</span>
+                                                    {mobileView === option.key && (
+                                                        <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="relative">
+                            <button
+                                onClick={() => {
+                                    const dropdown = document.getElementById('mobile-filter-dropdown');
+                                    if (dropdown) dropdown.classList.toggle('hidden');
+                                }}
+                                className="p-2 text-slate-600 hover:text-slate-900"
+                                aria-label="Filtrar eventos"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                            <div id="mobile-filter-dropdown" className="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-10 p-4">
+                                <h4 className="text-sm font-bold text-slate-800 mb-3">Filtrar por Status</h4>
+                                <StatusFilter statusFilters={statusFilters} onStatusFilterChange={handleStatusFilterChange} isMobile={true} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 {mobileView === 'dayGridMonth' ? (
                     <div className="flex flex-col">
                         <div className={`mobile-calendar-view month-view`}>
