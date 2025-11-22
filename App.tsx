@@ -587,10 +587,28 @@ const App: React.FC = () => {
     }, [session, userProfile, handleNavigate, pushPermissionStatus, authView]);
 
     // Real-time notifications subscription
+    // OTIMIZADO: Realtime de notificações só quando app está visível e em páginas relevantes
     useEffect(() => {
         if (!session?.user?.id) {
             return;
         }
+
+        // Páginas onde Realtime é útil (notificações em tempo real)
+        const realtimePages = ['notifications', 'dashboard'];
+        const shouldConnect = realtimePages.includes(activePage);
+
+        if (!shouldConnect) {
+            return; // Não conecta Realtime em outras páginas
+        }
+
+        // Só conecta se app estiver visível (não em background)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                supabase.removeChannel(channel);
+            } else if (document.visibilityState === 'visible') {
+                channel.subscribe();
+            }
+        };
 
         const channel = supabase
             .channel(`realtime-notifications:${session.user.id}`)
@@ -611,7 +629,7 @@ const App: React.FC = () => {
                         {
                             id: newNotification.id,
                             message: newNotification.message,
-                            type: 'info', // All real-time notifications are info style
+                            type: 'info',
                         },
                     ]);
 
@@ -621,74 +639,97 @@ const App: React.FC = () => {
             )
             .subscribe();
 
+        // Listener para detectar quando app vai para background
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
             supabase.removeChannel(channel);
         };
 
-    }, [session, refetchNotificationCount]);
+    }, [session, refetchNotificationCount, activePage]);
 
-    // Real-time volunteer status subscription
+    // OTIMIZADO: Realtime de status do voluntário - Substituído por polling a cada 60s
+    // (Mudanças de status são raras, não precisa de Realtime constante)
     useEffect(() => {
         if (!session?.user?.id || userProfile?.role !== 'volunteer') {
             return;
         }
 
-        const channel = supabase
-            .channel(`realtime-volunteer-status:${session.user.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'volunteers',
-                    filter: `user_id=eq.${session.user.id}`,
-                },
-                (payload) => {
-                    const updatedVolunteer = payload.new as DetailedVolunteer;
+        // Polling a cada 60 segundos, só quando app está visível
+        const checkStatusUpdate = async () => {
+            if (document.visibilityState === 'visible') {
+                try {
+                    const { data } = await supabase
+                        .from('volunteers')
+                        .select('status')
+                        .eq('user_id', session.user.id)
+                        .single();
 
-                    if (userProfile && updatedVolunteer.status !== userProfile.status) {
-                        if (updatedVolunteer.status === 'Inativo') {
+                    if (data && userProfile && data.status !== userProfile.status) {
+                        if (data.status === 'Inativo') {
                             setUserProfile(prev => prev ? { ...prev, status: 'Inativo' } : null);
-                        } else if (updatedVolunteer.status === 'Ativo') {
+                        } else if (data.status === 'Ativo') {
                             refetchUserData();
                         }
                     }
+                } catch (error) {
+                    console.error('Error checking volunteer status:', error);
                 }
-            )
-            .subscribe();
+            }
+        };
+
+        // Verificar imediatamente
+        checkStatusUpdate();
+
+        // Depois verificar a cada 60 segundos
+        const interval = setInterval(checkStatusUpdate, 60000);
 
         return () => {
-            supabase.removeChannel(channel);
+            clearInterval(interval);
         };
     }, [session?.user?.id, userProfile?.role, userProfile?.status, refetchUserData, setUserProfile]);
 
-    // Real-time leader department assignment subscription
+    // OTIMIZADO: Realtime de departamentos do líder - Substituído por polling a cada 60s
+    // (Mudanças de departamento são raras, não precisa de Realtime constante)
     useEffect(() => {
         if (!session?.user?.id || (userProfile?.role !== 'leader' && userProfile?.role !== 'lider')) {
             return;
         }
 
-        const channel = supabase
-            .channel(`realtime-leader-departments:${session.user.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*', // Listen for INSERT, UPDATE, DELETE
-                    schema: 'public',
-                    table: 'department_leaders',
-                    filter: `leader_id=eq.${session.user.id}`,
-                },
-                () => {
-                    console.log('Detected a change in leader department assignments. Refetching user data...');
-                    refetchUserData();
+        // Polling a cada 60 segundos, só quando app está visível
+        const checkDepartmentChanges = async () => {
+            if (document.visibilityState === 'visible') {
+                try {
+                    const { data } = await supabase
+                        .from('department_leaders')
+                        .select('department_id')
+                        .eq('leader_id', session.user.id);
+
+                    // Se houver mudança, refetch user data
+                    if (data && userProfile?.department_id) {
+                        const currentDeptId = data[0]?.department_id;
+                        if (currentDeptId !== userProfile.department_id) {
+                            console.log('Detected a change in leader department assignments. Refetching user data...');
+                            refetchUserData();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking department changes:', error);
                 }
-            )
-            .subscribe();
+            }
+        };
+
+        // Verificar imediatamente
+        checkDepartmentChanges();
+
+        // Depois verificar a cada 60 segundos
+        const interval = setInterval(checkDepartmentChanges, 60000);
 
         return () => {
-            supabase.removeChannel(channel);
+            clearInterval(interval);
         };
-    }, [session, userProfile?.role, refetchUserData]);
+    }, [session?.user?.id, userProfile?.role, userProfile?.department_id, refetchUserData]);
 
     const subscribeToPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {
