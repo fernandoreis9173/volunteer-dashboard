@@ -18,6 +18,7 @@ export const useDepartments = () => {
             return data;
         },
         staleTime: 10 * 60 * 1000, // 10 minutos (dados raramente mudam)
+        refetchOnWindowFocus: false, // Não refetch ao mudar de aba
     });
 };
 
@@ -35,6 +36,7 @@ export const useActiveDepartments = () => {
             return data;
         },
         staleTime: 10 * 60 * 1000,
+        refetchOnWindowFocus: false,
     });
 };
 
@@ -86,7 +88,9 @@ export const useEvents = (options: UseEventsOptions = {}) => {
             if (error) throw error;
             return data;
         },
-        staleTime: 2 * 60 * 1000, // 2 minutos (eventos mudam mais frequentemente)
+        staleTime: 10 * 60 * 1000, // 10 minutos (otimizado para scale)
+        gcTime: 30 * 60 * 1000, // Garbage collection após 30 minutos
+        refetchOnWindowFocus: false, // Não refetch ao mudar de aba
     });
 };
 
@@ -117,8 +121,10 @@ export const useTodaysEvents = (userId: string, userRole: string, departmentId?:
             if (error) throw error;
             return data;
         },
-        staleTime: 1 * 60 * 1000, // 1 minuto (eventos do dia são mais críticos)
-        refetchInterval: 5 * 60 * 1000, // Refetch a cada 5 minutos
+        staleTime: 5 * 60 * 1000, // 5 minutos
+        gcTime: 15 * 60 * 1000, // Garbage collection após 15 minutos
+        refetchOnWindowFocus: false, // Não refetch ao mudar de aba
+        // refetchInterval removido - usar Realtime para atualizações
     });
 };
 
@@ -138,7 +144,8 @@ export const useVolunteers = (departmentId?: number | null) => {
             if (error) throw error;
             return data;
         },
-        staleTime: 3 * 60 * 1000, // 3 minutos
+        staleTime: 10 * 60 * 1000, // 10 minutos
+        refetchOnWindowFocus: false,
     });
 };
 
@@ -154,7 +161,8 @@ export const useActiveVolunteers = () => {
             if (error) throw error;
             return data;
         },
-        staleTime: 5 * 60 * 1000,
+        staleTime: 10 * 60 * 1000,
+        refetchOnWindowFocus: false,
     });
 };
 
@@ -176,7 +184,8 @@ export const useNotifications = (userId: string, limit = 15) => {
             if (error) throw error;
             return data;
         },
-        staleTime: 30 * 1000, // 30 segundos (notificações são mais dinâmicas)
+        staleTime: 2 * 60 * 1000, // 2 minutos (otimizado)
+        refetchOnWindowFocus: false,
     });
 };
 
@@ -193,7 +202,8 @@ export const useUnreadNotificationsCount = (userId: string) => {
             if (error) throw error;
             return count ?? 0;
         },
-        staleTime: 30 * 1000,
+        staleTime: 2 * 60 * 1000,
+        refetchOnWindowFocus: false,
     });
 };
 
@@ -296,7 +306,8 @@ export const useCronogramaModelos = () => {
             if (error) throw error;
             return data;
         },
-        staleTime: 10 * 60 * 1000, // 10 minutos (raramente muda)
+        staleTime: 30 * 60 * 1000, // 30 minutos (raramente muda)
+        refetchOnWindowFocus: false,
     });
 };
 
@@ -313,7 +324,8 @@ export const useCronogramaModeloDetalhes = (ids: string[]) => {
             return data;
         },
         enabled: ids.length > 0,
-        staleTime: 10 * 60 * 1000,
+        staleTime: 30 * 60 * 1000,
+        refetchOnWindowFocus: false,
     });
 };
 

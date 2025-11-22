@@ -100,7 +100,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
             </div>
         );
     }
-    
+
     const isAlreadyScheduled = volunteer.isScheduledElsewhere;
 
     return (
@@ -164,13 +164,13 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
         if (!eventStartDateTime) return false;
         return new Date() > eventStartDateTime;
     }, [eventStartDateTime]);
-    
-    const isDepartmentInvolved = isSchedulingMode && initialData && leaderDepartmentId 
+
+    const isDepartmentInvolved = isSchedulingMode && initialData && leaderDepartmentId
         ? (initialData.event_departments || []).some(ed => ed.department_id === leaderDepartmentId)
         : false;
-    
+
     const isSchedulingAllowed = isSchedulingMode && formData.status === 'Confirmado' && isDepartmentInvolved && !hasEventStarted;
-    
+
     useEffect(() => {
         const fetchTimelineTemplates = async () => {
             if (isAdminMode) {
@@ -209,12 +209,10 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 return;
             };
 
-            const { data: dept } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
-            if (!dept) return;
-            
+            // Buscar voluntários do departamento do líder
             const { data: vols, error: vError } = await supabase
                 .from('volunteer_departments')
-                .select('volunteers(id, name, email, initials)')
+                .select('volunteers(id, name, email, initials, volunteer_departments(departments(name)))')
                 .eq('department_id', leaderDepartmentId);
 
             if (vError) {
@@ -229,12 +227,22 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                     .map(ev => ev.volunteer_id)
             );
 
-            const processedVols = (activeVolunteers as any[] || []).map(vol => ({
-                ...vol,
-                departments: [dept.name], // Simplified for this context
-                isScheduledElsewhere: scheduledElsewhereIds.has(vol.id)
-            }));
-            
+            const processedVols = (activeVolunteers as any[] || []).map(vol => {
+                // Extrair todos os nomes dos departamentos do voluntário
+                const allDepts = (vol.volunteer_departments || [])
+                    .map((vd: any) => vd.departments?.name)
+                    .filter((name: string) => name);
+
+                return {
+                    id: vol.id,
+                    name: vol.name,
+                    email: vol.email,
+                    initials: vol.initials,
+                    departments: allDepts,
+                    isScheduledElsewhere: scheduledElsewhereIds.has(vol.id)
+                };
+            });
+
             setAllVolunteers(processedVols);
         };
         fetchData();
@@ -244,11 +252,11 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
         if (initialData) {
             const { dateTime: localStart } = convertUTCToLocal(initialData.date, initialData.start_time);
             const { dateTime: localEnd } = convertUTCToLocal(initialData.date, initialData.end_time);
-    
+
             let localDate = initialData.date;
             let localStartTime = initialData.start_time;
             let localEndTime = initialData.end_time;
-    
+
             if (localStart && localEnd) {
                 // toISOString().split('T')[0] can be off by a day due to timezone.
                 // A more reliable way to get YYYY-MM-DD in local time.
@@ -256,11 +264,11 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 const month = String(localStart.getMonth() + 1).padStart(2, '0');
                 const day = String(localStart.getDate()).padStart(2, '0');
                 localDate = `${year}-${month}-${day}`;
-                
+
                 localStartTime = localStart.toTimeString().substring(0, 5);
                 localEndTime = localEnd.toTimeString().substring(0, 5);
             }
-    
+
             setFormData({
                 name: initialData.name,
                 date: localDate,
@@ -284,7 +292,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                     .filter(sv => sv.department_id === leaderDepartmentId)
                     .map(sv => sv.volunteers)
                     .filter((v): v is { id: number; name: string; email: string; initials: string; departments: string[]; } => v !== undefined && v !== null);
-                
+
                 setSelectedVolunteers(volunteersFromData.map(v => ({
                     ...v,
                     departments: v.departments || [],
@@ -332,7 +340,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const handleColorChange = (colorValue: string) => {
         setFormData(prev => ({ ...prev, color: prev.color === colorValue ? '' : colorValue }));
     };
-    
+
     const handleConfirmStatusChange = () => {
         if (pendingStatus) {
             setFormData(prev => ({ ...prev, status: pendingStatus }));
@@ -367,6 +375,14 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
         }
         setVolunteerSearch('');
     };
+
+    const addAllAvailableVolunteers = () => {
+        // Adicionar apenas voluntários que NÃO estão escalados em outro lugar
+        const availableToAdd = unselectedVolunteers.filter(v => !v.isScheduledElsewhere);
+        setSelectedVolunteers([...selectedVolunteers, ...availableToAdd]);
+        setVolunteerSearch('');
+    };
+
     const removeVolunteer = (volunteerId: number) => {
         setSelectedVolunteers(selectedVolunteers.filter(v => v.id !== volunteerId));
     };
@@ -389,13 +405,13 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setSaveError(null);
-        
+
         if (!formData.name || !formData.date || !formData.start_time || !formData.end_time) {
             setSaveError('Por favor, preencha todos os campos obrigatórios (Título, Data, Início, Fim).');
             return;
         }
-    
-        const payload: any = { 
+
+        const payload: any = {
             ...formData,
             cronograma_principal_id: formData.cronograma_principal_id || null,
             cronograma_kids_id: formData.cronograma_kids_id || null,
@@ -418,7 +434,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
     let title = isEditing ? "Editar Evento" : "Novo Evento";
     if (isSchedulingMode) title = `Escalar Voluntários - ${initialData?.name}`;
-    
+
     const statusOptionsForForm = [
         { value: 'Pendente', label: 'Pendente' },
         { value: 'Confirmado', label: 'Confirmado' },
@@ -427,233 +443,242 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const selectedStatusLabel = statusOptionsForForm.find(o => o.value === formData.status)?.label;
 
     return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <h2 className="text-xl font-bold text-slate-800 mb-4">{title}</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-            {isSchedulingMode ? (
-                 <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-sm text-slate-700">
-                    <p><strong>Data:</strong> {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-                    <p><strong>Horário:</strong> {formData.start_time.substring(0,5)} - {formData.end_time.substring(0,5)}</p>
-                    {formData.local && <p><strong>Local:</strong> {formData.local}</p>}
-                </div>
-            ) : (
-                <>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="sm:col-span-2">
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Título do Evento *</label>
-                            <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                            <div className="relative" ref={statusDropdownRef}>
-                                <button
-                                    type="button"
-                                    onClick={() => isAdminMode && setIsCustomStatusDropdownOpen(prev => !prev)}
-                                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer text-left disabled:bg-slate-100 disabled:cursor-not-allowed"
-                                    aria-haspopup="listbox"
-                                    aria-expanded={isCustomStatusDropdownOpen}
-                                    disabled={!isAdminMode}
-                                >
-                                    <span className="text-slate-900">{selectedStatusLabel}</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isCustomStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                                </button>
-                                {isCustomStatusDropdownOpen && isAdminMode && (
-                                    <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
-                                        <ul className="py-1" role="listbox">
-                                            {statusOptionsForForm.map(option => (
-                                                <li
-                                                    key={option.value}
-                                                    onClick={() => handleStatusSelect(option.value)}
-                                                    className={`px-4 py-2 hover:bg-slate-100 cursor-pointer text-sm ${formData.status === option.value ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
-                                                    role="option"
-                                                    aria-selected={formData.status === option.value}
-                                                >
-                                                    {option.label}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 className="text-xl font-bold text-slate-800 mb-4">{title}</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {isSchedulingMode ? (
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-2 text-sm text-slate-700">
+                        <p><strong>Data:</strong> {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                        <p><strong>Horário:</strong> {formData.start_time.substring(0, 5)} - {formData.end_time.substring(0, 5)}</p>
+                        {formData.local && <p><strong>Local:</strong> {formData.local}</p>}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Data *</label>
-                            <CustomDatePicker name="date" value={formData.date} onChange={handleDateChange} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Início *</label>
-                            <CustomTimePicker 
-                                value={formData.start_time}
-                                onChange={(time) => handleTimeChange('start_time', time)}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label>
-                            <CustomTimePicker 
-                                value={formData.end_time}
-                                onChange={(time) => handleTimeChange('end_time', time)}
-                            />
-                        </div>
-                    </div>
-                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
-                    {isAdminMode && (
-                        <div>
-                            <div className="flex justify-between items-center mb-1">
-                                <label className="block text-sm font-medium text-slate-700">Departamentos Envolvidos</label>
-                                <button
-                                    type="button"
-                                    onClick={handleAddAllDepartments}
-                                    className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-                                >
-                                    Adicionar Todos
-                                </button>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="sm:col-span-2">
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Título do Evento *</label>
+                                <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" />
                             </div>
-                            <SmartSearch
-                                items={allDepartments.filter(d => d.id != null) as SearchItem[]}
-                                selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
-                                onSelectItem={handleSelectDepartment}
-                                placeholder="Buscar e adicionar departamentos..."
-                            />
-                            <div className="mt-2 flex flex-wrap gap-2 min-h-[40px]">
-                                {selectedDepartments.map(department => (
-                                    <RemovableTag 
-                                        key={department.id}
-                                        text={department.name}
-                                        color="yellow"
-                                        onRemove={() => handleRemoveDepartment(department.id!)}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {isAdminMode && (
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Cor do Evento</label>
-                            <div className="flex items-center space-x-3">
-                                {colorOptions.map(option => {
-                                    const isSelected = formData.color === option.value;
-                                    const isWhite = option.name === 'Branco';
-
-                                    return (
-                                        <button
-                                            type="button"
-                                            key={option.value}
-                                            onClick={() => handleColorChange(option.value)}
-                                            className={`w-8 h-8 rounded-full ${option.bg} transition-all duration-150 transform hover:scale-110 focus:outline-none border-2 ${
-                                                isSelected ? 'border-blue-600' : (isWhite ? 'border-slate-300' : 'border-transparent')
-                                            }`}
-                                            aria-label={option.name}
-                                        >
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                    )}
-                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"></textarea></div>
-                
-                    {isAdminMode && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Principal</label>
-                                <select name="cronograma_principal_id" value={formData.cronograma_principal_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
-                                    <option value="">Nenhum</option>
-                                    {timelineTemplates.map(template => (
-                                        <option key={template.id} value={template.id}>{template.nome_modelo}</option>
-                                    ))}
-                                </select>
-                            </div>
-                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Kids</label>
-                                <select name="cronograma_kids_id" value={formData.cronograma_kids_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
-                                    <option value="">Nenhum</option>
-                                    {timelineTemplates.map(template => (
-                                        <option key={template.id} value={template.id}>{template.nome_modelo}</option>
-                                    ))}
-                                </select>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                                <div className="relative" ref={statusDropdownRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => isAdminMode && setIsCustomStatusDropdownOpen(prev => !prev)}
+                                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg flex justify-between items-center cursor-pointer text-left disabled:bg-slate-100 disabled:cursor-not-allowed"
+                                        aria-haspopup="listbox"
+                                        aria-expanded={isCustomStatusDropdownOpen}
+                                        disabled={!isAdminMode}
+                                    >
+                                        <span className="text-slate-900">{selectedStatusLabel}</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-slate-400 transition-transform ${isCustomStatusDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                    </button>
+                                    {isCustomStatusDropdownOpen && isAdminMode && (
+                                        <div className="absolute z-20 w-full top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg">
+                                            <ul className="py-1" role="listbox">
+                                                {statusOptionsForForm.map(option => (
+                                                    <li
+                                                        key={option.value}
+                                                        onClick={() => handleStatusSelect(option.value)}
+                                                        className={`px-4 py-2 hover:bg-slate-100 cursor-pointer text-sm ${formData.status === option.value ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                                                        role="option"
+                                                        aria-selected={formData.status === option.value}
+                                                    >
+                                                        {option.label}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    )}
-                </>
-            )}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Data *</label>
+                                <CustomDatePicker name="date" value={formData.date} onChange={handleDateChange} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Início *</label>
+                                <CustomTimePicker
+                                    value={formData.start_time}
+                                    onChange={(time) => handleTimeChange('start_time', time)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Fim *</label>
+                                <CustomTimePicker
+                                    value={formData.end_time}
+                                    onChange={(time) => handleTimeChange('end_time', time)}
+                                />
+                            </div>
+                        </div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                        {isAdminMode && (
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-sm font-medium text-slate-700">Departamentos Envolvidos</label>
+                                    <button
+                                        type="button"
+                                        onClick={handleAddAllDepartments}
+                                        className="text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                                    >
+                                        Adicionar Todos
+                                    </button>
+                                </div>
+                                <SmartSearch
+                                    items={allDepartments.filter(d => d.id != null) as SearchItem[]}
+                                    selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
+                                    onSelectItem={handleSelectDepartment}
+                                    placeholder="Buscar e adicionar departamentos..."
+                                />
+                                <div className="mt-2 flex flex-wrap gap-2 min-h-[40px]">
+                                    {selectedDepartments.map(department => (
+                                        <RemovableTag
+                                            key={department.id}
+                                            text={department.name}
+                                            color="yellow"
+                                            onRemove={() => handleRemoveDepartment(department.id!)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {isAdminMode && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">Cor do Evento</label>
+                                <div className="flex items-center space-x-3">
+                                    {colorOptions.map(option => {
+                                        const isSelected = formData.color === option.value;
+                                        const isWhite = option.name === 'Branco';
 
-            {isSchedulingMode && !isSchedulingAllowed && (
-                 <div className="pt-4 border-t border-slate-200">
-                    <div className="text-center bg-yellow-50 text-yellow-800 p-4 rounded-lg border border-yellow-200">
-                        <p className="font-semibold">A escala de voluntários não está disponível.</p>
-                        <p className="text-sm mt-1">
-                            {formData.status !== 'Confirmado' && 'Este evento ainda está pendente de confirmação. A escala só pode ser feita após a confirmação pelo administrador.'}
-                            {!isDepartmentInvolved && 'Seu departamento não foi adicionado a este evento ainda.'}
-                            {hasEventStarted && 'Este evento já começou ou terminou e não pode mais ser alterado.'}
-                        </p>
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={option.value}
+                                                onClick={() => handleColorChange(option.value)}
+                                                className={`w-8 h-8 rounded-full ${option.bg} transition-all duration-150 transform hover:scale-110 focus:outline-none border-2 ${isSelected ? 'border-blue-600' : (isWhite ? 'border-slate-300' : 'border-transparent')
+                                                    }`}
+                                                aria-label={option.name}
+                                            >
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"></textarea></div>
+
+                        {isAdminMode && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Principal</label>
+                                    <select name="cronograma_principal_id" value={formData.cronograma_principal_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
+                                        <option value="">Nenhum</option>
+                                        {timelineTemplates.map(template => (
+                                            <option key={template.id} value={template.id}>{template.nome_modelo}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Kids</label>
+                                    <select name="cronograma_kids_id" value={formData.cronograma_kids_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
+                                        <option value="">Nenhum</option>
+                                        {timelineTemplates.map(template => (
+                                            <option key={template.id} value={template.id}>{template.nome_modelo}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {isSchedulingMode && !isSchedulingAllowed && (
+                    <div className="pt-4 border-t border-slate-200">
+                        <div className="text-center bg-yellow-50 text-yellow-800 p-4 rounded-lg border border-yellow-200">
+                            <p className="font-semibold">A escala de voluntários não está disponível.</p>
+                            <p className="text-sm mt-1">
+                                {formData.status !== 'Confirmado' && 'Este evento ainda está pendente de confirmação. A escala só pode ser feita após a confirmação pelo administrador.'}
+                                {!isDepartmentInvolved && 'Seu departamento não foi adicionado a este evento ainda.'}
+                                {hasEventStarted && 'Este evento já começou ou terminou e não pode mais ser alterado.'}
+                            </p>
+                        </div>
                     </div>
-                 </div>
-            )}
+                )}
 
-            {isSchedulingAllowed && (
-                <div className="pt-4 border-t border-slate-200">
-                    {allVolunteers.length > 0 ? (
-                        <div className="space-y-4">
-                            <input
-                                type="text"
-                                placeholder="Buscar voluntários disponíveis..."
-                                value={volunteerSearch}
-                                onChange={(e) => setVolunteerSearch(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
-                            />
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col h-72">
-                                   <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
-                                        Disponíveis ({filteredAvailableVolunteers.length})
-                                    </h4>
-                                    <div className="overflow-y-auto space-y-2 flex-grow pr-1">
-                                        {filteredAvailableVolunteers.length > 0 ? filteredAvailableVolunteers.map(v => (
-                                            <VolunteerItem key={v.id} volunteer={v} onAction={() => addVolunteer(v)} actionType="add" />
-                                        )) : <p className="text-sm text-slate-500 text-center pt-4">Nenhum voluntário encontrado.</p>}
+                {isSchedulingAllowed && (
+                    <div className="pt-4 border-t border-slate-200">
+                        {allVolunteers.length > 0 ? (
+                            <div className="space-y-4">
+                                <input
+                                    type="text"
+                                    placeholder="Buscar voluntários disponíveis..."
+                                    value={volunteerSearch}
+                                    onChange={(e) => setVolunteerSearch(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
+                                />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-slate-50 rounded-lg p-3 flex flex-col h-72">
+                                        <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-200">
+                                            <h4 className="font-semibold text-slate-800">
+                                                Disponíveis ({filteredAvailableVolunteers.length})
+                                            </h4>
+                                            <button
+                                                type="button"
+                                                onClick={addAllAvailableVolunteers}
+                                                disabled={unselectedVolunteers.filter(v => !v.isScheduledElsewhere).length === 0}
+                                                className="text-xs font-semibold text-blue-600 hover:text-blue-800 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
+                                            >
+                                                Escalar Todos
+                                            </button>
+                                        </div>
+                                        <div className="overflow-y-auto space-y-2 flex-grow pr-1">
+                                            {filteredAvailableVolunteers.length > 0 ? filteredAvailableVolunteers.map(v => (
+                                                <VolunteerItem key={v.id} volunteer={v} onAction={() => addVolunteer(v)} actionType="add" />
+                                            )) : <p className="text-sm text-slate-500 text-center pt-4">Nenhum voluntário encontrado.</p>}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="bg-slate-50 rounded-lg p-3 flex flex-col h-72">
-                                    <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
-                                        Selecionados ({selectedVolunteers.length})
-                                    </h4>
-                                    <div className="overflow-y-auto space-y-2 flex-grow pr-1">
-                                        {selectedVolunteers.length > 0 ? [...selectedVolunteers].sort((a, b) => a.name.localeCompare(b.name)).map(v => (
-                                            <VolunteerItem key={v.id} volunteer={v} onAction={() => removeVolunteer(v.id)} actionType="remove" />
-                                        )) : <p className="text-sm text-slate-500 text-center pt-4">Nenhum voluntário selecionado.</p>}
+                                    <div className="bg-slate-50 rounded-lg p-3 flex flex-col h-72">
+                                        <h4 className="font-semibold text-slate-800 mb-2 text-center pb-2 border-b border-slate-200">
+                                            Selecionados ({selectedVolunteers.length})
+                                        </h4>
+                                        <div className="overflow-y-auto space-y-2 flex-grow pr-1">
+                                            {selectedVolunteers.length > 0 ? [...selectedVolunteers].sort((a, b) => a.name.localeCompare(b.name)).map(v => (
+                                                <VolunteerItem key={v.id} volunteer={v} onAction={() => removeVolunteer(v.id)} actionType="remove" />
+                                            )) : <p className="text-sm text-slate-500 text-center pt-4">Nenhum voluntário selecionado.</p>}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : (
-                        <p className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg">Não há voluntários ativos neste departamento para escalar.</p>
-                    )}
+                        ) : (
+                            <p className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg">Não há voluntários ativos neste departamento para escalar.</p>
+                        )}
+                    </div>
+                )}
+
+
+                <div className="pt-4 border-t border-slate-200 mt-4 flex justify-end items-center gap-3">
+                    {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
+                    <button type="button" onClick={onCancel} className="px-4 py-2 bg-white border border-slate-300 font-semibold rounded-lg">Cancelar</button>
+                    <button
+                        type="submit"
+                        disabled={isSaving || (isSchedulingMode && !isSchedulingAllowed)}
+                        className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg disabled:bg-green-300 disabled:cursor-not-allowed"
+                    >
+                        {isSaving ? 'Salvando...' : `Salvar ${isSchedulingMode ? 'Escala' : 'Evento'}`}
+                    </button>
                 </div>
-            )}
+            </form>
 
-
-            <div className="pt-4 border-t border-slate-200 mt-4 flex justify-end items-center gap-3">
-                {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
-                <button type="button" onClick={onCancel} className="px-4 py-2 bg-white border border-slate-300 font-semibold rounded-lg">Cancelar</button>
-                <button 
-                    type="submit" 
-                    disabled={isSaving || (isSchedulingMode && !isSchedulingAllowed)} 
-                    className="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg disabled:bg-green-300 disabled:cursor-not-allowed"
-                >
-                    {isSaving ? 'Salvando...' : `Salvar ${isSchedulingMode ? 'Escala' : 'Evento'}`}
-                </button>
-            </div>
-        </form>
-
-        <ConfirmationModal
-            isOpen={isStatusChangeModalOpen}
-            onClose={handleCancelStatusChange}
-            onConfirm={handleConfirmStatusChange}
-            title="Confirmar Alteração de Status"
-            message='Tem certeza que deseja alterar o status do evento para "Confirmado"? Esta ação pode afetar a escalação de voluntários.'
-        />
-    </div>
+            <ConfirmationModal
+                isOpen={isStatusChangeModalOpen}
+                onClose={handleCancelStatusChange}
+                onConfirm={handleConfirmStatusChange}
+                title="Confirmar Alteração de Status"
+                message='Tem certeza que deseja alterar o status do evento para "Confirmado"? Esta ação pode afetar a escalação de voluntários.'
+            />
+        </div>
     );
 };
 
