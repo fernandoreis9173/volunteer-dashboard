@@ -56,7 +56,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             const label = device.label.toLowerCase();
             return label.includes('back') || label.includes('rear') || label.includes('traseira') || label.includes('environment');
           });
-          const bestCameraId = backCamera?.deviceId || cameras[cameras.length - 1]?.deviceId || cameras[0].deviceId;
+          // Prioriza traseira, senão usa a primeira (padrão do sistema/desktop)
+          const bestCameraId = backCamera?.deviceId || cameras[0].deviceId;
           setSelectedDeviceId(bestCameraId);
         } else {
           setSelectedDeviceId(undefined);
