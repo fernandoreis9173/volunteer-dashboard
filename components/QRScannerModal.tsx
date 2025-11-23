@@ -22,6 +22,53 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const isStartingRef = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [videoDevices, setVideoDevices] = React.useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | undefined>(undefined);
+  const [cameraError, setCameraError] = React.useState<string | null>(null);
+
+  // Efeito para listar dispositivos
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        // Tenta "aquecer" permissões
+        await navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        }).catch(err => {
+          console.warn("Permissão de câmera pode ter sido negada ou não solicitada ainda:", err);
+          // Não define erro aqui, deixa o scanner tentar iniciar e falhar se for o caso
+        });
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cameras = devices.filter(device => device.kind === 'videoinput');
+        setVideoDevices(cameras);
+
+        // Se encontrou câmeras, tenta selecionar a melhor
+        if (cameras.length > 0) {
+          const backCamera = cameras.find(device => {
+            const label = device.label.toLowerCase();
+            return label.includes('back') || label.includes('rear') || label.includes('traseira') || label.includes('environment');
+          });
+          // Prioriza traseira, senão usa a última (comum em mobile), senão a primeira
+          // Se não achar nenhuma específica, deixa undefined para o navegador escolher a padrão
+          const bestCameraId = backCamera?.deviceId || cameras[cameras.length - 1]?.deviceId || cameras[0].deviceId;
+          setSelectedDeviceId(bestCameraId);
+        } else {
+          // Se não listou nada (ex: permissão não dada para listar labels), deixa undefined para tentar a default
+          setSelectedDeviceId(undefined);
+        }
+      } catch (error) {
+        console.error("Erro ao listar dispositivos:", error);
+        // Mesmo com erro na listagem, tentamos iniciar com a padrão
+        setSelectedDeviceId(undefined);
+      }
+    };
+
+    if (isOpen) {
+      setCameraError(null);
+      getDevices();
+    }
+  }, [isOpen]);
+
   // Efeito para controlar o scanner
   useEffect(() => {
     // Função para parar o scanner
@@ -45,10 +92,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
     // Se já está iniciando ou rodando, não faz nada
     if (isStartingRef.current || controlsRef.current) {
+      // Se mudou o device ID e já está rodando, precisamos parar e reiniciar
+      // Mas como selectedDeviceId é dependência, o cleanup do useEffect anterior já deve ter parado.
+      // Vamos garantir apenas que não iniciamos se já estiver rodando COM O MESMO ID (o que não deve acontecer se a lógica estiver certa)
       return;
     }
 
     isStartingRef.current = true;
+    setCameraError(null);
 
     timeoutRef.current = setTimeout(async () => {
       if (!videoRef.current) return; // Verificação extra
@@ -56,51 +107,34 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       const codeReader = new BrowserQRCodeReader();
 
       try {
-        // Tenta pedir permissão de câmera de forma genérica primeiro
-        // Isso funciona melhor em desktops que podem não ter 'environment'
-        await navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-          stream.getTracks().forEach(track => track.stop());
-        });
+        // A lógica de pedir permissão e enumerar dispositivos foi movida para o useEffect de listagem.
+        // Aqui, apenas iniciamos o scanner com o selectedDeviceId.
+        // Se selectedDeviceId for undefined, o zxing usa a câmera padrão (user facing geralmente)
+        // Se for string, usa a específica.
+        // Isso resolve o problema de desktop onde talvez não tenhamos IDs listados corretamente.
 
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-        let selectedDeviceId = videoDevices[0]?.deviceId; // Padrão: primeira câmera (webcam)
-
-        // Tenta encontrar uma câmera traseira explicitamente
-        const backCamera = videoDevices.find(device => {
-          const label = device.label.toLowerCase();
-          return (
-            label.includes('back') ||
-            label.includes('rear') ||
-            label.includes('traseira') ||
-            label.includes('environment')
-          );
-        });
-
-        if (backCamera) {
-          selectedDeviceId = backCamera.deviceId;
-        } else if (videoDevices.length > 1) {
-          // Se não tem traseira explícita mas tem mais de uma, tenta a última (comum em celulares sem label claro)
-          // Mas em desktop com 1 camera, isso não será executado, mantendo a [0]
-          selectedDeviceId = videoDevices[videoDevices.length - 1].deviceId;
-        }
-
-        if (selectedDeviceId && videoRef.current && !controlsRef.current && !scanResult) {
-          controlsRef.current = await codeReader.decodeFromVideoDevice(
-            selectedDeviceId,
-            videoRef.current,
-            (result) => {
-              if (result) {
-                // Ao detectar, para o scanner e notifica o pai
-                stopScanner();
-                onScanSuccess(result.getText());
-              }
+        controlsRef.current = await codeReader.decodeFromVideoDevice(
+          selectedDeviceId,
+          videoRef.current,
+          (result) => {
+            if (result) {
+              // Ao detectar, para o scanner e notifica o pai
+              stopScanner();
+              onScanSuccess(result.getText());
             }
-          );
-        }
-      } catch (error) {
+          }
+        );
+      } catch (error: any) {
         console.error('Erro ao iniciar scanner:', error);
+        let msg = "Erro ao acessar a câmera.";
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          msg = "Permissão de câmera negada. Verifique as configurações do navegador.";
+        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+          msg = "Nenhuma câmera encontrada.";
+        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+          msg = "A câmera está em uso por outro aplicativo.";
+        }
+        setCameraError(msg);
       } finally {
         isStartingRef.current = false;
       }
@@ -109,7 +143,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
     return () => {
       stopScanner();
     };
-  }, [isOpen, onScanSuccess, scanResult]); // Re-executa quando scanResult muda (null -> valor -> null)
+  }, [isOpen, onScanSuccess, scanResult, selectedDeviceId]); // Re-executa quando scanResult ou selectedDeviceId muda
 
   if (!isOpen) return null;
 
@@ -126,15 +160,35 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent text-white">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="text-lg font-bold">Escanear Presença</h3>
-              <p className="text-xs opacity-80">{scanningEventName}</p>
+        <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent text-white pointer-events-none">
+          <div className="flex justify-between items-start pointer-events-auto">
+            <div className="flex-1 mr-4">
+              <h3 className="text-lg font-bold leading-tight">Escanear Presença</h3>
+              <p className="text-xs opacity-80 mb-2">{scanningEventName}</p>
+
+              {/* Seletor de Câmera - Só mostra se tivermos dispositivos listados */}
+              {videoDevices.length > 1 && (
+                <div className="relative inline-block text-left">
+                  <select
+                    value={selectedDeviceId || ''}
+                    onChange={(e) => setSelectedDeviceId(e.target.value)}
+                    className="bg-white/20 text-white text-xs rounded px-2 py-1 border border-white/30 focus:outline-none focus:border-white appearance-none pr-6 cursor-pointer backdrop-blur-sm hover:bg-white/30 transition-colors"
+                  >
+                    {videoDevices.map((device, index) => (
+                      <option key={device.deviceId} value={device.deviceId} className="text-black">
+                        {device.label || `Câmera ${index + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1 text-white">
+                    <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                  </div>
+                </div>
+              )}
             </div>
             <button
               onClick={onClose}
-              className="p-2 bg-white/10 rounded-full backdrop-blur-sm hover:bg-white/20 transition-colors"
+              className="p-2 bg-white/10 rounded-full backdrop-blur-sm hover:bg-white/20 transition-colors flex-shrink-0"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -153,8 +207,24 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             muted
           />
 
+          {/* Erro de Câmera */}
+          {cameraError && !scanResult && (
+            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center p-6 text-center bg-black/80 backdrop-blur-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="text-white text-lg font-medium">{cameraError}</p>
+              <button
+                onClick={() => { setCameraError(null); setSelectedDeviceId(undefined); }}
+                className="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+              >
+                Tentar Novamente
+              </button>
+            </div>
+          )}
+
           {/* Scanner Overlay (Mira) */}
-          {!scanResult && (
+          {!scanResult && !cameraError && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="w-64 h-64 border-2 border-white/30 rounded-lg relative">
                 <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 -mt-1 -ml-1 rounded-tl-lg"></div>
