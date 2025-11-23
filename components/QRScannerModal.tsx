@@ -62,8 +62,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           disableFlip: false,
           videoConstraints: {
             facingMode: "environment",
-            width: { ideal: 1080 },
-            height: { ideal: 1920 }
+            width: { ideal: 720 },  // Reduzido para menos zoom
+            height: { ideal: 1280 }
           }
         } : {
           fps: 30,
@@ -71,8 +71,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           disableFlip: false,
           videoConstraints: {
             facingMode: "user",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            width: { ideal: 1280 }, // Reduzido para menos zoom
+            height: { ideal: 720 }
           }
         };
 
