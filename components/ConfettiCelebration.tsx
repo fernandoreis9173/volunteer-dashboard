@@ -35,7 +35,7 @@ const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({ isOpen, onClo
   const modalContent = (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4"
-      onClick={onClose}
+    // onClick={onClose} // REMOVIDO: Evitar fechar ao clicar fora acidentalmente
     >
       {/* Confetes */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -57,6 +57,16 @@ const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({ isOpen, onClo
         className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 text-center transform transition-all duration-500 scale-0 animate-bounce-in relative overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Botão Fechar (X) */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
         {/* Ícone de Sucesso Animado */}
         <div className="mb-6 relative">
           <div className="mx-auto w-24 h-24 bg-green-100 rounded-full flex items-center justify-center animate-scale-in">
