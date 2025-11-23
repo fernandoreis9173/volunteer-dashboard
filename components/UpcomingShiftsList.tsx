@@ -51,7 +51,7 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
   const visibleDepartments = departmentNames.slice(0, MAX_DISPLAY).join(', ');
   const remainingDepartments = departmentNames.length - MAX_DISPLAY;
 
-  const isLeader = userRole === 'leader' || userRole === 'lider';
+  const isLeader = userRole === 'leader' || userRole === 'lider' || userRole === 'admin';
 
   const cardContainerClasses = isToday ? 'w-full' : 'w-80 flex-shrink-0';
 
