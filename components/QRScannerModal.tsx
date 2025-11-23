@@ -25,9 +25,16 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const [videoDevices, setVideoDevices] = React.useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | undefined>(undefined);
   const [cameraError, setCameraError] = React.useState<string | null>(null);
+  const [debugLogs, setDebugLogs] = React.useState<string[]>([]);
 
   // Ref para controlar a inicialização
   const initializationIdRef = useRef(0);
+
+  const addLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString();
+    setDebugLogs(prev => [`[${time}] ${msg}`, ...prev].slice(0, 10));
+    console.log(`[ScannerDebug] ${msg}`);
+  };
 
   // Função para detectar mobile
   const isMobile = () => {
@@ -37,10 +44,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   // Carrega dispositivos APÓS ter permissão (chamado quando o scanner inicia)
   const loadDevices = async () => {
     try {
+      addLog("Enumerando dispositivos...");
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cameras = devices.filter(device => device.kind === 'videoinput');
+      addLog(`Câmeras encontradas: ${cameras.length}`);
+      cameras.forEach(c => addLog(`- ${c.label} (${c.deviceId.slice(0, 8)}...)`));
       setVideoDevices(cameras);
-    } catch (e) {
+    } catch (e: any) {
+      addLog(`Erro ao listar: ${e.message}`);
       console.error("Erro ao listar dispositivos:", e);
     }
   };
@@ -48,6 +59,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   // Efeito principal de controle do scanner
   useEffect(() => {
     const currentInitId = ++initializationIdRef.current;
+    addLog(`Iniciando ciclo #${currentInitId}. Mobile? ${isMobile()}`);
 
     const stopScanner = () => {
       if (controlsRef.current) {
@@ -70,7 +82,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
     const timer = setTimeout(async () => {
       if (currentInitId !== initializationIdRef.current) return;
-      if (!videoRef.current) return;
+      if (!videoRef.current) {
+        addLog("Erro: Elemento de vídeo não encontrado.");
+        return;
+      }
 
       const codeReader = new BrowserQRCodeReader();
 
@@ -80,12 +95,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         // Callback de sucesso do scan
         const scanCallback = (result: any) => {
           if (result && currentInitId === initializationIdRef.current) {
+            addLog("QR Code detectado!");
             stopScanner();
             onScanSuccess(result.getText());
           }
         };
 
         if (selectedDeviceId) {
+          addLog(`Iniciando com Device ID: ${selectedDeviceId.slice(0, 8)}...`);
           // Se o usuário selecionou uma câmera específica, usa ela
           controls = await codeReader.decodeFromVideoDevice(
             selectedDeviceId,
@@ -99,6 +116,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               facingMode: isMobile() ? 'environment' : 'user'
             }
           };
+          addLog(`Iniciando com Constraints: ${JSON.stringify(constraints)}`);
 
           // No desktop, se não for mobile, 'user' geralmente pega a webcam padrão.
           // Se falhar com constraints, o zxing/browser costuma tentar o default.
@@ -110,15 +128,18 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         }
 
         if (currentInitId === initializationIdRef.current) {
+          addLog("Scanner iniciado com sucesso!");
           controlsRef.current = controls;
           // Scanner rodando com sucesso! Agora podemos listar os dispositivos para o dropdown
           loadDevices();
         } else {
+          addLog("Ciclo obsoleto, parando scanner.");
           controls.stop();
         }
 
       } catch (error: any) {
         if (currentInitId !== initializationIdRef.current) return;
+        addLog(`Erro Fatal: ${error.name} - ${error.message}`);
         console.error('Erro ao iniciar scanner:', error);
 
         if (error.name === 'AbortError') return;
@@ -131,6 +152,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         } else if (error.name === 'NotReadableError') {
           msg = "A câmera está em uso ou indisponível.";
         } else if (error.name === 'OverconstrainedError') {
+          addLog("Erro de constraint. Tentando fallback genérico...");
           // Se falhar com constraints (ex: não tem câmera traseira no desktop), tenta sem constraints (padrão)
           if (!selectedDeviceId) {
             try {
@@ -145,13 +167,15 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 }
               );
               if (currentInitId === initializationIdRef.current) {
+                addLog("Fallback iniciado com sucesso!");
                 controlsRef.current = fallbackControls;
                 loadDevices();
                 return; // Recuperado com sucesso
               } else {
                 fallbackControls.stop();
               }
-            } catch (fallbackErr) {
+            } catch (fallbackErr: any) {
+              addLog(`Fallback falhou: ${fallbackErr.message}`);
               console.error("Fallback falhou:", fallbackErr);
             }
           }
@@ -234,6 +258,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             muted
           />
 
+          {/* DEBUG OVERLAY */}
+          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-green-400 text-[10px] font-mono p-2 max-h-32 overflow-y-auto z-50 pointer-events-none">
+            <div className="font-bold text-white mb-1">DEBUG LOGS:</div>
+            {debugLogs.map((log, i) => (
+              <div key={i}>{log}</div>
+            ))}
+          </div>
+
           {/* Erro de Câmera */}
           {cameraError && !scanResult && (
             <div className="absolute inset-0 z-40 flex flex-col items-center justify-center p-6 text-center bg-black/80 backdrop-blur-sm">
@@ -243,7 +275,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               <p className="text-white text-lg font-medium">{cameraError}</p>
               <button
                 onClick={() => { setCameraError(null); setSelectedDeviceId(undefined); }}
-                className="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+                className="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors pointer-events-auto"
               >
                 Tentar Novamente
               </button>
