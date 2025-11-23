@@ -11,6 +11,7 @@ import QRCodeDisplayModal from './QRCodeDisplayModal';
 import RequestSwapModal from './RequestSwapModal';
 import VolunteerStatCard from './VolunteerStatCard';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
+import ConfettiCelebration from './ConfettiCelebration';
 
 interface LiveEventTimerProps {
     event: VolunteerEvent;
@@ -103,6 +104,10 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<VolunteerSchedule | null>(null);
 
+    // Estados para celebração
+    const [showCelebration, setShowCelebration] = useState(false);
+    const [celebrationVolunteerName, setCelebrationVolunteerName] = useState<string>('');
+
     // Fetch Dashboard Data Logic Removed - Handled by React Query
 
     const handleInvitationResponse = async (invitationId: number, response: 'aceito' | 'recusado') => {
@@ -160,6 +165,46 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
         setQrCodeEvent(event);
         setIsQrModalOpen(true);
     };
+
+    // Realtime subscription para detectar confirmação de presença
+    useEffect(() => {
+        if (!volunteerProfile?.id || !isQrModalOpen || !qrCodeEvent) return;
+
+        const subscription = supabase
+            .channel(`attendance-${volunteerProfile.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'event_volunteers',
+                    filter: `volunteer_id=eq.${volunteerProfile.id}`,
+                },
+                (payload) => {
+                    // Verifica se é o evento do QR code aberto e se foi marcado como presente
+                    if (
+                        payload.new.event_id === qrCodeEvent.id &&
+                        payload.new.department_id === qrCodeEvent.department_id &&
+                        payload.new.present === true &&
+                        payload.old.present === false
+                    ) {
+                        // Presença confirmada! Fechar modal e celebrar
+                        setIsQrModalOpen(false);
+                        setCelebrationVolunteerName(session?.user?.user_metadata?.name || 'Voluntário');
+                        setShowCelebration(true);
+
+                        // Refetch data para atualizar UI
+                        refetchDashboard();
+                        invalidateEvents();
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [volunteerProfile?.id, isQrModalOpen, qrCodeEvent, session, refetchDashboard, invalidateEvents]);
 
     const handleRequestSwap = (event: VolunteerSchedule) => {
         setSwapRequestEvent(event);
@@ -316,6 +361,11 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 isOpen={!!viewingTimelineFor}
                 onClose={() => setViewingTimelineFor(null)}
                 event={viewingTimelineFor}
+            />
+            <ConfettiCelebration
+                isOpen={showCelebration}
+                onClose={() => setShowCelebration(false)}
+                volunteerName={celebrationVolunteerName}
             />
         </div>
     );
