@@ -303,6 +303,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 onClose={() => setIsQrModalOpen(false)}
                 data={qrCodeData}
                 title={`QR Code para ${qrCodeEvent?.name}`}
+                attendanceConfirmed={qrCodeEvent?.present === true}
             />
             <RequestSwapModal
                 isOpen={isSwapModalOpen}
@@ -469,9 +470,10 @@ const EventCard: React.FC<{
                     ) : isLive ? (
                         <button
                             onClick={() => onGenerateQrCode(event)}
-                            className="flex-1 text-center px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-sm"
+                            disabled={myAttendance === true}
+                            className="flex-1 text-center px-4 py-2 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed disabled:text-slate-500"
                         >
-                            Gerar QR Code
+                            {myAttendance === true ? 'Presença Confirmada' : 'Gerar QR Code'}
                         </button>
                     ) : (
                         <button
