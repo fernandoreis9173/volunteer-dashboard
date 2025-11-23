@@ -26,8 +26,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | undefined>(undefined);
   const [cameraError, setCameraError] = React.useState<string | null>(null);
 
+  // Ref para controlar a "versão" da inicialização e evitar race conditions
+  const initializationIdRef = useRef(0);
+
   // Efeito para listar dispositivos
   useEffect(() => {
+    let mounted = true;
+
     const getDevices = async () => {
       try {
         // Tenta "aquecer" permissões
@@ -35,11 +40,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           stream.getTracks().forEach(track => track.stop());
         }).catch(err => {
           console.warn("Permissão de câmera pode ter sido negada ou não solicitada ainda:", err);
-          // Não define erro aqui, deixa o scanner tentar iniciar e falhar se for o caso
         });
+
+        if (!mounted) return;
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const cameras = devices.filter(device => device.kind === 'videoinput');
+
+        if (!mounted) return;
         setVideoDevices(cameras);
 
         // Se encontrou câmeras, tenta selecionar a melhor
@@ -48,18 +56,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             const label = device.label.toLowerCase();
             return label.includes('back') || label.includes('rear') || label.includes('traseira') || label.includes('environment');
           });
-          // Prioriza traseira, senão usa a última (comum em mobile), senão a primeira
-          // Se não achar nenhuma específica, deixa undefined para o navegador escolher a padrão
           const bestCameraId = backCamera?.deviceId || cameras[cameras.length - 1]?.deviceId || cameras[0].deviceId;
           setSelectedDeviceId(bestCameraId);
         } else {
-          // Se não listou nada (ex: permissão não dada para listar labels), deixa undefined para tentar a default
           setSelectedDeviceId(undefined);
         }
       } catch (error) {
         console.error("Erro ao listar dispositivos:", error);
-        // Mesmo com erro na listagem, tentamos iniciar com a padrão
-        setSelectedDeviceId(undefined);
+        if (mounted) setSelectedDeviceId(undefined);
       }
     };
 
@@ -67,83 +71,95 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       setCameraError(null);
       getDevices();
     }
+
+    return () => { mounted = false; };
   }, [isOpen]);
 
   // Efeito para controlar o scanner
   useEffect(() => {
-    // Função para parar o scanner
+    // Incrementa ID para invalidar tentativas anteriores
+    const currentInitId = ++initializationIdRef.current;
+
     const stopScanner = () => {
       if (controlsRef.current) {
         try { controlsRef.current.stop(); } catch (e) { }
         controlsRef.current = null;
       }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
       isStartingRef.current = false;
     };
 
-    // Se modal fechado ou mostrando resultado, para o scanner
     if (!isOpen || scanResult) {
       stopScanner();
       return;
     }
 
-    // Se já está iniciando ou rodando, não faz nada
-    if (isStartingRef.current || controlsRef.current) {
-      // Se mudou o device ID e já está rodando, precisamos parar e reiniciar
-      // Mas como selectedDeviceId é dependência, o cleanup do useEffect anterior já deve ter parado.
-      // Vamos garantir apenas que não iniciamos se já estiver rodando COM O MESMO ID (o que não deve acontecer se a lógica estiver certa)
-      return;
-    }
+    // Se já está rodando, para antes de reiniciar (troca de câmera)
+    stopScanner();
 
     isStartingRef.current = true;
     setCameraError(null);
 
-    timeoutRef.current = setTimeout(async () => {
-      if (!videoRef.current) return; // Verificação extra
+    // Pequeno delay para garantir que o DOM do vídeo esteja pronto e limpo
+    const timer = setTimeout(async () => {
+      // Se esta inicialização ficou obsoleta (outro useEffect rodou), aborta
+      if (currentInitId !== initializationIdRef.current) return;
+      if (!videoRef.current) return;
 
       const codeReader = new BrowserQRCodeReader();
 
       try {
-        // A lógica de pedir permissão e enumerar dispositivos foi movida para o useEffect de listagem.
-        // Aqui, apenas iniciamos o scanner com o selectedDeviceId.
-        // Se selectedDeviceId for undefined, o zxing usa a câmera padrão (user facing geralmente)
-        // Se for string, usa a específica.
-        // Isso resolve o problema de desktop onde talvez não tenhamos IDs listados corretamente.
-
-        controlsRef.current = await codeReader.decodeFromVideoDevice(
+        // Tenta iniciar o scanner
+        const controls = await codeReader.decodeFromVideoDevice(
           selectedDeviceId,
           videoRef.current,
           (result) => {
             if (result) {
-              // Ao detectar, para o scanner e notifica o pai
-              stopScanner();
-              onScanSuccess(result.getText());
+              // Só processa se ainda for a instância válida
+              if (currentInitId === initializationIdRef.current) {
+                stopScanner();
+                onScanSuccess(result.getText());
+              }
             }
           }
         );
+
+        if (currentInitId === initializationIdRef.current) {
+          controlsRef.current = controls;
+        } else {
+          // Se ficou obsoleto durante o await, para imediatamente
+          controls.stop();
+        }
+
       } catch (error: any) {
+        // Ignora erros se já mudamos de contexto
+        if (currentInitId !== initializationIdRef.current) return;
+
         console.error('Erro ao iniciar scanner:', error);
+
+        // Ignora AbortError (comum em trocas rápidas)
+        if (error.name === 'AbortError') return;
+
         let msg = "Erro ao acessar a câmera.";
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          msg = "Permissão de câmera negada. Verifique as configurações do navegador.";
+          msg = "Permissão de câmera negada. Verifique as configurações.";
         } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
           msg = "Nenhuma câmera encontrada.";
         } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-          msg = "A câmera está em uso por outro aplicativo.";
+          msg = "A câmera está em uso por outro app.";
         }
         setCameraError(msg);
       } finally {
-        isStartingRef.current = false;
+        if (currentInitId === initializationIdRef.current) {
+          isStartingRef.current = false;
+        }
       }
-    }, 100);
+    }, 300); // Aumentei o delay para 300ms para dar tempo ao navegador de limpar o recurso anterior
 
     return () => {
+      clearTimeout(timer);
       stopScanner();
     };
-  }, [isOpen, onScanSuccess, scanResult, selectedDeviceId]); // Re-executa quando scanResult ou selectedDeviceId muda
+  }, [isOpen, onScanSuccess, scanResult, selectedDeviceId]);
 
   if (!isOpen) return null;
 
