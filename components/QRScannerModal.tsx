@@ -20,6 +20,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isStartingRef = useRef(false);
 
+  // Detecta se é mobile
+  const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
   useEffect(() => {
     const stopScanner = async () => {
       if (scannerRef.current && scannerRef.current.isScanning) {
@@ -48,15 +53,38 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         const scanner = new Html5Qrcode('qr-reader');
         scannerRef.current = scanner;
 
-        const config = {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0
+        const mobile = isMobile();
+
+        // Configuração diferente para mobile (vertical) vs desktop (horizontal)
+        const config = mobile ? {
+          fps: 30,
+          qrbox: { width: 300, height: 300 },
+          aspectRatio: 0.5625, // 9:16 (vertical)
+          disableFlip: false,
+          videoConstraints: {
+            facingMode: "environment",
+            width: { ideal: 1080 },
+            height: { ideal: 1920 }, // Vertical para mobile
+            aspectRatio: { ideal: 0.5625 }
+          }
+        } : {
+          fps: 30,
+          qrbox: { width: 300, height: 300 },
+          aspectRatio: 1.777778, // 16:9 (horizontal)
+          disableFlip: false,
+          videoConstraints: {
+            facingMode: "user",
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }, // Horizontal para desktop
+            aspectRatio: { ideal: 1.777778 }
+          }
         };
 
-        // Tenta iniciar com a primeira câmera disponível
+        const facingMode = mobile ? "environment" : "user";
+
+        // Tenta iniciar com facingMode apropriado
         await scanner.start(
-          { facingMode: "environment" }, // Tenta câmera traseira primeiro
+          { facingMode },
           config,
           (decodedText) => {
             stopScanner();
@@ -66,23 +94,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             // Ignora erros de scan (normal quando não há QR code)
           }
         ).catch(async (err) => {
-          console.log('[Scanner] Falhou com environment, tentando com user...', err);
-          // Se falhar, tenta com câmera frontal
+          console.log(`[Scanner] Falhou com ${facingMode}, tentando fallback...`, err);
+
+          // Fallback: tenta com a primeira câmera disponível
           try {
-            await scanner.start(
-              { facingMode: "user" },
-              config,
-              (decodedText) => {
-                stopScanner();
-                onScanSuccess(decodedText);
-              },
-              (errorMessage) => {
-                // Ignora erros de scan
-              }
-            );
-          } catch (userErr) {
-            console.log('[Scanner] Falhou com user, tentando com deviceId...', userErr);
-            // Se ainda falhar, tenta com a primeira câmera disponível
             const devices = await Html5Qrcode.getCameras();
             if (devices && devices.length > 0) {
               await scanner.start(
@@ -97,6 +112,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 }
               );
             }
+          } catch (fallbackErr) {
+            console.error('[Scanner] Fallback falhou:', fallbackErr);
           }
         });
 
