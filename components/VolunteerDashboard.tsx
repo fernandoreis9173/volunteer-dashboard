@@ -152,8 +152,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                     setTimeout(() => {
                         cardElement.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
                     }, 2500); // Highlight for 2.5 seconds
-                } else {
-                    console.warn(`Could not find event card with ID: ${cardId}`);
                 }
             }
         }
@@ -168,21 +166,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
 
     // Realtime subscription para detectar confirmação de presença
     useEffect(() => {
-        if (!volunteerProfile?.id || !isQrModalOpen || !qrCodeEvent) {
-            console.log('⏸️ Subscription não criada:', {
-                hasVolunteer: !!volunteerProfile?.id,
-                modalOpen: isQrModalOpen,
-                hasEvent: !!qrCodeEvent
-            });
-            return;
-        }
-
-        console.log('🔔 Criando subscription para volunteer:', volunteerProfile.id);
-        console.log('📋 QR Code Event:', {
-            eventId: qrCodeEvent.id,
-            deptId: qrCodeEvent.department_id,
-            present: qrCodeEvent.present
-        });
+        if (!volunteerProfile?.id || !isQrModalOpen || !qrCodeEvent) return;
 
         const subscription = supabase
             .channel(`attendance-${volunteerProfile.id}-${Date.now()}`) // Unique channel
@@ -195,26 +179,13 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                     filter: `volunteer_id=eq.${volunteerProfile.id}`,
                 },
                 (payload) => {
-                    console.log('🔥 REALTIME UPDATE RECEBIDO:', payload);
-                    console.log('📊 Payload new:', payload.new);
-                    console.log('📊 Payload old:', payload.old);
-
                     // Verifica se é o evento do QR code aberto e se foi marcado como presente
                     const isCorrectEvent = payload.new.event_id === qrCodeEvent.id;
                     const isCorrectDept = payload.new.department_id === qrCodeEvent.department_id;
                     const isNowPresent = payload.new.present === true;
                     const wasNotPresent = payload.old?.present !== true; // FIX: aceita false, null ou undefined
 
-                    console.log('✅ Checks:', {
-                        isCorrectEvent,
-                        isCorrectDept,
-                        isNowPresent,
-                        wasNotPresent,
-                        oldPresent: payload.old?.present
-                    });
-
                     if (isCorrectEvent && isCorrectDept && isNowPresent && wasNotPresent) {
-                        console.log('🎉 CELEBRAÇÃO DISPARADA!');
                         // Presença confirmada! Fechar modal e celebrar
                         setIsQrModalOpen(false);
                         setCelebrationVolunteerName(session?.user?.user_metadata?.name || 'Voluntário');
@@ -223,17 +194,12 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                         // Refetch data para atualizar UI
                         refetchDashboard();
                         invalidateEvents();
-                    } else {
-                        console.log('❌ Condições não satisfeitas para celebração');
                     }
                 }
             )
-            .subscribe((status) => {
-                console.log('📡 Subscription status:', status);
-            });
+            .subscribe();
 
         return () => {
-            console.log('👋 Unsubscribing...');
             subscription.unsubscribe();
         };
     }, [volunteerProfile?.id, isQrModalOpen, qrCodeEvent, session, refetchDashboard, invalidateEvents]);
