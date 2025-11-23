@@ -10,6 +10,13 @@ interface ConfettiCelebrationProps {
 const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({ isOpen, onClose, volunteerName }) => {
   const [confetti, setConfetti] = useState<Array<{ id: number; left: number; delay: number; duration: number }>>([]);
 
+  // Ref para garantir que onClose seja sempre o atual sem reiniciar o timer
+  const onCloseRef = React.useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (isOpen) {
       // Gerar confetes aleatórios
@@ -21,14 +28,14 @@ const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({ isOpen, onClo
       }));
       setConfetti(confettiPieces);
 
-      // Fechar automaticamente após 5 segundos
+      // Fechar automaticamente após 6 segundos
       const timer = setTimeout(() => {
-        onClose();
-      }, 5000);
+        onCloseRef.current();
+      }, 6000);
 
       return () => clearTimeout(timer);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]); // Dependência apenas de isOpen para evitar reinícios desnecessários
 
   if (!isOpen) return null;
 
