@@ -58,8 +58,16 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
     timeoutRef.current = setTimeout(async () => {
       if (!videoRef.current) return;
 
+      // Verificar se a API de mídia está disponível
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('API de câmera não disponível');
+        isStartingRef.current = false;
+        return;
+      }
+
       const codeReader = new BrowserQRCodeReader();
       const mobile = isMobile();
+
 
       try {
         // Configuração diferente para mobile vs desktop
@@ -77,35 +85,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           }
         };
 
-        // Pede permissão primeiro
-        await navigator.mediaDevices.getUserMedia(constraints).then(stream => {
-          stream.getTracks().forEach(track => track.stop());
-        });
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-        let selectedDeviceId = videoDevices[0]?.deviceId;
-
-        if (mobile) {
-          // Para mobile, procura câmera traseira
-          const backCamera = videoDevices.find(device => {
-            const label = device.label.toLowerCase();
-            return (
-              label.includes('back') ||
-              label.includes('rear') ||
-              label.includes('traseira') ||
-              label.includes('environment')
-            );
-          });
-          if (backCamera) {
-            selectedDeviceId = backCamera.deviceId;
-          }
-        }
-        // Para desktop, usa a primeira câmera (geralmente a webcam integrada)
-
-        const controls = await codeReader.decodeFromVideoDevice(
-          selectedDeviceId,
+        // Usa decodeFromConstraints para deixar o Zxing gerenciar tudo
+        const controls = await codeReader.decodeFromConstraints(
+          constraints,
           videoRef.current,
           (result) => {
             if (result) {
