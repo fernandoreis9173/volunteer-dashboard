@@ -242,6 +242,10 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
 
     const userName = getShortName(session?.user?.user_metadata?.name);
 
+    const handleCloseCelebration = useCallback(() => {
+        setShowCelebration(false);
+    }, []);
+
     return (
         <div className="space-y-6">
             {notification && (
@@ -362,7 +366,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             />
             <ConfettiCelebration
                 isOpen={showCelebration}
-                onClose={() => setShowCelebration(false)}
+                onClose={handleCloseCelebration}
                 volunteerName={celebrationVolunteerName}
             />
         </div>
