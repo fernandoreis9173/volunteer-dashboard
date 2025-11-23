@@ -11,33 +11,33 @@ const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = (
 };
 
 interface VolunteerCardProps {
-    volunteer: DetailedVolunteer;
-    onEdit: (volunteer: DetailedVolunteer) => void;
-    onInvite: (volunteer: DetailedVolunteer) => void;
-    onRemoveFromDepartment: (volunteer: DetailedVolunteer) => void;
-    onRequestAction: (volunteer: DetailedVolunteer, type: 'disable' | 'enable') => void;
-    onPromote: (volunteer: DetailedVolunteer) => void; // Nova prop
-    userRole: string | null;
-    leaderDepartmentName: string | null;
-    isInvitePending: boolean;
+  volunteer: DetailedVolunteer;
+  onEdit: (volunteer: DetailedVolunteer) => void;
+  onInvite: (volunteer: DetailedVolunteer) => void;
+  onRemoveFromDepartment: (volunteer: DetailedVolunteer) => void;
+  onRequestAction: (volunteer: DetailedVolunteer, type: 'disable' | 'enable') => void;
+  onPromote: (volunteer: DetailedVolunteer) => void; // Nova prop
+  userRole: string | null;
+  leaderDepartmentName: string | null;
+  isInvitePending: boolean;
 }
 
 const formatPhoneNumber = (value: string) => {
-    if (!value) return '';
+  if (!value) return '';
 
-    const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
-    const { length } = phoneNumber;
+  const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
+  const { length } = phoneNumber;
 
-    if (length <= 2) {
-        return `(${phoneNumber}`;
-    }
-    if (length <= 6) {
-        return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
-    }
-    if (length <= 10) {
-        return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
-    }
-    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
+  if (length <= 2) {
+    return `(${phoneNumber}`;
+  }
+  if (length <= 6) {
+    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
+  }
+  if (length <= 10) {
+    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
+  }
+  return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
 };
 
 const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvite, onRemoveFromDepartment, onRequestAction, onPromote, userRole, leaderDepartmentName, isInvitePending }) => {
@@ -45,15 +45,15 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-          if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-              setIsMenuOpen(false);
-          }
-      };
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-  
+
   const getAvailabilityText = () => {
     let availabilityData: any = volunteer.availability;
 
@@ -72,20 +72,20 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
     if (Array.isArray(availabilityData)) {
       const count = availabilityData.length;
       if (count === 0) {
-          return 'Nenhuma registrada';
+        return 'Nenhuma registrada';
       }
       if (count === 1) {
-          return '1 dia disponível';
+        return '1 dia disponível';
       }
       return `${count} dias disponíveis`;
     }
-    
+
     return String(volunteer.availability);
   };
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
   const isAdmin = userRole === 'admin';
-  
+
   const isAlreadyInDepartment = useMemo(() => {
     if (!isLeader || !leaderDepartmentName || !Array.isArray(volunteer.departments)) return false;
     return volunteer.departments.some(d => d.name === leaderDepartmentName);
@@ -125,24 +125,24 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
           )}
         </div>
       </div>
-      
+
       <div className="text-sm text-slate-600 space-y-2">
-         <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
           </svg>
-          <span>{volunteer.email}</span>
+          <span className="break-all">{volunteer.email}</span>
         </div>
         {volunteer.phone && (
           <div className="flex items-center space-x-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
-              </svg>
-              <span>{formatPhoneNumber(volunteer.phone)}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
+            </svg>
+            <span>{formatPhoneNumber(volunteer.phone)}</span>
           </div>
         )}
       </div>
-  
+
       {(volunteer.departments || []).length > 0 && (
         <div>
           <p className="text-sm font-semibold text-slate-500 mb-2">Departamentos:</p>
@@ -155,16 +155,16 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
           </div>
         </div>
       )}
-      
+
       {(volunteer.skills || []).length > 0 && (
-          <div>
+        <div>
           <p className="text-sm font-semibold text-slate-500 mb-2">Habilidades:</p>
           <div className="flex flex-wrap gap-2">
-              {(volunteer.skills || []).map(s => <Tag key={s} color="blue">{s}</Tag>)}
+            {(volunteer.skills || []).map(s => <Tag key={s} color="blue">{s}</Tag>)}
           </div>
-          </div>
+        </div>
       )}
-  
+
       <div>
         <p className="text-sm font-semibold text-slate-500 mb-2">Disponibilidade:</p>
         <div className="flex items-center space-x-2 text-sm text-slate-600">
@@ -176,7 +176,7 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
           </span>
         </div>
       </div>
-      
+
       {isLeader && (
         <div className="pt-4 border-t border-slate-200">
           {isAlreadyInDepartment ? (
@@ -210,7 +210,7 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
           )}
         </div>
       )}
-  
+
     </div>
   );
 }

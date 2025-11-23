@@ -12,6 +12,7 @@ import DepartmentsPage from './components/DepartmentsPage';
 import SchedulesPage from './components/SchedulesPage';
 import CalendarPage from './components/CalendarPage';
 import AdminPage from './components/AdminPage';
+import AdminNotificationsPage from './components/AdminNotificationsPage';
 import AdminDashboard from './components/AdminDashboard';
 import FrequencyPage from './components/FrequencyPage';
 import LoginPage from './components/LoginPage';
@@ -132,6 +133,7 @@ const App: React.FC = () => {
     const lastUserId = useRef<string | null>(null);
     const hasLoginRedirected = useRef(false);
     const [theme, setTheme] = useState(getInitialTheme());
+    const [adminSubPage, setAdminSubPage] = useState<'users' | 'notifications'>('users');
 
     // State to cache today's events locally to avoid frequent DB hits
     const [todaysEvents, setTodaysEvents] = useState<AppEvent[]>([]);
@@ -812,6 +814,9 @@ const App: React.FC = () => {
                 // FIX: Pass the single leaderDepartmentId to CalendarPage.
                 return <CalendarPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} setIsSidebarOpen={setIsSidebarOpen} />;
             case 'admin':
+                if (adminSubPage === 'notifications') {
+                    return <AdminNotificationsPage onDataChange={fetchLeaders} />;
+                }
                 return <AdminPage onDataChange={fetchLeaders} />;
             case 'frequency':
                 // FIX: Remove unused `leaders` prop from `FrequencyPage` component call to fix type error, as the component no longer requires it.
@@ -941,6 +946,8 @@ const App: React.FC = () => {
                 onInstallPrompt={handleInstallPrompt}
                 theme={theme}
                 toggleTheme={toggleTheme}
+                adminSubPage={adminSubPage}
+                onAdminSubPageChange={setAdminSubPage}
             />
 
             <div className="flex-1 flex flex-col overflow-hidden">

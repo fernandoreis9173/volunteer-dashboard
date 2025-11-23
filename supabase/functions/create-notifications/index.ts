@@ -3,18 +3,26 @@ import { createClient } from 'npm:@supabase/supabase-js@2.44.4';
 import * as webpush from 'npm:web-push@3.6.7';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
+};
+
+const chunkArray = (array: any[], size: number) => {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += size) {
+        chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
 };
 
 const sendPushNotification = async (subscription: any, payload: string, supabaseAdmin: any) => {
     // Helper to send a single notification and handle errors/expired subscriptions.
     try {
-        const subscriptionData = typeof subscription.subscription_data === 'string' 
-            ? JSON.parse(subscription.subscription_data) 
+        const subscriptionData = typeof subscription.subscription_data === 'string'
+            ? JSON.parse(subscription.subscription_data)
             : subscription.subscription_data;
-            
+
         const fullSubscription = {
             endpoint: subscription.endpoint,
             keys: subscriptionData.keys,
@@ -39,8 +47,21 @@ Deno.serve(async (req: any) => {
     }
 
     try {
-        const { notifications, broadcastMessage, notifyType, event } = await req.json();
-        
+        const {
+            notifications,
+            broadcastMessage,
+            notifyType,
+            event,
+            // New targeted notification parameters
+            message,
+            targetType,
+            departmentId,
+            includeLeaders,
+            includeVolunteers,
+            eventId,
+            userIds
+        } = await req.json();
+
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -51,15 +72,37 @@ Deno.serve(async (req: any) => {
         if (!vapidPublicKey || !vapidPrivateKey) throw new Error("VAPID keys are not configured.");
 
         webpush.setVapidDetails('mailto:leovieiradefreitas@gmail.com', vapidPublicKey, vapidPrivateKey);
-        
+
         let notificationsToProcess: any[] = Array.isArray(notifications) ? [...notifications] : [];
+
+        // NEW: Handle targeted notifications (department or event)
+        if (targetType === 'department' && departmentId && userIds && userIds.length > 0) {
+            console.log(`Creating targeted notifications for department ${departmentId} to ${userIds.length} users.`);
+            const targetedNotifications = userIds.map((userId: string) => ({
+                user_id: userId,
+                message: message,
+                type: 'info',
+                is_read: false,
+            }));
+            notificationsToProcess.push(...targetedNotifications);
+        } else if (targetType === 'event' && eventId && userIds && userIds.length > 0) {
+            console.log(`Creating targeted notifications for event ${eventId} to ${userIds.length} users.`);
+            const targetedNotifications = userIds.map((userId: string) => ({
+                user_id: userId,
+                message: message,
+                type: 'info',
+                is_read: false,
+                related_event_id: eventId,
+            }));
+            notificationsToProcess.push(...targetedNotifications);
+        }
 
         if (notifyType === 'event_created' && event) {
             console.log("Buscando todos os líderes para notificação de criação de evento...");
             const { data: leadersFromProfiles, error: profileError } = await supabaseAdmin
-              .from('profiles')
-              .select('id')
-              .or('role.eq.leader,role.eq.lider,role.eq.líder');
+                .from('profiles')
+                .select('id')
+                .or('role.eq.leader,role.eq.lider,role.eq.líder');
 
             if (profileError) throw profileError;
 
@@ -79,7 +122,7 @@ Deno.serve(async (req: any) => {
             } else {
                 console.log(`Encontrados ${leaders.length} líderes diretamente em 'profiles'.`);
             }
-            
+
             if (leaders.length > 0) {
                 const newNotifications = leaders.map(l => ({
                     user_id: l.id,
@@ -109,11 +152,11 @@ Deno.serve(async (req: any) => {
                         .from('department_leaders')
                         .select('leader_id')
                         .in('department_id', allDepartmentIds);
-                    
+
                     if (leaderError) throw leaderError;
-                    
+
                     const leaders = leadersData || [];
-                    
+
                     if (leaders.length > 0) {
                         // FIX: Use `leader_id` from the correct query result.
                         const newNotifications = leaders.map(l => ({
@@ -152,7 +195,7 @@ Deno.serve(async (req: any) => {
                         type: 'event_update',
                         related_event_id: event.id,
                     }));
-                
+
                 console.log(`Encontrados ${volunteerNotifications.length} voluntários únicos para notificar.`);
                 notificationsToProcess.push(...volunteerNotifications);
             }
@@ -160,12 +203,16 @@ Deno.serve(async (req: any) => {
 
         if (notificationsToProcess && notificationsToProcess.length > 0) {
             console.log("🔔 Notificações geradas:", notificationsToProcess.map(n => ({
-              user_id: n.user_id,
-              message: n.message
+                user_id: n.user_id,
+                message: n.message
             })));
 
-            const { error: insertError } = await supabaseAdmin.from('notifications').insert(notificationsToProcess);
-            if (insertError) throw insertError;
+            // Batch insert notifications
+            const notificationChunks = chunkArray(notificationsToProcess, 1000);
+            for (const chunk of notificationChunks) {
+                const { error: insertError } = await supabaseAdmin.from('notifications').insert(chunk);
+                if (insertError) throw insertError;
+            }
 
             const notificationsByUser = new Map();
             notificationsToProcess.forEach(n => {
@@ -173,42 +220,53 @@ Deno.serve(async (req: any) => {
                 notificationsByUser.get(n.user_id)?.push(n);
             });
             const userIdsToNotify = Array.from(notificationsByUser.keys());
+            let activeSubscriptions: any[] = [];
 
-            const { data: activeSubscriptions, error: subsError } = await supabaseAdmin
-                .from('push_subscriptions')
-                .select('endpoint, subscription_data, user_id')
-                .in('user_id', userIdsToNotify);
-            
-            if (subsError) {
-                console.error("Error fetching push subscriptions, push notifications will be skipped:", subsError);
+            // Batch fetch subscriptions to avoid URL length limits
+            const userIdChunks = chunkArray(userIdsToNotify, 100);
+            for (const chunk of userIdChunks) {
+                const { data: subs, error: subsError } = await supabaseAdmin
+                    .from('push_subscriptions')
+                    .select('endpoint, subscription_data, user_id')
+                    .in('user_id', chunk);
+
+                if (subsError) {
+                    console.error("Error fetching push subscriptions chunk:", subsError);
+                } else if (subs) {
+                    activeSubscriptions = [...activeSubscriptions, ...subs];
+                }
             }
-            
-            if (activeSubscriptions) {
+
+            if (activeSubscriptions.length > 0) {
                 console.log("📡 IDs com subscription ativa:", activeSubscriptions.map(s => s.user_id));
             }
 
             if (activeSubscriptions && activeSubscriptions.length > 0) {
                 console.log(`Found ${activeSubscriptions.length} active subscriptions for ${userIdsToNotify.length} targeted users.`);
 
-                const pushPromises = activeSubscriptions.map(sub => {
-                    const userNotifications = notificationsByUser.get(sub.user_id) || [];
-                    const title = 'Nova Notificação';
-                    const body = userNotifications.length > 1 
-                        ? `Você tem ${userNotifications.length} novas notificações.` 
-                        : userNotifications[0]?.message ?? 'Você tem uma nova notificação.';
-                    
-                    let targetUrl = '/#/notifications';
-                    if (userNotifications.length === 1 && userNotifications[0]?.related_event_id) {
-                        targetUrl = '/#/events';
-                    }
+                // Batch send push notifications to control concurrency
+                const pushChunks = chunkArray(activeSubscriptions, 50);
+                for (const chunk of pushChunks) {
+                    const pushPromises = chunk.map((sub: any) => {
+                        const userNotifications = notificationsByUser.get(sub.user_id) || [];
+                        const title = 'Nova Notificação';
+                        const body = userNotifications.length > 1
+                            ? `Você tem ${userNotifications.length} novas notificações.`
+                            : userNotifications[0]?.message ?? 'Você tem uma nova notificação.';
 
-                    const payload = JSON.stringify({ title, body, url: targetUrl });
-                    return sendPushNotification(sub, payload, supabaseAdmin);
-                });
-                
-                await Promise.all(pushPromises);
+                        let targetUrl = '/#/notifications';
+                        if (userNotifications.length === 1 && userNotifications[0]?.related_event_id) {
+                            targetUrl = '/#/events';
+                        }
+
+                        const payload = JSON.stringify({ title, body, url: targetUrl });
+                        return sendPushNotification(sub, payload, supabaseAdmin);
+                    });
+
+                    await Promise.all(pushPromises);
+                }
             } else {
-                 console.log(`Notifications saved to DB, but no active push subscriptions found for the targeted users.`);
+                console.log(`Notifications saved to DB, but no active push subscriptions found for the targeted users.`);
             }
 
             return new Response(JSON.stringify({
@@ -229,7 +287,7 @@ Deno.serve(async (req: any) => {
                     body: broadcastMessage,
                     url: '/#/notifications'
                 });
-                
+
                 const broadcastPromises = allSubscriptions.map(sub => sendPushNotification(sub, payload, supabaseAdmin));
                 await Promise.all(broadcastPromises);
 
@@ -241,16 +299,16 @@ Deno.serve(async (req: any) => {
                     is_read: false,
                 }));
 
-                if(broadcastNotificationsToInsert.length > 0) {
+                if (broadcastNotificationsToInsert.length > 0) {
                     await supabaseAdmin.from('notifications').insert(broadcastNotificationsToInsert);
                 }
-                
+
                 return new Response(JSON.stringify({ message: `Broadcast enviado para ${allSubscriptions.length} inscrições.` }), {
                     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                     status: 200,
                 });
             } else {
-                 return new Response(JSON.stringify({ message: 'Nenhuma inscrição de push ativa encontrada para o broadcast.' }), {
+                return new Response(JSON.stringify({ message: 'Nenhuma inscrição de push ativa encontrada para o broadcast.' }), {
                     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                     status: 200,
                 });
