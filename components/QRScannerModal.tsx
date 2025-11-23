@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { BrowserQRCodeReader } from '@zxing/browser';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface QRScannerModalProps {
   isOpen: boolean;
@@ -17,94 +17,100 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   scanningEventName,
   scanResult
 }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const controlsRef = useRef<any>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const isStartingRef = useRef(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Função para detectar se é mobile
-  const isMobile = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  };
-
-  // Efeito para controlar o scanner
   useEffect(() => {
-    // Função para parar o scanner
-    const stopScanner = () => {
-      if (controlsRef.current) {
-        try { controlsRef.current.stop(); } catch (e) { }
-        controlsRef.current = null;
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
+    const stopScanner = async () => {
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        try {
+          await scannerRef.current.stop();
+        } catch (e) {
+          console.error('Erro ao parar scanner:', e);
+        }
       }
       isStartingRef.current = false;
     };
 
-    // Se modal fechado ou mostrando resultado, para o scanner
     if (!isOpen || scanResult) {
       stopScanner();
       return;
     }
 
-    // Se já está iniciando ou rodando, não faz nada
-    if (isStartingRef.current || controlsRef.current) {
+    if (isStartingRef.current) {
       return;
     }
 
     isStartingRef.current = true;
 
-    timeoutRef.current = setTimeout(async () => {
-      if (!videoRef.current) return;
-
-      // Verificar se a API de mídia está disponível
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.error('API de câmera não disponível');
-        isStartingRef.current = false;
-        return;
-      }
-
-      const codeReader = new BrowserQRCodeReader();
-      const mobile = isMobile();
-
-
+    const startScanner = async () => {
       try {
-        // Configuração diferente para mobile vs desktop
-        const constraints = mobile ? {
-          video: {
-            facingMode: 'environment', // Câmera traseira para mobile
-            width: { ideal: 720 },
-            height: { ideal: 1280 }
-          }
-        } : {
-          video: {
-            facingMode: 'user', // Câmera frontal para desktop
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
+        const scanner = new Html5Qrcode('qr-reader');
+        scannerRef.current = scanner;
+
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0
         };
 
-        // Usa decodeFromConstraints para deixar o Zxing gerenciar tudo
-        const controls = await codeReader.decodeFromConstraints(
-          constraints,
-          videoRef.current,
-          (result) => {
-            if (result) {
-              stopScanner();
-              onScanSuccess(result.getText());
+        // Tenta iniciar com a primeira câmera disponível
+        await scanner.start(
+          { facingMode: "environment" }, // Tenta câmera traseira primeiro
+          config,
+          (decodedText) => {
+            stopScanner();
+            onScanSuccess(decodedText);
+          },
+          (errorMessage) => {
+            // Ignora erros de scan (normal quando não há QR code)
+          }
+        ).catch(async (err) => {
+          console.log('[Scanner] Falhou com environment, tentando com user...', err);
+          // Se falhar, tenta com câmera frontal
+          try {
+            await scanner.start(
+              { facingMode: "user" },
+              config,
+              (decodedText) => {
+                stopScanner();
+                onScanSuccess(decodedText);
+              },
+              (errorMessage) => {
+                // Ignora erros de scan
+              }
+            );
+          } catch (userErr) {
+            console.log('[Scanner] Falhou com user, tentando com deviceId...', userErr);
+            // Se ainda falhar, tenta com a primeira câmera disponível
+            const devices = await Html5Qrcode.getCameras();
+            if (devices && devices.length > 0) {
+              await scanner.start(
+                devices[0].id,
+                config,
+                (decodedText) => {
+                  stopScanner();
+                  onScanSuccess(decodedText);
+                },
+                (errorMessage) => {
+                  // Ignora erros de scan
+                }
+              );
             }
           }
-        );
+        });
 
-        controlsRef.current = controls;
+        console.log('[Scanner] Scanner iniciado com sucesso!');
       } catch (error) {
         console.error('Erro ao iniciar scanner:', error);
         isStartingRef.current = false;
       }
-    }, 300);
+    };
+
+    const timer = setTimeout(startScanner, 300);
 
     return () => {
+      clearTimeout(timer);
       stopScanner();
     };
   }, [isOpen, onScanSuccess, scanResult]);
@@ -141,31 +147,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           </div>
         </div>
 
-        {/* Video Area */}
+        {/* Scanner Area */}
         <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-          <video
-            ref={videoRef}
-            className="absolute inset-0 w-full h-full object-cover"
-            autoPlay
-            playsInline
-            muted
-          />
-
-          {/* Scanner Overlay (Mira) */}
-          {!scanResult && (
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="w-64 h-64 border-2 border-white/30 rounded-lg relative">
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 -mt-1 -ml-1 rounded-tl-lg"></div>
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 -mt-1 -mr-1 rounded-tr-lg"></div>
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 -mb-1 -ml-1 rounded-bl-lg"></div>
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 -mb-1 -mr-1 rounded-br-lg"></div>
-                <div className="absolute left-0 right-0 h-0.5 bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan-line top-1/2"></div>
-              </div>
-              <p className="absolute bottom-20 text-white/80 text-sm font-medium bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
-                Aponte para o QR Code
-              </p>
-            </div>
-          )}
+          <div id="qr-reader" className="w-full h-full"></div>
 
           {/* Feedback Overlay */}
           {scanResult && (
@@ -194,14 +178,16 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       </div>
 
       <style>{`
-        @keyframes scan-line {
-          0% { transform: translateY(-120px); opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { transform: translateY(120px); opacity: 0; }
+        #qr-reader {
+          width: 100% !important;
         }
-        .animate-scan-line {
-          animation: scan-line 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        #qr-reader video {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+        }
+        #qr-reader__dashboard {
+          display: none !important;
         }
         @keyframes bounce-in {
           0% { transform: scale(0); }
