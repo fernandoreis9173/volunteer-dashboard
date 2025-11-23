@@ -119,19 +119,15 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
   const modalContent = (
     <div
-      className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-0 md:p-4 transition-opacity duration-300"
+      className="fixed inset-0 bg-black z-50 flex items-center justify-center"
       aria-labelledby="modal-title"
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
     >
-      <div
-        className="bg-black relative w-full h-full md:h-auto md:max-w-md md:rounded-2xl md:overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="relative w-full h-full flex flex-col">
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent text-white pointer-events-none">
-          <div className="flex justify-between items-start pointer-events-auto">
+        <div className="absolute top-0 left-0 right-0 z-30 p-4 bg-gradient-to-b from-black/80 to-transparent text-white">
+          <div className="flex justify-between items-start">
             <div className="flex-1 mr-4">
               <h3 className="text-lg font-bold leading-tight">Escanear Presença</h3>
               <p className="text-xs opacity-80">{scanningEventName}</p>
@@ -147,9 +143,36 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           </div>
         </div>
 
-        {/* Scanner Area */}
-        <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
-          <div id="qr-reader" className="w-full h-full"></div>
+        {/* Scanner Area - Tela Cheia */}
+        <div className="flex-1 relative bg-black overflow-hidden">
+          <div id="qr-reader" className="absolute inset-0"></div>
+
+          {/* Overlay de Scan Animado */}
+          {!scanResult && (
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-20">
+              {/* Área de foco do QR Code */}
+              <div className="relative w-72 h-72">
+                {/* Cantos animados */}
+                <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl animate-pulse-corner"></div>
+                <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl animate-pulse-corner"></div>
+                <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl animate-pulse-corner"></div>
+                <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-blue-500 rounded-br-2xl animate-pulse-corner"></div>
+
+                {/* Linha de scan animada */}
+                <div className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent shadow-[0_0_20px_rgba(59,130,246,0.8)] animate-scan-line"></div>
+
+                {/* Brilho de fundo */}
+                <div className="absolute inset-0 bg-blue-500/5 rounded-2xl"></div>
+              </div>
+
+              {/* Instrução */}
+              <div className="absolute bottom-32 left-0 right-0 flex justify-center">
+                <div className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-full border border-white/20">
+                  <p className="text-white text-sm font-medium">Aponte para o QR Code</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Feedback Overlay */}
           {scanResult && (
@@ -178,17 +201,63 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       </div>
 
       <style>{`
+        /* Esconde completamente a UI do html5-qrcode */
         #qr-reader {
           width: 100% !important;
+          height: 100% !important;
         }
         #qr-reader video {
           width: 100% !important;
           height: 100% !important;
-          object-fit: cover !important;
+          object-fit: contain !important;
+          border: none !important;
         }
-        #qr-reader__dashboard {
+        #qr-reader__dashboard,
+        #qr-reader__dashboard_section,
+        #qr-reader__dashboard_section_csr,
+        #qr-reader__header_message,
+        #qr-reader__camera_selection,
+        #qr-reader__scan_region {
           display: none !important;
         }
+        
+        /* Animação da linha de scan */
+        @keyframes scan-line {
+          0% { 
+            top: 0%; 
+            opacity: 0;
+          }
+          10% { 
+            opacity: 1;
+          }
+          90% { 
+            opacity: 1;
+          }
+          100% { 
+            top: 100%; 
+            opacity: 0;
+          }
+        }
+        .animate-scan-line {
+          animation: scan-line 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        
+        /* Animação dos cantos */
+        @keyframes pulse-corner {
+          0%, 100% { 
+            opacity: 1;
+            filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
+          }
+          50% { 
+            opacity: 0.6;
+            filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.4));
+          }
+        }
+        .animate-pulse-corner {
+          animation: pulse-corner 2s ease-in-out infinite;
+        }
+        
+        /* Animações de feedback */
         @keyframes bounce-in {
           0% { transform: scale(0); }
           50% { transform: scale(1.2); }
