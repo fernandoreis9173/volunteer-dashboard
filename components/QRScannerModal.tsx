@@ -26,59 +26,27 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | undefined>(undefined);
   const [cameraError, setCameraError] = React.useState<string | null>(null);
 
-  // Ref para controlar a "versão" da inicialização e evitar race conditions
+  // Ref para controlar a inicialização
   const initializationIdRef = useRef(0);
 
-  // Efeito para listar dispositivos
-  useEffect(() => {
-    let mounted = true;
+  // Função para detectar mobile
+  const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
 
-    const getDevices = async () => {
-      try {
-        // Tenta "aquecer" permissões
-        await navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-          stream.getTracks().forEach(track => track.stop());
-        }).catch(err => {
-          console.warn("Permissão de câmera pode ter sido negada ou não solicitada ainda:", err);
-        });
-
-        if (!mounted) return;
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cameras = devices.filter(device => device.kind === 'videoinput');
-
-        if (!mounted) return;
-        setVideoDevices(cameras);
-
-        // Se encontrou câmeras, tenta selecionar a melhor
-        if (cameras.length > 0) {
-          const backCamera = cameras.find(device => {
-            const label = device.label.toLowerCase();
-            return label.includes('back') || label.includes('rear') || label.includes('traseira') || label.includes('environment');
-          });
-          // Prioriza traseira, senão usa a primeira (padrão do sistema/desktop)
-          const bestCameraId = backCamera?.deviceId || cameras[0].deviceId;
-          setSelectedDeviceId(bestCameraId);
-        } else {
-          setSelectedDeviceId(undefined);
-        }
-      } catch (error) {
-        console.error("Erro ao listar dispositivos:", error);
-        if (mounted) setSelectedDeviceId(undefined);
-      }
-    };
-
-    if (isOpen) {
-      setCameraError(null);
-      getDevices();
+  // Carrega dispositivos APÓS ter permissão (chamado quando o scanner inicia)
+  const loadDevices = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(device => device.kind === 'videoinput');
+      setVideoDevices(cameras);
+    } catch (e) {
+      console.error("Erro ao listar dispositivos:", e);
     }
+  };
 
-    return () => { mounted = false; };
-  }, [isOpen]);
-
-  // Efeito para controlar o scanner
+  // Efeito principal de controle do scanner
   useEffect(() => {
-    // Incrementa ID para invalidar tentativas anteriores
     const currentInitId = ++initializationIdRef.current;
 
     const stopScanner = () => {
@@ -94,59 +62,100 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       return;
     }
 
-    // Se já está rodando, para antes de reiniciar (troca de câmera)
+    // Para qualquer execução anterior
     stopScanner();
 
     isStartingRef.current = true;
     setCameraError(null);
 
-    // Pequeno delay para garantir que o DOM do vídeo esteja pronto e limpo
     const timer = setTimeout(async () => {
-      // Se esta inicialização ficou obsoleta (outro useEffect rodou), aborta
       if (currentInitId !== initializationIdRef.current) return;
       if (!videoRef.current) return;
 
       const codeReader = new BrowserQRCodeReader();
 
       try {
-        // Tenta iniciar o scanner
-        const controls = await codeReader.decodeFromVideoDevice(
-          selectedDeviceId,
-          videoRef.current,
-          (result) => {
-            if (result) {
-              // Só processa se ainda for a instância válida
-              if (currentInitId === initializationIdRef.current) {
-                stopScanner();
-                onScanSuccess(result.getText());
-              }
-            }
+        let controls;
+
+        // Callback de sucesso do scan
+        const scanCallback = (result: any) => {
+          if (result && currentInitId === initializationIdRef.current) {
+            stopScanner();
+            onScanSuccess(result.getText());
           }
-        );
+        };
+
+        if (selectedDeviceId) {
+          // Se o usuário selecionou uma câmera específica, usa ela
+          controls = await codeReader.decodeFromVideoDevice(
+            selectedDeviceId,
+            videoRef.current,
+            scanCallback
+          );
+        } else {
+          // Inicialização automática baseada no dispositivo
+          const constraints = {
+            video: {
+              facingMode: isMobile() ? 'environment' : 'user'
+            }
+          };
+
+          // No desktop, se não for mobile, 'user' geralmente pega a webcam padrão.
+          // Se falhar com constraints, o zxing/browser costuma tentar o default.
+          controls = await codeReader.decodeFromConstraints(
+            constraints,
+            videoRef.current,
+            scanCallback
+          );
+        }
 
         if (currentInitId === initializationIdRef.current) {
           controlsRef.current = controls;
+          // Scanner rodando com sucesso! Agora podemos listar os dispositivos para o dropdown
+          loadDevices();
         } else {
-          // Se ficou obsoleto durante o await, para imediatamente
           controls.stop();
         }
 
       } catch (error: any) {
-        // Ignora erros se já mudamos de contexto
         if (currentInitId !== initializationIdRef.current) return;
-
         console.error('Erro ao iniciar scanner:', error);
 
-        // Ignora AbortError (comum em trocas rápidas)
         if (error.name === 'AbortError') return;
 
         let msg = "Erro ao acessar a câmera.";
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          msg = "Permissão de câmera negada. Verifique as configurações.";
-        } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+          msg = "Permissão de câmera negada.";
+        } else if (error.name === 'NotFoundError') {
           msg = "Nenhuma câmera encontrada.";
-        } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-          msg = "A câmera está em uso por outro app.";
+        } else if (error.name === 'NotReadableError') {
+          msg = "A câmera está em uso ou indisponível.";
+        } else if (error.name === 'OverconstrainedError') {
+          // Se falhar com constraints (ex: não tem câmera traseira no desktop), tenta sem constraints (padrão)
+          if (!selectedDeviceId) {
+            try {
+              const fallbackControls = await codeReader.decodeFromVideoDevice(
+                undefined,
+                videoRef.current!,
+                (result) => {
+                  if (result && currentInitId === initializationIdRef.current) {
+                    stopScanner();
+                    onScanSuccess(result.getText());
+                  }
+                }
+              );
+              if (currentInitId === initializationIdRef.current) {
+                controlsRef.current = fallbackControls;
+                loadDevices();
+                return; // Recuperado com sucesso
+              } else {
+                fallbackControls.stop();
+              }
+            } catch (fallbackErr) {
+              console.error("Fallback falhou:", fallbackErr);
+            }
+          }
+          msg = "Câmera incompatível.";
         }
         setCameraError(msg);
       } finally {
@@ -154,7 +163,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           isStartingRef.current = false;
         }
       }
-    }, 300); // Aumentei o delay para 300ms para dar tempo ao navegador de limpar o recurso anterior
+    }, 300);
 
     return () => {
       clearTimeout(timer);
@@ -191,6 +200,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
                     onChange={(e) => setSelectedDeviceId(e.target.value)}
                     className="bg-white/20 text-white text-xs rounded px-2 py-1 border border-white/30 focus:outline-none focus:border-white appearance-none pr-6 cursor-pointer backdrop-blur-sm hover:bg-white/30 transition-colors"
                   >
+                    <option value="">Automático</option>
                     {videoDevices.map((device, index) => (
                       <option key={device.deviceId} value={device.deviceId} className="text-black">
                         {device.label || `Câmera ${index + 1}`}
