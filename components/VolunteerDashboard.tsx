@@ -164,6 +164,13 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
         setIsQrModalOpen(true);
     };
 
+    const handleCloseCelebration = useCallback(() => {
+        setShowCelebration(false);
+        // Atualiza os dados APENAS quando a celebração termina para evitar re-renderizações bruscas
+        invalidateEvents();
+        refetchDashboard();
+    }, [invalidateEvents, refetchDashboard]);
+
     // Realtime subscription para detectar confirmação de presença
     useEffect(() => {
         if (!volunteerProfile?.id || !isQrModalOpen || !qrCodeEvent) return;
@@ -186,23 +193,17 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                     const wasNotPresent = payload.old?.present !== true; // FIX: aceita false, null ou undefined
 
                     if (isCorrectEvent && isCorrectDept && isNowPresent && wasNotPresent) {
-                        // Presença confirmada! Fechar modal e celebrar
+                        // Presença confirmada! Fechar modal QR e abrir celebração
+                        // NÃO atualizamos os dados agora para manter a UI estável
                         setIsQrModalOpen(false);
                         setCelebrationVolunteerName(session?.user?.user_metadata?.name || 'Voluntário');
                         setShowCelebration(true);
-
-                        // Refetch data para atualizar UI
-                        refetchDashboard();
-                        invalidateEvents();
                     }
                 }
             )
             .subscribe();
 
-        return () => {
-            subscription.unsubscribe();
-        };
-    }, [volunteerProfile?.id, isQrModalOpen, qrCodeEvent, session, refetchDashboard, invalidateEvents]);
+    }, [volunteerProfile?.id, isQrModalOpen, qrCodeEvent, session]);
 
     const handleRequestSwap = (event: VolunteerSchedule) => {
         setSwapRequestEvent(event);
@@ -239,12 +240,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
         { key: 'eventsToday', title: 'Eventos Hoje', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" /></svg>, color: 'purple' as const },
     ];
 
-
     const userName = getShortName(session?.user?.user_metadata?.name);
-
-    const handleCloseCelebration = useCallback(() => {
-        setShowCelebration(false);
-    }, []);
 
     return (
         <div className="space-y-6">
