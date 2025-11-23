@@ -22,180 +22,110 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const isStartingRef = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [videoDevices, setVideoDevices] = React.useState<MediaDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | undefined>(undefined);
-  const [cameraError, setCameraError] = React.useState<string | null>(null);
-
-  // Ref para controlar a inicialização
-  const initializationIdRef = useRef(0);
-  // Ref para guardar o stream atual e poder parar as tracks
-  const streamRef = useRef<MediaStream | null>(null);
-
-  // Função para detectar mobile
+  // Função para detectar se é mobile
   const isMobile = () => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   };
 
-  // Carrega dispositivos
-  const loadDevices = async () => {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const cameras = devices.filter(device => device.kind === 'videoinput');
-      setVideoDevices(cameras);
-    } catch (e) {
-      console.error("Erro ao listar dispositivos:", e);
-    }
-  };
-
-  // Efeito principal de controle do scanner
+  // Efeito para controlar o scanner
   useEffect(() => {
-    const currentInitId = ++initializationIdRef.current;
-
+    // Função para parar o scanner
     const stopScanner = () => {
-      // Para o Zxing
       if (controlsRef.current) {
         try { controlsRef.current.stop(); } catch (e) { }
         controlsRef.current = null;
       }
-      // Para o stream de vídeo (solta a câmera)
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
       isStartingRef.current = false;
     };
 
+    // Se modal fechado ou mostrando resultado, para o scanner
     if (!isOpen || scanResult) {
       stopScanner();
       return;
     }
 
-    // Para qualquer execução anterior antes de iniciar a nova
-    stopScanner();
+    // Se já está iniciando ou rodando, não faz nada
+    if (isStartingRef.current || controlsRef.current) {
+      return;
+    }
 
     isStartingRef.current = true;
-    setCameraError(null);
 
-    const startCameraAndScanner = async () => {
-      if (currentInitId !== initializationIdRef.current) return;
+    timeoutRef.current = setTimeout(async () => {
       if (!videoRef.current) return;
 
       const codeReader = new BrowserQRCodeReader();
+      const mobile = isMobile();
 
       try {
-        // 1. Configurar Constraints
-        let constraints: MediaStreamConstraints = {
+        // Configuração diferente para mobile vs desktop
+        const constraints = mobile ? {
           video: {
-            facingMode: isMobile() ? 'environment' : 'user'
+            facingMode: 'environment', // Câmera traseira para mobile
+            width: { ideal: 720 },
+            height: { ideal: 1280 }
+          }
+        } : {
+          video: {
+            facingMode: 'user', // Câmera frontal para desktop
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           }
         };
 
-        if (selectedDeviceId) {
-          constraints = { video: { deviceId: { exact: selectedDeviceId } } };
+        // Pede permissão primeiro
+        await navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        });
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+        let selectedDeviceId = videoDevices[0]?.deviceId;
+
+        if (mobile) {
+          // Para mobile, procura câmera traseira
+          const backCamera = videoDevices.find(device => {
+            const label = device.label.toLowerCase();
+            return (
+              label.includes('back') ||
+              label.includes('rear') ||
+              label.includes('traseira') ||
+              label.includes('environment')
+            );
+          });
+          if (backCamera) {
+            selectedDeviceId = backCamera.deviceId;
+          }
         }
+        // Para desktop, usa a primeira câmera (geralmente a webcam integrada)
 
-        // 2. Obter Stream Manualmente (Controle Total)
-        console.log(`[Scanner] Solicitando stream com:`, constraints);
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-        if (currentInitId !== initializationIdRef.current) {
-          stream.getTracks().forEach(t => t.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-
-        // 3. Iniciar Zxing com o Stream (Zxing gerencia o vídeo)
-        // Não precisamos dar play manual ou setar srcObject, o decodeFromStream faz isso.
-
-        // Pequeno delay para garantir renderização
-        await new Promise(r => setTimeout(r, 100));
-
-        if (currentInitId !== initializationIdRef.current) return;
-
-        const controls = await codeReader.decodeFromStream(
-          stream,
-          videoRef.current!,
+        const controls = await codeReader.decodeFromVideoDevice(
+          selectedDeviceId,
+          videoRef.current,
           (result) => {
-            if (result && currentInitId === initializationIdRef.current) {
+            if (result) {
               stopScanner();
               onScanSuccess(result.getText());
             }
           }
         );
 
-        if (currentInitId === initializationIdRef.current) {
-          controlsRef.current = controls;
-          loadDevices(); // Carrega lista para o dropdown
-        } else {
-          controls.stop();
-        }
-
-      } catch (error: any) {
-        if (currentInitId !== initializationIdRef.current) return;
-        console.error('Erro ao iniciar câmera/scanner:', error);
-        console.error('Nome do erro:', error.name);
-        console.error('Mensagem:', error.message);
-        console.error('Stack:', error.stack);
-
-        if (error.name === 'AbortError') return;
-
-        let msg = `Erro: ${error.name} - ${error.message}`;
-        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          msg = "Permissão de câmera negada.";
-        } else if (error.name === 'NotFoundError') {
-          msg = "Nenhuma câmera encontrada.";
-        } else if (error.name === 'NotReadableError') {
-          msg = "A câmera está em uso ou indisponível.";
-        } else if (error.name === 'OverconstrainedError') {
-          // Fallback: Tenta sem constraints (padrãozão)
-          if (!selectedDeviceId) {
-            console.log("Fallback para constraints padrão...");
-            try {
-              const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
-              if (currentInitId === initializationIdRef.current) {
-                streamRef.current = fallbackStream;
-
-                // Reinicia Zxing com decodeFromStream
-                const fallbackControls = await codeReader.decodeFromStream(
-                  fallbackStream,
-                  videoRef.current!,
-                  (result) => {
-                    if (result && currentInitId === initializationIdRef.current) {
-                      stopScanner();
-                      onScanSuccess(result.getText());
-                    }
-                  }
-                );
-                controlsRef.current = fallbackControls;
-                loadDevices();
-                return;
-              } else {
-                fallbackStream.getTracks().forEach(t => t.stop());
-              }
-            } catch (e) {
-              console.error("Fallback falhou", e);
-            }
-          }
-          msg = "Câmera incompatível.";
-        }
-        setCameraError(msg);
-      } finally {
-        if (currentInitId === initializationIdRef.current) {
-          isStartingRef.current = false;
-        }
+        controlsRef.current = controls;
+      } catch (error) {
+        console.error('Erro ao iniciar scanner:', error);
+        isStartingRef.current = false;
       }
-    };
-
-    startCameraAndScanner();
+    }, 300);
 
     return () => {
       stopScanner();
     };
-  }, [isOpen, onScanSuccess, scanResult, selectedDeviceId]);
+  }, [isOpen, onScanSuccess, scanResult]);
 
   if (!isOpen) return null;
 
@@ -216,28 +146,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           <div className="flex justify-between items-start pointer-events-auto">
             <div className="flex-1 mr-4">
               <h3 className="text-lg font-bold leading-tight">Escanear Presença</h3>
-              <p className="text-xs opacity-80 mb-2">{scanningEventName}</p>
-
-              {/* Seletor de Câmera - Só mostra se tivermos dispositivos listados */}
-              {videoDevices.length > 1 && (
-                <div className="relative inline-block text-left">
-                  <select
-                    value={selectedDeviceId || ''}
-                    onChange={(e) => setSelectedDeviceId(e.target.value)}
-                    className="bg-white/20 text-white text-xs rounded px-2 py-1 border border-white/30 focus:outline-none focus:border-white appearance-none pr-6 cursor-pointer backdrop-blur-sm hover:bg-white/30 transition-colors"
-                  >
-                    <option value="">Automático</option>
-                    {videoDevices.map((device, index) => (
-                      <option key={device.deviceId} value={device.deviceId} className="text-black">
-                        {device.label || `Câmera ${index + 1}`}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1 text-white">
-                    <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
-                  </div>
-                </div>
-              )}
+              <p className="text-xs opacity-80">{scanningEventName}</p>
             </div>
             <button
               onClick={onClose}
@@ -260,24 +169,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             muted
           />
 
-          {/* Erro de Câmera */}
-          {cameraError && !scanResult && (
-            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center p-6 text-center bg-black/80 backdrop-blur-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <p className="text-white text-lg font-medium">{cameraError}</p>
-              <button
-                onClick={() => { setCameraError(null); setSelectedDeviceId(undefined); }}
-                className="mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors pointer-events-auto"
-              >
-                Tentar Novamente
-              </button>
-            </div>
-          )}
-
           {/* Scanner Overlay (Mira) */}
-          {!scanResult && !cameraError && (
+          {!scanResult && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="w-64 h-64 border-2 border-white/30 rounded-lg relative">
                 <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 -mt-1 -ml-1 rounded-tl-lg"></div>
