@@ -219,12 +219,27 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           width: 100% !important;
           height: 100% !important;
         }
-        #qr-reader video {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: contain !important;
-          border: none !important;
+        
+        /* Mobile: vídeo vertical em tela cheia */
+        @media (max-width: 768px) {
+          #qr-reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border: none !important;
+          }
         }
+        
+        /* Desktop: vídeo horizontal sem cortar */
+        @media (min-width: 769px) {
+          #qr-reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+            border: none !important;
+          }
+        }
+        
         #qr-reader__dashboard,
         #qr-reader__dashboard_section,
         #qr-reader__dashboard_section_csr,
