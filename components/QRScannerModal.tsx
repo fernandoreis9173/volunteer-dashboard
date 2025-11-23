@@ -55,25 +55,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         const mobile = isMobile();
 
-        // Configuração diferente para mobile (vertical) vs desktop (horizontal)
-        const config = mobile ? {
+        // Configuração sem forçar resolução - usa configuração nativa da câmera
+        const config = {
           fps: 30,
           qrbox: { width: 300, height: 300 },
-          disableFlip: false,
-          videoConstraints: {
-            facingMode: "environment",
-            width: { ideal: 720 },  // Reduzido para menos zoom
-            height: { ideal: 1280 }
-          }
-        } : {
-          fps: 30,
-          qrbox: { width: 300, height: 300 },
-          disableFlip: false,
-          videoConstraints: {
-            facingMode: "user",
-            width: { ideal: 1280 }, // Reduzido para menos zoom
-            height: { ideal: 720 }
-          }
+          disableFlip: false
         };
 
         const facingMode = mobile ? "environment" : "user";
