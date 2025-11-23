@@ -56,21 +56,18 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       const codeReader = new BrowserQRCodeReader();
 
       try {
-        // Força câmera traseira e proporção vertical (9:16)
-        await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 720 },
-            height: { ideal: 1280 }
-          }
-        }).then(stream => {
+        // Tenta pedir permissão de câmera de forma genérica primeiro
+        // Isso funciona melhor em desktops que podem não ter 'environment'
+        await navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
           stream.getTracks().forEach(track => track.stop());
         });
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
 
-        let selectedDeviceId = videoDevices[0]?.deviceId;
+        let selectedDeviceId = videoDevices[0]?.deviceId; // Padrão: primeira câmera (webcam)
+
+        // Tenta encontrar uma câmera traseira explicitamente
         const backCamera = videoDevices.find(device => {
           const label = device.label.toLowerCase();
           return (
@@ -81,8 +78,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           );
         });
 
-        if (backCamera) selectedDeviceId = backCamera.deviceId;
-        else if (videoDevices.length > 1) selectedDeviceId = videoDevices[1].deviceId;
+        if (backCamera) {
+          selectedDeviceId = backCamera.deviceId;
+        } else if (videoDevices.length > 1) {
+          // Se não tem traseira explícita mas tem mais de uma, tenta a última (comum em celulares sem label claro)
+          // Mas em desktop com 1 camera, isso não será executado, mantendo a [0]
+          selectedDeviceId = videoDevices[videoDevices.length - 1].deviceId;
+        }
 
         if (selectedDeviceId && videoRef.current && !controlsRef.current && !scanResult) {
           controlsRef.current = await codeReader.decodeFromVideoDevice(
