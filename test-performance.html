@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Performance - get_events_for_user</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+            margin: 5px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+        }
+        .metric {
+            display: inline-block;
+            margin: 10px 15px 10px 0;
+            padding: 10px 15px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .good { color: #28a745; }
+        .warning { color: #ffc107; }
+        .bad { color: #dc3545; }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status.good { background: #d4edda; color: #155724; }
+        .status.warning { background: #fff3cd; color: #856404; }
+        .status.bad { background: #f8d7da; color: #721c24; }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .chart {
+            margin-top: 20px;
+            height: 200px;
+            background: white;
+            border-radius: 6px;
+            padding: 15px;
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+        }
+        .bar {
+            flex: 1;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            transition: height 0.3s ease;
+        }
+        .bar-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            color: #666;
+            white-space: nowrap;
+        }
+        .bar-value {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Teste de Performance - get_events_for_user</h1>
+        
+        <div class="test-section">
+            <h2>📊 Métricas em Tempo Real</h2>
+            <div id="metrics">
+                <div class="metric">
+                    <div class="metric-label">Última Query</div>
+                    <div class="metric-value" id="lastQueryTime">--</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Média (5 queries)</div>
+                    <div class="metric-value" id="avgQueryTime">--</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cache Hit Rate</div>
+                    <div class="metric-value" id="cacheHitRate">--</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Total de Testes</div>
+                    <div class="metric-value" id="totalTests">0</div>
+                </div>
+            </div>
+            
+            <div class="chart" id="chart"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🧪 Testes Automatizados</h2>
+            <button onclick="testSingleQuery()" id="singleTestBtn">Testar 1x</button>
+            <button onclick="testMultipleQueries()" id="multiTestBtn">Testar 5x</button>
+            <button onclick="testWithCache()" id="cacheTestBtn">Testar Cache</button>
+            <button onclick="clearResults()">Limpar Resultados</button>
+            <div id="testResults" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>📋 Instruções de Verificação</h2>
+            <ol>
+                <li><strong>Abra o DevTools</strong> (F12) → Aba <strong>Network</strong></li>
+                <li>Clique em <strong>"Testar 1x"</strong> para fazer uma query</li>
+                <li>Procure por <code>get_events_for_user</code> na lista de requisições</li>
+                <li>Verifique o tempo na coluna <strong>"Time"</strong></li>
+                <li>Clique em <strong>"Testar Cache"</strong> para verificar se o cache está funcionando</li>
+            </ol>
+            
+            <h3>✅ Critérios de Sucesso:</h3>
+            <ul>
+                <li><strong class="good">Excelente:</strong> &lt; 50ms</li>
+                <li><strong class="warning">Bom:</strong> 50-100ms</li>
+                <li><strong class="bad">Precisa melhorar:</strong> &gt; 100ms</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🔧 Verificar no Supabase</h2>
+            <pre>
+1. Acesse: https://supabase.com/dashboard/project/[seu-projeto]
+2. Vá em: Database → Query Performance
+3. Procure por: get_events_for_user
+4. Compare os tempos antes e depois das otimizações
+            </pre>
+        </div>
+    </div>
+
+    <script>
+        let queryTimes = [];
+        let cacheHits = 0;
+        let totalQueries = 0;
+
+        function updateMetrics(time, fromCache = false) {
+            queryTimes.push(time);
+            if (queryTimes.length > 5) queryTimes.shift();
+            
+            totalQueries++;
+            if (fromCache) cacheHits++;
+
+            // Atualizar última query
+            const status = time < 50 ? 'good' : time < 100 ? 'warning' : 'bad';
+            document.getElementById('lastQueryTime').innerHTML = 
+                `${time.toFixed(0)}ms <span class="status ${status}">${status === 'good' ? '✓' : status === 'warning' ? '⚠' : '✗'}</span>`;
+            document.getElementById('lastQueryTime').className = `metric-value ${status}`;
+
+            // Atualizar média
+            const avg = queryTimes.reduce((a, b) => a + b, 0) / queryTimes.length;
+            const avgStatus = avg < 50 ? 'good' : avg < 100 ? 'warning' : 'bad';
+            document.getElementById('avgQueryTime').innerHTML = `${avg.toFixed(0)}ms`;
+            document.getElementById('avgQueryTime').className = `metric-value ${avgStatus}`;
+
+            // Atualizar cache hit rate
+            const hitRate = totalQueries > 0 ? (cacheHits / totalQueries * 100) : 0;
+            document.getElementById('cacheHitRate').innerHTML = `${hitRate.toFixed(0)}%`;
+            document.getElementById('cacheHitRate').className = 
+                `metric-value ${hitRate > 50 ? 'good' : hitRate > 20 ? 'warning' : 'bad'}`;
+
+            // Atualizar total
+            document.getElementById('totalTests').innerHTML = totalQueries;
+
+            // Atualizar gráfico
+            updateChart();
+        }
+
+        function updateChart() {
+            const chart = document.getElementById('chart');
+            chart.innerHTML = '';
+            
+            const maxTime = Math.max(...queryTimes, 100);
+            
+            queryTimes.forEach((time, index) => {
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                bar.style.height = `${(time / maxTime) * 100}%`;
+                
+                const label = document.createElement('div');
+                label.className = 'bar-label';
+                label.textContent = `#${totalQueries - queryTimes.length + index + 1}`;
+                
+                const value = document.createElement('div');
+                value.className = 'bar-value';
+                value.textContent = `${time.toFixed(0)}ms`;
+                
+                bar.appendChild(label);
+                bar.appendChild(value);
+                chart.appendChild(bar);
+            });
+        }
+
+        async function testSingleQuery() {
+            const btn = document.getElementById('singleTestBtn');
+            btn.disabled = true;
+            btn.innerHTML = 'Testando... <span class="loading"></span>';
+            
+            const results = document.getElementById('testResults');
+            results.innerHTML = '<p>⏳ Executando query...</p>';
+
+            try {
+                const startTime = performance.now();
+                
+                // Simular chamada - SUBSTITUA com sua chamada real ao Supabase
+                await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 20));
+                
+                const endTime = performance.now();
+                const duration = endTime - startTime;
+
+                updateMetrics(duration, false);
+
+                const status = duration < 50 ? 'good' : duration < 100 ? 'warning' : 'bad';
+                const statusText = duration < 50 ? '✅ Excelente!' : duration < 100 ? '⚠️ Bom' : '❌ Precisa melhorar';
+                
+                results.innerHTML = `
+                    <p><strong>Resultado:</strong> <span class="status ${status}">${statusText}</span></p>
+                    <p><strong>Tempo de execução:</strong> ${duration.toFixed(2)}ms</p>
+                    <p><strong>Timestamp:</strong> ${new Date().toLocaleTimeString()}</p>
+                `;
+            } catch (error) {
+                results.innerHTML = `<p style="color: red;">❌ Erro: ${error.message}</p>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Testar 1x';
+            }
+        }
+
+        async function testMultipleQueries() {
+            const btn = document.getElementById('multiTestBtn');
+            btn.disabled = true;
+            btn.innerHTML = 'Testando... <span class="loading"></span>';
+            
+            const results = document.getElementById('testResults');
+            results.innerHTML = '<p>⏳ Executando 5 queries...</p>';
+
+            const times = [];
+            
+            for (let i = 0; i < 5; i++) {
+                const startTime = performance.now();
+                await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 20));
+                const endTime = performance.now();
+                const duration = endTime - startTime;
+                times.push(duration);
+                updateMetrics(duration, false);
+                
+                results.innerHTML += `<p>Query ${i + 1}: ${duration.toFixed(2)}ms</p>`;
+            }
+
+            const avg = times.reduce((a, b) => a + b, 0) / times.length;
+            const min = Math.min(...times);
+            const max = Math.max(...times);
+
+            const status = avg < 50 ? 'good' : avg < 100 ? 'warning' : 'bad';
+            const statusText = avg < 50 ? '✅ Excelente!' : avg < 100 ? '⚠️ Bom' : '❌ Precisa melhorar';
+
+            results.innerHTML += `
+                <hr>
+                <p><strong>Resultado:</strong> <span class="status ${status}">${statusText}</span></p>
+                <p><strong>Média:</strong> ${avg.toFixed(2)}ms</p>
+                <p><strong>Mínimo:</strong> ${min.toFixed(2)}ms</p>
+                <p><strong>Máximo:</strong> ${max.toFixed(2)}ms</p>
+            `;
+
+            btn.disabled = false;
+            btn.innerHTML = 'Testar 5x';
+        }
+
+        async function testWithCache() {
+            const btn = document.getElementById('cacheTestBtn');
+            btn.disabled = true;
+            btn.innerHTML = 'Testando... <span class="loading"></span>';
+            
+            const results = document.getElementById('testResults');
+            results.innerHTML = '<p>⏳ Testando cache...</p>';
+
+            // Primeira chamada (sem cache)
+            let startTime = performance.now();
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50));
+            let endTime = performance.now();
+            const firstCall = endTime - startTime;
+            updateMetrics(firstCall, false);
+
+            results.innerHTML += `<p>1ª chamada (sem cache): ${firstCall.toFixed(2)}ms</p>`;
+
+            // Segunda chamada (com cache)
+            startTime = performance.now();
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 20 + 5));
+            endTime = performance.now();
+            const secondCall = endTime - startTime;
+            updateMetrics(secondCall, true);
+
+            results.innerHTML += `<p>2ª chamada (com cache): ${secondCall.toFixed(2)}ms</p>`;
+
+            const improvement = ((firstCall - secondCall) / firstCall * 100);
+            const status = improvement > 50 ? 'good' : improvement > 20 ? 'warning' : 'bad';
+            const statusText = improvement > 50 ? '✅ Cache funcionando!' : improvement > 20 ? '⚠️ Cache parcial' : '❌ Cache não está funcionando';
+
+            results.innerHTML += `
+                <hr>
+                <p><strong>Resultado:</strong> <span class="status ${status}">${statusText}</span></p>
+                <p><strong>Melhoria:</strong> ${improvement.toFixed(1)}%</p>
+                <p><strong>Economia de tempo:</strong> ${(firstCall - secondCall).toFixed(2)}ms</p>
+            `;
+
+            btn.disabled = false;
+            btn.innerHTML = 'Testar Cache';
+        }
+
+        function clearResults() {
+            document.getElementById('testResults').innerHTML = '';
+            queryTimes = [];
+            cacheHits = 0;
+            totalQueries = 0;
+            document.getElementById('lastQueryTime').innerHTML = '--';
+            document.getElementById('avgQueryTime').innerHTML = '--';
+            document.getElementById('cacheHitRate').innerHTML = '--';
+            document.getElementById('totalTests').innerHTML = '0';
+            document.getElementById('chart').innerHTML = '';
+        }
+
+        // Instruções ao carregar
+        window.onload = () => {
+            console.log('%c🔍 Teste de Performance - get_events_for_user', 'font-size: 20px; font-weight: bold; color: #667eea;');
+            console.log('%cPara testar com dados reais:', 'font-size: 14px; font-weight: bold;');
+            console.log('1. Substitua a linha "await new Promise..." pela sua chamada real ao Supabase');
+            console.log('2. Use performance.mark() e performance.measure() para medir o tempo real');
+            console.log('3. Verifique o Network tab para ver as requisições reais');
+        };
+    </script>
+</body>
+</html>

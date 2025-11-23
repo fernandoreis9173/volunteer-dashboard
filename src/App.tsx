@@ -167,6 +167,42 @@ const App: React.FC = () => {
             });
         }
     }, []);
+
+    // --- VERSION CHECKER (Kill Switch para Cache Antigo) ---
+    useEffect(() => {
+        const CURRENT_VERSION = '2025-11-23-v1'; // Alterar isso força o reload em todos os clientes
+        const storedVersion = localStorage.getItem('app_version');
+
+        if (storedVersion !== CURRENT_VERSION) {
+            console.log(`Nova versão detectada: ${CURRENT_VERSION}. Limpando cache e recarregando...`);
+
+            // 1. Limpar caches do Service Worker
+            if ('caches' in window) {
+                caches.keys().then((names) => {
+                    names.forEach((name) => {
+                        caches.delete(name);
+                    });
+                });
+            }
+
+            // 2. Desregistrar Service Workers antigos
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then((registrations) => {
+                    for (const registration of registrations) {
+                        registration.unregister();
+                    }
+                });
+            }
+
+            // 3. Atualizar versão e recarregar
+            localStorage.setItem('app_version', CURRENT_VERSION);
+
+            // Pequeno delay para garantir que a limpeza ocorra
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        }
+    }, []);
     // ---------------------------------------------------
 
     useEffect(() => {
