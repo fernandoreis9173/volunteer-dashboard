@@ -59,24 +59,20 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         const config = mobile ? {
           fps: 30,
           qrbox: { width: 300, height: 300 },
-          aspectRatio: 0.5625, // 9:16 (vertical)
           disableFlip: false,
           videoConstraints: {
             facingMode: "environment",
             width: { ideal: 1080 },
-            height: { ideal: 1920 }, // Vertical para mobile
-            aspectRatio: { ideal: 0.5625 }
+            height: { ideal: 1920 }
           }
         } : {
           fps: 30,
           qrbox: { width: 300, height: 300 },
-          aspectRatio: 1.777778, // 16:9 (horizontal)
           disableFlip: false,
           videoConstraints: {
             facingMode: "user",
             width: { ideal: 1920 },
-            height: { ideal: 1080 }, // Horizontal para desktop
-            aspectRatio: { ideal: 1.777778 }
+            height: { ideal: 1080 }
           }
         };
 
