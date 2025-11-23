@@ -203,13 +203,14 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                     const isCorrectEvent = payload.new.event_id === qrCodeEvent.id;
                     const isCorrectDept = payload.new.department_id === qrCodeEvent.department_id;
                     const isNowPresent = payload.new.present === true;
-                    const wasNotPresent = payload.old?.present === false || payload.old?.present === null;
+                    const wasNotPresent = payload.old?.present !== true; // FIX: aceita false, null ou undefined
 
                     console.log('✅ Checks:', {
                         isCorrectEvent,
                         isCorrectDept,
                         isNowPresent,
-                        wasNotPresent
+                        wasNotPresent,
+                        oldPresent: payload.old?.present
                     });
 
                     if (isCorrectEvent && isCorrectDept && isNowPresent && wasNotPresent) {
