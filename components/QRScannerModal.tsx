@@ -108,23 +108,16 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         streamRef.current = stream;
 
-        // 3. Atrelar ao Vídeo e Tocar
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          // Importante: esperar o vídeo estar pronto
-          await videoRef.current.play().catch(e => console.error("Erro ao dar play:", e));
-        }
+        // 3. Iniciar Zxing com o Stream (Zxing gerencia o vídeo)
+        // Não precisamos dar play manual ou setar srcObject, o decodeFromStream faz isso.
 
-        // 4. Iniciar Zxing no Elemento de Vídeo já rodando
-        // 4. Iniciar Zxing no Elemento de Vídeo já rodando
-
-
-        // Pequeno delay para garantir que o vídeo tem dimensões
-        await new Promise(r => setTimeout(r, 200));
+        // Pequeno delay para garantir renderização
+        await new Promise(r => setTimeout(r, 100));
 
         if (currentInitId !== initializationIdRef.current) return;
 
-        const controls = await codeReader.decodeFromVideoElement(
+        const controls = await codeReader.decodeFromStream(
+          stream,
           videoRef.current!,
           (result) => {
             if (result && currentInitId === initializationIdRef.current) {
@@ -162,12 +155,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
               if (currentInitId === initializationIdRef.current) {
                 streamRef.current = fallbackStream;
-                if (videoRef.current) {
-                  videoRef.current.srcObject = fallbackStream;
-                  videoRef.current.play();
-                }
-                // Reinicia Zxing
-                const fallbackControls = await codeReader.decodeFromVideoElement(
+
+                // Reinicia Zxing com decodeFromStream
+                const fallbackControls = await codeReader.decodeFromStream(
+                  fallbackStream,
                   videoRef.current!,
                   (result) => {
                     if (result && currentInitId === initializationIdRef.current) {
