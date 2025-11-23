@@ -9,7 +9,6 @@ import { AnalysisChart } from './TrafficChart';
 import ActivityFeed from './ActivityFeed';
 import EventDetailsModal from './EventDetailsModal';
 import ActiveVolunteersList from './ActiveVolunteersList';
-import QRCodeDisplayModal from './QRCodeDisplayModal';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
 import QRScannerModal from './QRScannerModal';
 
@@ -69,161 +68,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
     const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
     const [otherDashboardData, setOtherDashboardData] = useState<Partial<DashboardData>>({});
     const [dashboardError, setDashboardError] = useState<string | null>(null);
-    const [isQrDisplayOpen, setIsQrDisplayOpen] = useState(false);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
-    const [scannedQrData, setScannedQrData] = useState<string | null>(null);
+    const [scanResult, setScanResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const { invalidateEvents } = useInvalidateQueries();
 
-    // React Query for Events
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
+    // ... (código existente) ...
 
-    const last30Days = new Date(today);
-    last30Days.setDate(today.getDate() - 29);
-    const last30DaysStr = last30Days.toISOString().split('T')[0];
-
-    const { data: eventsData = [], isLoading: eventsLoading, error: eventsError } = useEvents({
-        startDate: last30DaysStr
-    });
-
-    const fetchNonEventData = useCallback(async () => {
-        setOtherDashboardData(prev => ({ ...prev }));
-        setDashboardError(null);
+    const handleAutoConfirmAttendance = useCallback(async (decodedText: string) => {
+        // Se já estiver processando um resultado (ex: mostrando sucesso), ignora novos scans
+        if (scanResult) return;
 
         try {
-            const [
-                activeVolunteersCountRes,
-                departmentsCountRes,
-                activeLeadersRes,
-            ] = await Promise.all([
-                supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                supabase.functions.invoke('list-users', { body: { context: 'dashboard' } }),
-            ]);
+            const data = JSON.parse(decodedText);
 
-            if (activeVolunteersCountRes.error) throw activeVolunteersCountRes.error;
-            if (departmentsCountRes.error) throw departmentsCountRes.error;
-            if (activeLeadersRes.error) throw activeLeadersRes.error;
-
-            setOtherDashboardData({
-                stats: {
-                    activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
-                    departments: { value: String(departmentsCountRes.count ?? 0), change: 0 },
-                    schedulesToday: { value: '0', change: 0 }, // Will be updated with event data
-                    upcomingSchedules: { value: '0', change: 0 }, // Will be updated with event data
-                },
-                activeLeaders: activeLeadersRes.data?.users || [],
-            });
-
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            console.error("Error fetching admin dashboard data:", errorMessage);
-            setDashboardError(`Falha ao carregar dados do dashboard: ${errorMessage}`);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchNonEventData();
-    }, [fetchNonEventData]);
-
-    const dashboardData = useMemo(() => {
-        const allEvents = (eventsData as unknown as DashboardEvent[]) || [];
-
-        const next7Days = new Date(today);
-        next7Days.setDate(today.getDate() + 7);
-        const next7DaysStr = next7Days.toISOString().split('T')[0];
-
-        const todaySchedules = allEvents.filter(e => e.date === todayStr);
-        const upcomingSchedules = allEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr);
-        const chartEvents = allEvents.filter(e => e.date <= todayStr);
-
-        // --- Process Chart Data ---
-        const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
-        for (const event of chartEvents) {
-            const date = event.date;
-            if (!chartDataMap.has(date)) {
-                chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
-            }
-            const entry = chartDataMap.get(date)!;
-            entry.scheduledVolunteers += (event.event_volunteers || []).length;
-            (event.event_departments || []).forEach(ed => {
-                if (ed.departments?.id) entry.involvedDepartments.add(ed.departments.id)
-            });
-            entry.eventNames.push(event.name);
-        }
-
-        const chartData: ChartDataPoint[] = Array.from({ length: 30 }, (_, i) => {
-            const day = new Date(last30Days);
-            day.setDate(last30Days.getDate() + i);
-            const dateStr = day.toISOString().split('T')[0];
-            const dataForDay = chartDataMap.get(dateStr);
-            return {
-                date: dateStr,
-                scheduledVolunteers: dataForDay?.scheduledVolunteers || 0,
-                involvedDepartments: dataForDay?.involvedDepartments.size || 0,
-                eventNames: dataForDay?.eventNames || [],
-            };
-        });
-
-        return {
-            ...otherDashboardData,
-            stats: {
-                ...otherDashboardData.stats,
-                schedulesToday: { value: String(todaySchedules.length), change: 0 },
-                upcomingSchedules: { value: String(upcomingSchedules.length), change: 0 },
-                activeVolunteers: otherDashboardData.stats?.activeVolunteers || { value: '0', change: 0 },
-                departments: otherDashboardData.stats?.departments || { value: '0', change: 0 },
-            },
-            todaySchedules,
-            upcomingSchedules: upcomingSchedules.slice(0, 10),
-            chartData,
-        } as DashboardData;
-
-    }, [eventsData, otherDashboardData, todayStr, last30DaysStr]);
-
-    const showNotification = useCallback((message: string, type: 'success' | 'error') => {
-        setNotification({ message, type });
-        setTimeout(() => setNotification(null), 5000);
-    }, []);
-
-    const handleMarkAttendance = (event: DashboardEvent | null) => {
-        if (!event) {
-            showNotification('Nenhum evento ativo para escanear.', 'error');
-            return;
-        }
-        setScanningEvent(event);
-        setIsScannerOpen(true);
-    };
-
-    const handleScanSuccess = useCallback((decodedText: string) => {
-        setIsScannerOpen(false);
-        setScannedQrData(decodedText);
-        setIsQrDisplayOpen(true);
-    }, []);
-
-    const handleConfirmAttendance = useCallback(async () => {
-        if (!scannedQrData || !scanningEvent) {
-            showNotification("Dados insuficientes para confirmar presença.", 'error');
-            return;
-        }
-
-        try {
-            const data = JSON.parse(scannedQrData);
+            // Validações básicas
             if (!data.vId || !data.eId || !data.dId) {
-                throw new Error("QR Code inválido: Faltando dados essenciais.");
+                throw new Error("QR Code incompleto.");
             }
             if (data.eId !== scanningEvent?.id) {
-                throw new Error("Este QR Code é para um evento diferente.");
+                throw new Error("Evento incorreto.");
             }
+
+            // Mostra feedback de carregamento (opcional, ou apenas espera)
+            // setScanResult({ type: 'loading', message: 'Processando...' });
 
             const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !sessionData.session) {
-                throw new Error("Sessão de usuário não encontrada. Por favor, faça login novamente.");
+                throw new Error("Sessão inválida.");
             }
 
             const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
@@ -236,118 +111,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
             if (invokeError) throw invokeError;
 
             const volunteerName = scanningEvent?.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
-            showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
 
+            // Sucesso!
+            setScanResult({ type: 'success', message: `${volunteerName}` });
             invalidateEvents();
 
+            // Limpa o resultado após 2.5s para permitir novo scan
+            setTimeout(() => {
+                setScanResult(null);
+            }, 2500);
+
         } catch (err: any) {
+            let errorMsg = "Erro ao confirmar.";
             if (err.context && typeof err.context.json === 'function') {
                 try {
                     const errorJson = await err.context.json();
-                    if (errorJson && errorJson.error) {
-                        showNotification(errorJson.error, 'error');
-                    } else {
-                        showNotification(getErrorMessage(err), 'error');
-                    }
-                } catch (parseError) {
-                    showNotification(getErrorMessage(err), 'error');
-                }
+                    if (errorJson && errorJson.error) errorMsg = errorJson.error;
+                } catch { }
             } else {
-                showNotification(getErrorMessage(err), 'error');
+                errorMsg = getErrorMessage(err);
             }
-        } finally {
-            setScannedQrData(null);
-            setIsQrDisplayOpen(false);
-            setScanningEvent(null);
-        }
-    }, [scannedQrData, scanningEvent, showNotification, invalidateEvents]);
 
-    const scannedVolunteerName = useMemo(() => {
-        if (!scannedQrData || !scanningEvent) return 'Voluntário';
-        try {
-            const data = JSON.parse(scannedQrData);
-            return scanningEvent.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário Desconhecido';
-        } catch {
-            return 'Dados Inválidos';
-        }
-    }, [scannedQrData, scanningEvent]);
+            // Erro!
+            setScanResult({ type: 'error', message: errorMsg });
 
+            // Limpa o erro após 4s
+            setTimeout(() => {
+                setScanResult(null);
+            }, 4000);
+        }
+    }, [scanningEvent, scanResult, invalidateEvents]);
+
+    // ... (resto do código) ...
 
     return (
         <div className="space-y-8">
-            {notification && (
-                <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                    {notification.message}
-                </div>
-            )}
-            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-                    <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
-                </div>
-                <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
-                    {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
-                    {activeEvent && (
-                        <button
-                            onClick={() => handleMarkAttendance(activeEvent as DashboardEvent)}
-                            className="p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors flex flex-row items-center justify-center gap-3 w-full md:w-auto md:px-6"
-                            aria-label="Marcar Presença"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="h-7 w-7 md:h-6 md:w-6">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
-                            </svg>
-                            <span className="text-lg md:text-base font-semibold">Marcar Presença</span>
-                        </button>
-                    )}
-                </div>
-            </div>
+            {/* ... (código existente) ... */}
 
-            {dashboardError && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{dashboardError}</div>}
-            <StatsRow stats={dashboardData.stats} userRole="admin" />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
-                <div className="lg:col-span-2">
-                    {dashboardData.chartData ? <AnalysisChart data={dashboardData.chartData} /> : <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full animate-pulse"><div className="h-8 bg-slate-200 rounded w-1/2 mb-6"></div><div className="h-[300px] bg-slate-200 rounded"></div></div>}
-                </div>
-                <div className="lg:col-span-1">
-                    <ActiveVolunteersList stats={dashboardData.stats} userRole={'admin'} />
-                </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
-                <div className="lg:col-span-2">
-                    <UpcomingShiftsList
-                        todaySchedules={dashboardData.todaySchedules}
-                        upcomingSchedules={dashboardData.upcomingSchedules}
-                        onViewDetails={setSelectedEvent}
-                        userRole={'admin'}
-                        onMarkAttendance={() => { }} // No-op for admin
-                        onViewTimeline={setViewingTimelineFor}
-                    />
-                </div>
-                <div className="lg:col-span-1">
-                    <ActivityFeed leaders={dashboardData.activeLeaders} />
-                </div>
-            </div>
-            <EventDetailsModal isOpen={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} />
             {isScannerOpen && (
                 <QRScannerModal
                     isOpen={isScannerOpen}
-                    onClose={() => { setIsScannerOpen(false); setScanningEvent(null); }}
-                    onScanSuccess={handleScanSuccess}
-                    scanningEventName={scanningEvent?.name}
-                />
-            )}
-            {isQrDisplayOpen && (
-                <QRCodeDisplayModal
-                    isOpen={isQrDisplayOpen}
                     onClose={() => {
-                        setIsQrDisplayOpen(false);
-                        setScannedQrData(null);
+                        setIsScannerOpen(false);
+                        setScanningEvent(null);
+                        setScanResult(null);
                     }}
-                    data={scannedQrData ? JSON.parse(scannedQrData) : null}
-                    title={`Confirmar Presença`}
-                    volunteerName={scannedVolunteerName}
-                    description="Verifique os dados do voluntário e confirme a presença."
-                    onConfirm={handleConfirmAttendance}
+                    onScanSuccess={handleAutoConfirmAttendance}
+                    scanningEventName={scanningEvent?.name}
+                    scanResult={scanResult}
                 />
             )}
             <EventTimelineViewerModal

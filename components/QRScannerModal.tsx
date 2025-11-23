@@ -7,23 +7,27 @@ interface QRScannerModalProps {
   onClose: () => void;
   onScanSuccess: (decodedText: string) => void;
   scanningEventName?: string | null;
+  scanResult?: { type: 'success' | 'error'; message: string } | null;
 }
 
-const QRScannerModal: React.FC<QRScannerModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  onScanSuccess, 
-  scanningEventName 
+const QRScannerModal: React.FC<QRScannerModalProps> = ({
+  isOpen,
+  onClose,
+  onScanSuccess,
+  scanningEventName,
+  scanResult
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<any>(null);
   const isStartingRef = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Efeito para controlar o scanner
   useEffect(() => {
-    if (!isOpen) {
+    // Função para parar o scanner
+    const stopScanner = () => {
       if (controlsRef.current) {
-        try { controlsRef.current.stop(); } catch (e) {}
+        try { controlsRef.current.stop(); } catch (e) { }
         controlsRef.current = null;
       }
       if (timeoutRef.current) {
@@ -31,16 +35,24 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         timeoutRef.current = null;
       }
       isStartingRef.current = false;
+    };
+
+    // Se modal fechado ou mostrando resultado, para o scanner
+    if (!isOpen || scanResult) {
+      stopScanner();
       return;
     }
 
-    if (!videoRef.current || isStartingRef.current || controlsRef.current) {
+    // Se já está iniciando ou rodando, não faz nada
+    if (isStartingRef.current || controlsRef.current) {
       return;
     }
 
     isStartingRef.current = true;
 
     timeoutRef.current = setTimeout(async () => {
+      if (!videoRef.current) return; // Verificação extra
+
       const codeReader = new BrowserQRCodeReader();
 
       try {
@@ -57,13 +69,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
-        
+
         let selectedDeviceId = videoDevices[0]?.deviceId;
         const backCamera = videoDevices.find(device => {
           const label = device.label.toLowerCase();
           return (
-            label.includes('back') || 
-            label.includes('rear') || 
+            label.includes('back') ||
+            label.includes('rear') ||
             label.includes('traseira') ||
             label.includes('environment')
           );
@@ -72,17 +84,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         if (backCamera) selectedDeviceId = backCamera.deviceId;
         else if (videoDevices.length > 1) selectedDeviceId = videoDevices[1].deviceId;
 
-        if (selectedDeviceId && videoRef.current && !controlsRef.current) {
+        if (selectedDeviceId && videoRef.current && !controlsRef.current && !scanResult) {
           controlsRef.current = await codeReader.decodeFromVideoDevice(
             selectedDeviceId,
             videoRef.current,
             (result) => {
               if (result) {
-                if (controlsRef.current) {
-                  try { controlsRef.current.stop(); } catch (e) {}
-                  controlsRef.current = null;
-                }
-                isStartingRef.current = false;
+                // Ao detectar, para o scanner e notifica o pai
+                stopScanner();
                 onScanSuccess(result.getText());
               }
             }
@@ -96,128 +105,118 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
     }, 100);
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      if (controlsRef.current) {
-        try { controlsRef.current.stop(); } catch (e) {}
-        controlsRef.current = null;
-      }
-      isStartingRef.current = false;
+      stopScanner();
     };
-  }, [isOpen, onScanSuccess]);
+  }, [isOpen, onScanSuccess, scanResult]); // Re-executa quando scanResult muda (null -> valor -> null)
 
   if (!isOpen) return null;
 
   const modalContent = (
     <div
-      className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4 transition-opacity duration-300"
+      className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-0 md:p-4 transition-opacity duration-300"
       aria-labelledby="modal-title"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-xs mx-auto text-center transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale overflow-hidden"
+        className="bg-black relative w-full h-full md:h-auto md:max-w-md md:rounded-2xl md:overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4">
-          <h3 id="modal-title" className="text-lg font-bold text-slate-900">
-            Escanear QR Code
-          </h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Alinhe o QR Code do voluntário para o evento <br /> 
-            <span className="font-semibold">{scanningEventName}</span>.
-          </p>
+        {/* Header */}
+        <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent text-white">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-bold">Escanear Presença</h3>
+              <p className="text-xs opacity-80">{scanningEventName}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 bg-white/10 rounded-full backdrop-blur-sm hover:bg-white/20 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        <div className="relative bg-slate-900 video-container">
-          <video 
+        {/* Video Area */}
+        <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
+          <video
             ref={videoRef}
-            className="scanner-video"
+            className="absolute inset-0 w-full h-full object-cover"
             autoPlay
             playsInline
             muted
           />
-          
-          <div className="absolute inset-0 scanner-overlay pointer-events-none">
-            <div className="scanner-line"></div>
-            <div className="corner top-left"></div>
-            <div className="corner top-right"></div>
-            <div className="corner bottom-left"></div>
-            <div className="corner bottom-right"></div>
-          </div>
-        </div>
 
-        <div className="p-4">
-          <button
-            type="button"
-            className="w-full inline-flex justify-center rounded-lg border border-transparent px-4 py-2 bg-slate-600 text-sm font-semibold text-white shadow-sm hover:bg-slate-700"
-            onClick={onClose}
-          >
-            Cancelar
-          </button>
+          {/* Scanner Overlay (Mira) */}
+          {!scanResult && (
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="w-64 h-64 border-2 border-white/30 rounded-lg relative">
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 -mt-1 -ml-1 rounded-tl-lg"></div>
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 -mt-1 -mr-1 rounded-tr-lg"></div>
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 -mb-1 -ml-1 rounded-bl-lg"></div>
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 -mb-1 -mr-1 rounded-br-lg"></div>
+                <div className="absolute left-0 right-0 h-0.5 bg-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan-line top-1/2"></div>
+              </div>
+              <p className="absolute bottom-20 text-white/80 text-sm font-medium bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
+                Aponte para o QR Code
+              </p>
+            </div>
+          )}
+
+          {/* Feedback Overlay */}
+          {scanResult && (
+            <div className={`absolute inset-0 z-30 flex flex-col items-center justify-center p-6 text-center animate-fade-in ${scanResult.type === 'success' ? 'bg-green-600/90' : 'bg-red-600/90'
+              } backdrop-blur-sm`}>
+              <div className="bg-white rounded-full p-4 mb-4 shadow-lg animate-bounce-in">
+                {scanResult.type === 'success' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">
+                {scanResult.type === 'success' ? 'Confirmado!' : 'Erro!'}
+              </h3>
+              <p className="text-white/90 text-lg font-medium max-w-xs">
+                {scanResult.message}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
       <style>{`
-        .video-container {
-          aspect-ratio: 3 / 4;
-          width: 100%;
-          position: relative;
-          overflow: hidden;
-          background: #000;
+        @keyframes scan-line {
+          0% { transform: translateY(-120px); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translateY(120px); opacity: 0; }
         }
-
-        .scanner-video {
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: fill !important;
+        .animate-scan-line {
+          animation: scan-line 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
-
-        .scanner-overlay {
-          position: absolute;
-          inset: 0;
-          z-index: 1;
+        @keyframes bounce-in {
+          0% { transform: scale(0); }
+          50% { transform: scale(1.2); }
+          100% { transform: scale(1); }
         }
-
-        .scanner-line {
-          position: absolute;
-          left: 10%;
-          right: 10%;
-          height: 2px;
-          background: #ef4444;
-          box-shadow: 0 0 10px #ef4444;
-          animation: scan 2.5s infinite linear;
+        .animate-bounce-in {
+          animation: bounce-in 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
         }
-
-        .corner {
-          position: absolute;
-          width: 25px;
-          height: 25px;
-          border: 4px solid #ef4444;
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
-        .corner.top-left { top: 10px; left: 10px; border-right: none; border-bottom: none; }
-        .corner.top-right { top: 10px; right: 10px; border-left: none; border-bottom: none; }
-        .corner.bottom-left { bottom: 10px; left: 10px; border-right: none; border-top: none; }
-        .corner.bottom-right { bottom: 10px; right: 10px; border-left: none; border-top: none; }
-
-        @keyframes scan {
-          0% { top: 5%; }
-          50% { top: 95%; }
-          100% { top: 5%; }
-        }
-
-        @keyframes fade-in-scale {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in-scale {
-          animation: fade-in-scale 0.2s ease-out forwards;
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out forwards;
         }
       `}</style>
     </div>
