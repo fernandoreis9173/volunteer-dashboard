@@ -38,6 +38,7 @@ import { supabase } from './lib/supabaseClient';
 // FIX: Restored Supabase v2 types to ensure type safety.
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
+import { useLeaders, useTodaysEvents } from './hooks/useQueries';
 
 // FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
 const areApiKeysConfigured =
@@ -127,7 +128,7 @@ const App: React.FC = () => {
     const [installPromptEvent, setInstallPromptEvent] = useState<any | null>(null);
     const [isIOSInstallPromptOpen, setIsIOSInstallPromptOpen] = useState(false);
     // FIX: Use 'any' for User type due to import errors.
-    const [leaders, setLeaders] = useState<User[]>([]);
+    // const [leaders, setLeaders] = useState<User[]>([]); // Replaced by React Query
     const lastUserId = useRef<string | null>(null);
     const hasLoginRedirected = useRef(false);
     const [theme, setTheme] = useState(getInitialTheme());
@@ -135,14 +136,23 @@ const App: React.FC = () => {
     // Admin submenu state
     const [adminSubPage, setAdminSubPage] = useState<'users' | 'notifications'>('users');
 
-    // State to cache today's events locally to avoid frequent DB hits
-    const [todaysEvents, setTodaysEvents] = useState<AppEvent[]>([]);
+    // State to cache today's events locally to avoid frequent DB hits - REMOVED (React Query)
+    // const [todaysEvents, setTodaysEvents] = useState<AppEvent[]>([]);
 
     // VAPID key is now hardcoded for production
     const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
 
     // Optimization: Derive userId to stabilize dependencies and prevent re-fetches on token refresh
     const userId = session?.user?.id;
+
+    // Helper variables to stabilize dependencies
+    const userRole = userProfile?.role;
+    const userDepartmentId = userProfile?.department_id;
+    const userVolunteerId = userProfile?.volunteer_id;
+
+    // React Query hooks for leaders and today's events
+    const { data: leaders = [], refetch: refetchLeaders } = useLeaders();
+    const { data: todaysEvents = [] } = useTodaysEvents(userId || '', userRole || '', userDepartmentId, userVolunteerId);
 
     const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
     const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
@@ -350,102 +360,7 @@ const App: React.FC = () => {
         }
     }, []);
 
-    const fetchLeaders = useCallback(async () => {
-        if (!userId) {
-            setLeaders([]);
-            return;
-        }
-        try {
-            const { data, error: invokeError } = await supabase.functions.invoke('list-users');
-            if (invokeError) throw invokeError;
-            if (data.users) {
-                // FIX: Use EnrichedUser type which includes the `app_status` property from the `list-users` function.
-                const potentialLeaders = data.users.filter((user: EnrichedUser) => {
-                    const role = user.user_metadata?.role;
-                    return (role === 'leader' || role === 'lider' || role === 'admin') && user.app_status === 'Ativo';
-                });
-                setLeaders(potentialLeaders);
-            }
-        } catch (err) {
-            console.error("Error fetching leaders in App:", getErrorMessage(err));
-        }
-    }, [userId]);
-
-    useEffect(() => {
-        fetchLeaders();
-    }, [fetchLeaders]);
-
-    // Helper variables to stabilize dependencies for the fetch callback
-    const userRole = userProfile?.role;
-    const userDepartmentId = userProfile?.department_id;
-    const userVolunteerId = userProfile?.volunteer_id;
-
-    // REFACTORED: Fetch DB Data - Only runs on mount
-    const fetchTodaysEvents = useCallback(async () => {
-        if (!userId || !userRole) {
-            // Only clear if we are definitely logged out or role missing
-            if (!userId) setTodaysEvents([]);
-            return;
-        }
-
-        try {
-            let allEventsData: any[] | null = null;
-            let fetchError: any = null;
-
-            // Performance optimization: Only fetch events for TODAY
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const todayStr = `${year}-${month}-${day}`;
-
-            if (userRole === 'admin') {
-                // Admin: Direct filtered query instead of full history RPC
-                const { data, error } = await supabase
-                    .from('events')
-                    .select('*, event_departments(*, departments(*)), event_volunteers(*, volunteers(*))')
-                    .eq('date', todayStr)
-                    .eq('status', 'Confirmado');
-                allEventsData = data;
-                fetchError = error;
-            } else if ((userRole === 'leader' || userRole === 'lider') && userDepartmentId) {
-                // Leader: Direct filtered query (department + today)
-                const { data, error } = await supabase
-                    .from('events')
-                    .select('*, event_departments!inner(*, departments(*)), event_volunteers(*, volunteers(*))')
-                    .eq('date', todayStr)
-                    .eq('status', 'Confirmado')
-                    .eq('event_departments.department_id', userDepartmentId);
-                allEventsData = data;
-                fetchError = error;
-            } else if (userRole === 'volunteer' && userVolunteerId) {
-                // Volunteer: Direct query filtered by volunteer ID + today
-                const { data, error } = await supabase
-                    .from('events')
-                    .select('*, event_departments(*, departments(*)), event_volunteers!inner(*, volunteers(*))')
-                    .eq('event_volunteers.volunteer_id', userVolunteerId)
-                    .eq('date', todayStr)
-                    .eq('status', 'Confirmado');
-                allEventsData = data;
-                fetchError = error;
-            } else {
-                // If profile is loaded but no ID (e.g. pending), clear events
-                setTodaysEvents([]);
-                return;
-            }
-
-            if (fetchError) throw fetchError;
-
-            // Map raw data to AppEvent type
-            const eventsList: AppEvent[] = (allEventsData || []).map(item => item as unknown as AppEvent);
-            setTodaysEvents(eventsList);
-
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            console.error("Error fetching today's events:", errorMessage);
-            // Don't clear existing events on error to prevent flickering
-        }
-    }, [userId, userRole, userDepartmentId, userVolunteerId]);
+    // fetchLeaders and fetchTodaysEvents REMOVED - Handled by React Query hooks above
 
     // REFACTORED: Check Local Logic - Runs every minute using cached data (No DB hits)
     const checkActiveEventLocally = useCallback(() => {
@@ -473,11 +388,7 @@ const App: React.FC = () => {
         setActiveEvent(liveEvent || null);
     }, [todaysEvents]);
 
-    // Effect 1: Initial Fetch (Realtime disabled for performance)
-    useEffect(() => {
-        if (!userId) return;
-        fetchTodaysEvents();
-    }, [userId, fetchTodaysEvents]);
+    // Effect 1: Initial Fetch - REMOVED (Handled by React Query)
 
     // Effect 2: Check local time against cached data frequently (e.g., every 1 minute)
     // This is cheap CPU calculation, does NOT hit the database.
@@ -594,8 +505,14 @@ const App: React.FC = () => {
             return;
         }
 
+        console.log('[Realtime] Subscribing to notifications for user:', session.user.id);
         const channel = supabase
-            .channel(`realtime-notifications:${session.user.id}`)
+            .channel(`realtime-notifications:${session.user.id}`, {
+                config: {
+                    broadcast: { self: false }, // Não receber próprias mensagens
+                    presence: { key: session.user.id },
+                },
+            })
             .on(
                 'postgres_changes',
                 {
@@ -605,6 +522,7 @@ const App: React.FC = () => {
                     filter: `user_id=eq.${session.user.id}`,
                 },
                 (payload) => {
+                    console.log('[Realtime] New notification received:', payload);
                     const newNotification = payload.new as NotificationRecord;
 
                     // Add to toast notifications
@@ -621,13 +539,16 @@ const App: React.FC = () => {
                     refetchNotificationCount();
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('[Realtime] Notifications channel status:', status);
+            });
 
         return () => {
+            console.log('[Realtime] Unsubscribing from notifications');
             supabase.removeChannel(channel);
         };
 
-    }, [session, refetchNotificationCount]);
+    }, [session?.user?.id, refetchNotificationCount]); // Removido 'session' completo para evitar reconexões
 
     // Real-time volunteer status subscription
     useEffect(() => {
@@ -635,8 +556,14 @@ const App: React.FC = () => {
             return;
         }
 
+        console.log('[Realtime] Subscribing to volunteer status for user:', session.user.id);
         const channel = supabase
-            .channel(`realtime-volunteer-status:${session.user.id}`)
+            .channel(`realtime-volunteer-status:${session.user.id}`, {
+                config: {
+                    broadcast: { self: false },
+                    presence: { key: session.user.id },
+                },
+            })
             .on(
                 'postgres_changes',
                 {
@@ -646,6 +573,7 @@ const App: React.FC = () => {
                     filter: `user_id=eq.${session.user.id}`,
                 },
                 (payload) => {
+                    console.log('[Realtime] Volunteer status updated:', payload);
                     const updatedVolunteer = payload.new as DetailedVolunteer;
 
                     if (userProfile && updatedVolunteer.status !== userProfile.status) {
@@ -657,12 +585,15 @@ const App: React.FC = () => {
                     }
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('[Realtime] Volunteer status channel status:', status);
+            });
 
         return () => {
+            console.log('[Realtime] Unsubscribing from volunteer status');
             supabase.removeChannel(channel);
         };
-    }, [session?.user?.id, userProfile?.role, userProfile?.status, refetchUserData, setUserProfile]);
+    }, [session?.user?.id, userProfile?.role, userProfile?.status, refetchUserData]);
 
     // Real-time leader department assignment subscription
     useEffect(() => {
@@ -670,8 +601,14 @@ const App: React.FC = () => {
             return;
         }
 
+        console.log('[Realtime] Subscribing to leader departments for user:', session.user.id);
         const channel = supabase
-            .channel(`realtime-leader-departments:${session.user.id}`)
+            .channel(`realtime-leader-departments:${session.user.id}`, {
+                config: {
+                    broadcast: { self: false },
+                    presence: { key: session.user.id },
+                },
+            })
             .on(
                 'postgres_changes',
                 {
@@ -681,16 +618,19 @@ const App: React.FC = () => {
                     filter: `leader_id=eq.${session.user.id}`,
                 },
                 () => {
-                    console.log('Detected a change in leader department assignments. Refetching user data...');
+                    console.log('[Realtime] Leader department assignment changed. Refetching user data...');
                     refetchUserData();
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('[Realtime] Leader departments channel status:', status);
+            });
 
         return () => {
+            console.log('[Realtime] Unsubscribing from leader departments');
             supabase.removeChannel(channel);
         };
-    }, [session, userProfile?.role, refetchUserData]);
+    }, [session?.user?.id, userProfile?.role, refetchUserData]);
 
     const subscribeToPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window && session) {
@@ -763,7 +703,7 @@ const App: React.FC = () => {
                 return <RankingPage session={session} userProfile={userProfile} />;
             case 'departments':
                 // FIX: Pass the single leaderDepartmentId to DepartmentsPage.
-                return <DepartmentsPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} leaders={leaders} onLeadersChange={fetchLeaders} />;
+                return <DepartmentsPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} leaders={leaders} onLeadersChange={refetchLeaders} />;
             case 'events':
                 // FIX: Pass `leaders` prop to SchedulesPage to satisfy its prop requirements.
                 return <SchedulesPage isFormOpen={isEventFormOpen} setIsFormOpen={setIsEventFormOpen} userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} leaders={leaders} />;
@@ -774,9 +714,9 @@ const App: React.FC = () => {
                 return <CalendarPage userRole={userProfile.role} leaderDepartmentId={userProfile.department_id} onDataChange={refetchNotificationCount} setIsSidebarOpen={setIsSidebarOpen} />;
             case 'admin':
                 if (adminSubPage === 'notifications') {
-                    return <AdminNotificationsPage onDataChange={fetchLeaders} />;
+                    return <AdminNotificationsPage onDataChange={refetchLeaders} />;
                 }
-                return <AdminPage onDataChange={fetchLeaders} />;
+                return <AdminPage onDataChange={refetchLeaders} />;
             case 'frequency':
                 // FIX: Remove unused `leaders` prop from `FrequencyPage` component call to fix type error, as the component no longer requires it.
                 return <FrequencyPage />;

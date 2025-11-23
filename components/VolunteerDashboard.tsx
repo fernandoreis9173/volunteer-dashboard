@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 // FIX: Restored Supabase v2 types for type safety.
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
-import { useInvalidateQueries } from '../hooks/useQueries';
+import { useInvalidateQueries, useVolunteerDashboardData } from '../hooks/useQueries';
 import LiveEventDetailsModal from './LiveEventDetailsModal';
 import QRCodeDisplayModal from './QRCodeDisplayModal';
 import RequestSwapModal from './RequestSwapModal';
@@ -76,13 +76,22 @@ const getDepartmentIcon = (deptName: string | undefined) => {
 
 
 const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, activeEvent, onNavigate, leaders }) => {
-    const [volunteerProfile, setVolunteerProfile] = useState<DetailedVolunteer | null>(null);
-    const [todayEvents, setTodayEvents] = useState<VolunteerSchedule[]>([]);
-    const [upcomingEvents, setUpcomingEvents] = useState<VolunteerSchedule[]>([]);
-    const [invitations, setInvitations] = useState<Invitation[]>([]);
-    const [stats, setStats] = useState({ upcoming: 0, attended: 0, totalScheduled: 0, eventsToday: 0 });
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { invalidateEvents } = useInvalidateQueries();
+    const userId = session?.user?.id;
+
+    const showNotification = useCallback((message: string, type: 'success' | 'error') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 5000);
+    }, []);
+
+    const { data: dashboardData, isLoading: loading, error: dashboardError, refetch: refetchDashboard } = useVolunteerDashboardData(userId, leaders);
+    const error = dashboardError ? getErrorMessage(dashboardError) : null;
+
+    const volunteerProfile = dashboardData?.volunteerProfile || null;
+    const todayEvents = dashboardData?.todayEvents || [];
+    const upcomingEvents = dashboardData?.upcomingEvents || [];
+    const invitations = dashboardData?.invitations || [];
+    const stats = dashboardData?.stats || { upcoming: 0, attended: 0, totalScheduled: 0, eventsToday: 0 };
 
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [qrCodeData, setQrCodeData] = useState<object | null>(null);
@@ -94,171 +103,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<VolunteerSchedule | null>(null);
 
-    const { invalidateEvents } = useInvalidateQueries();
-
-    const userId = session?.user?.id;
-
-    const showNotification = useCallback((message: string, type: 'success' | 'error') => {
-        setNotification({ message, type });
-        setTimeout(() => setNotification(null), 5000);
-    }, []);
-
-    const fetchDashboardData = useCallback(async () => {
-        if (!userId) return;
-        setLoading(true);
-        setError(null);
-
-        try {
-            // 1. Fetch Volunteer Profile & Departments
-            const { data: volProfile, error: volProfileError } = await supabase
-                .from('volunteers')
-                .select('id, name, departments:volunteer_departments(departments(id, name))')
-                .eq('user_id', userId)
-                .single();
-
-            if (volProfileError) throw volProfileError;
-            if (!volProfile) throw new Error("Perfil de voluntário não encontrado.");
-
-            const volunteerId = volProfile.id;
-
-            // 2. Fetch Data in Parallel: Direct Schedule Query (Optimized) + Invitations + Stats Counts
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayStr = today.toISOString().split('T')[0];
-
-            // Replaced `get_my_schedule` RPC with a direct, filtered join.
-            const [scheduleRes, rawInvitationsRes, totalPresencesRes, totalScheduledRes] = await Promise.all([
-                // List of Today + Upcoming events (Detailed data)
-                supabase
-                    .from('event_volunteers')
-                    .select(`
-                        present,
-                        department_id,
-                        departments(name),
-                        events(
-                            id, name, date, start_time, end_time, status, local, observations,
-                            cronograma_principal_id, cronograma_kids_id
-                        )
-                    `)
-                    .eq('volunteer_id', volunteerId)
-                    .gte('events.date', todayStr) // Fetch only today and future
-                    .eq('events.status', 'Confirmado')
-                    .order('date', { foreignTable: 'events', ascending: true })
-                    .order('start_time', { foreignTable: 'events', ascending: true }),
-
-                supabase.from('invitations').select('id, created_at, leader_id, departments(id, name)').eq('volunteer_id', volunteerId).eq('status', 'pendente'),
-
-                // Count Total Confirmed Presences (All Time)
-                supabase
-                    .from('event_volunteers')
-                    .select('events!inner(id)', { count: 'exact', head: true })
-                    .eq('volunteer_id', volunteerId)
-                    .eq('present', true)
-                    .eq('events.status', 'Confirmado'),
-
-                // Count Total Scheduled (All Time)
-                supabase
-                    .from('event_volunteers')
-                    .select('events!inner(id)', { count: 'exact', head: true })
-                    .eq('volunteer_id', volunteerId)
-                    .eq('events.status', 'Confirmado'),
-            ]);
-
-            if (scheduleRes.error) throw scheduleRes.error;
-            if (rawInvitationsRes.error) throw rawInvitationsRes.error;
-            if (totalPresencesRes.error) console.error("Error fetching total presences:", totalPresencesRes.error);
-            if (totalScheduledRes.error) console.error("Error fetching total scheduled:", totalScheduledRes.error);
-
-            // --- Process Invitations ---
-            const rawInvitations = rawInvitationsRes.data || [];
-            if (rawInvitations.length > 0) {
-                const leadersMap = new Map<string, string | null>();
-                leaders.forEach(l => leadersMap.set(l.id, l.user_metadata?.name || null));
-
-                const enrichedInvitations: Invitation[] = rawInvitations.map((inv: any) => ({
-                    id: inv.id,
-                    created_at: inv.created_at,
-                    departments: inv.departments,
-                    profiles: { name: inv.leader_id ? leadersMap.get(inv.leader_id) || 'Líder' : 'Líder' }
-                }));
-                setInvitations(enrichedInvitations);
-            } else {
-                setInvitations([]);
-            }
-
-            // --- Process Profile ---
-            const transformedDepartments = (volProfile.departments || []).map((d: any) => d.departments).filter(Boolean);
-            const completeProfile = { ...volProfile, departments: transformedDepartments };
-            setVolunteerProfile(completeProfile as unknown as DetailedVolunteer);
-
-            // --- Process Schedule & Enrich with Leader Names ---
-            const rawSchedule = scheduleRes.data || [];
-
-            // 1. Get all unique department IDs from schedule
-            const relevantDeptIds = [...new Set(rawSchedule.map((item: any) => item.department_id))];
-
-            // 2. Fetch leaders for these departments
-            const { data: deptLeaders, error: dlError } = await supabase
-                .from('department_leaders')
-                .select('department_id, leader_id')
-                .in('department_id', relevantDeptIds);
-
-            if (dlError) console.warn("Could not fetch leaders for schedule items", dlError);
-
-            const deptLeaderMap = new Map<number, string>();
-            (deptLeaders || []).forEach((dl: any) => {
-                const leaderUser = leaders.find(u => u.id === dl.leader_id);
-                if (leaderUser) {
-                    deptLeaderMap.set(dl.department_id, leaderUser.user_metadata?.name || 'Líder');
-                }
-            });
-
-            const allMySchedules: VolunteerSchedule[] = rawSchedule
-                .filter((item: any) => item.events) // Filter out if event join failed (e.g. deleted event)
-                .map((item: any) => {
-                    const evt = item.events;
-                    return {
-                        id: evt.id,
-                        name: evt.name,
-                        date: evt.date,
-                        start_time: evt.start_time,
-                        end_time: evt.end_time,
-                        status: evt.status,
-                        local: evt.local,
-                        observations: evt.observations,
-                        department_id: item.department_id,
-                        department_name: item.departments?.name || 'Departamento',
-                        leader_name: deptLeaderMap.get(item.department_id) || '',
-                        present: item.present,
-                        cronograma_principal_id: evt.cronograma_principal_id,
-                        cronograma_kids_id: evt.cronograma_kids_id,
-                    };
-                });
-
-            setTodayEvents(allMySchedules.filter(e => e.date === todayStr));
-            setUpcomingEvents(allMySchedules.filter(e => e.date > todayStr));
-
-            // Use accurate counts from the DB for stats
-            setStats({
-                upcoming: allMySchedules.filter(e => e.date > todayStr).length,
-                attended: totalPresencesRes.count ?? 0,
-                totalScheduled: totalScheduledRes.count ?? 0,
-                eventsToday: allMySchedules.filter(e => e.date === todayStr).length,
-            });
-
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            setError(errorMessage);
-            console.error("Error fetching volunteer dashboard data:", err);
-        } finally {
-            setLoading(false);
-        }
-    }, [userId, leaders]);
-
-
-    useEffect(() => {
-        fetchDashboardData();
-    }, [fetchDashboardData]);
+    // Fetch Dashboard Data Logic Removed - Handled by React Query
 
     const handleInvitationResponse = async (invitationId: number, response: 'aceito' | 'recusado') => {
         try {
@@ -272,7 +117,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             invalidateEvents();
 
             // Refetch local dashboard data
-            fetchDashboardData();
+            refetchDashboard();
         } catch (err) {
             showNotification(`Erro ao responder ao convite: ${getErrorMessage(err)}`, 'error');
         }
@@ -334,7 +179,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             // Invalidate queries to refresh data
             invalidateEvents();
 
-            await fetchDashboardData(); // Refetch to update status
+            await refetchDashboard(); // Refetch to update status
         } catch (err) {
             showNotification(`Erro ao solicitar troca: ${getErrorMessage(err)}`, 'error');
         } finally {

@@ -3,7 +3,7 @@
 
 // --- Configuration ---
 // Incrementing the cache name invalidates previous caches.
-const CACHE_NAME = 'volunteer-dashboard-v9'; // VERSÃO ATUALIZADA PARA FORÇAR REFRESH
+const CACHE_NAME = 'volunteer-dashboard-v10'; // VERSÃO ATUALIZADA - 2025-11-23 - Limpeza completa após otimizações React Query
 const urlsToCache = [
   '/',
   '/index.html',
@@ -20,15 +20,15 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[sw.js] Opened cache and caching app shell.');
-        
+
         // CORREÇÃO: Usar .catch para garantir que mesmo que um arquivo falhe (404),
         // o Service Worker ainda instale. Isso resolve o erro 'Failed to execute addAll'.
         return cache.addAll(urlsToCache)
-            .catch(err => {
-                console.warn('[sw.js] Falha parcial no cache. A instalação continua.', err);
-                // A Promise é resolvida para que a instalação continue
-                return; 
-            });
+          .catch(err => {
+            console.warn('[sw.js] Falha parcial no cache. A instalação continua.', err);
+            // A Promise é resolvida para que a instalação continue
+            return;
+          });
       })
       .then(() => self.skipWaiting()) // Activate new SW immediately
   );
@@ -60,13 +60,13 @@ self.addEventListener('fetch', (event) => {
   // 1. Ignore non-GET requests (like POST to Supabase functions).
   // 2. Ignore cross-origin requests (já que url.origin !== self.location.origin).
   // 3. Para same-origin GET requests, try network first.
-  
+
   // Isso garante que o POST para a Edge Function não é interceptado e não quebra a Promise.
   if (request.method !== 'GET' || url.origin !== self.location.origin) {
     // Let the browser handle it without interception.
     return;
   }
-  
+
   event.respondWith(
     fetch(request)
       .then((networkResponse) => {
@@ -112,14 +112,14 @@ self.addEventListener('push', (event) => {
       body: event.data.text(),
     };
   }
-  
+
   const title = data.title || 'Nova Notificação';
   const options = {
     body: data.body || 'Você recebeu uma nova notificação.',
     icon: '/icon.svg',
     badge: '/icon.svg',
     data: {
-        url: data.url || '/'
+      url: data.url || '/'
     }
   };
 
@@ -129,7 +129,7 @@ self.addEventListener('push', (event) => {
 // Listener for clicks em notificações
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  
+
   const notificationData = event.notification.data;
   const urlToOpen = new URL(notificationData.url || '/', self.location.origin).href;
 

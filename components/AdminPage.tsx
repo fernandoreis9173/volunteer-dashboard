@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient';
 // FIX: Import the 'User' type from the central 'types.ts' module to resolve the export error.
 import { EnrichedUser, User } from '../types';
+import { useAdminUsers } from '../hooks/useQueries';
 import EditUserModal from './EditUserModal';
 import ConfirmationModal from './ConfirmationModal';
 import { getErrorMessage, getInitials } from '../lib/utils';
@@ -18,9 +19,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const [inviteLoading, setInviteLoading] = useState(false);
     const [inviteError, setInviteError] = useState<string | null>(null);
     const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
-    const [invitedUsers, setInvitedUsers] = useState<EnrichedUser[]>([]);
-    const [listLoading, setListLoading] = useState(true);
-    const [listError, setListError] = useState<string | null>(null);
+    // const [invitedUsers, setInvitedUsers] = useState<EnrichedUser[]>([]); // Replaced by React Query
+    // const [listLoading, setListLoading] = useState(true); // Replaced by React Query
+    // const [listError, setListError] = useState<string | null>(null); // Replaced by React Query
     const [inputValue, setInputValue] = useState(''); // For immediate input
     const [searchQuery, setSearchQuery] = useState(''); // For debounced filtering
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -34,42 +35,24 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
     const roleDropdownRef = useRef<HTMLDivElement>(null);
 
-    // Cache Ref for Users
-    const usersCache = useRef<{ data: EnrichedUser[], timestamp: number } | null>(null);
-    const CACHE_DURATION = 60000; // 1 minute
+    // Cache Ref for Users - REMOVED
+    // const usersCache = useRef<{ data: EnrichedUser[], timestamp: number } | null>(null);
+    // const CACHE_DURATION = 60000; // 1 minute
 
-    // Fetch Logic for User Management
+    // React Query Hook
+    const { data: invitedUsers = [], isLoading: listLoading, error: listErrorObject, refetch: refetchUsers } = useAdminUsers();
+    const listError = listErrorObject ? getErrorMessage(listErrorObject) : null;
+
+    // Fetch Logic for User Management - REMOVED (Handled by useAdminUsers)
+    /*
     const fetchInvitedUsers = useCallback(async (force = false) => {
-        // Check cache first
-        if (!force && usersCache.current && (Date.now() - usersCache.current.timestamp < CACHE_DURATION)) {
-            setInvitedUsers(usersCache.current.data);
-            setListLoading(false);
-            return;
-        }
-
-        setListLoading(true);
-        setListError(null);
-
-        const { data, error: fetchError } = await supabase.functions.invoke('list-users');
-
-        if (fetchError) {
-            const errorMessage = getErrorMessage(fetchError);
-            setListError(`Falha ao carregar la lista de convidados: ${errorMessage}`);
-        } else if (data && data.error) {
-            setListError(`Erro retornado pela função: ${data.error}`);
-            setInvitedUsers([]);
-        } else {
-            const users = data.users || [];
-            setInvitedUsers(users);
-            // Update cache
-            usersCache.current = { data: users, timestamp: Date.now() };
-        }
-        setListLoading(false);
+       ...
     }, []);
 
     useEffect(() => {
         fetchInvitedUsers();
     }, [fetchInvitedUsers]);
+    */
 
     // Debounce search query
     useEffect(() => {
@@ -128,7 +111,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             setEmail('');
             setName('');
             setRole('leader');
-            await fetchInvitedUsers(true); // Force refetch
+            setRole('leader');
+            await refetchUsers(); // Force refetch
         } catch (err) {
             setInviteError(`Falha ao enviar convite: ${getErrorMessage(err)}`);
         } finally {
@@ -143,7 +127,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
         if (error) {
             alert(`Falha ao atualizar permissões: ${getErrorMessage(error)}`);
         } else {
-            await fetchInvitedUsers(true); // Force refetch
+            await refetchUsers(); // Force refetch
             setIsEditModalOpen(false);
         }
     };
@@ -165,7 +149,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             if (error) {
                 alert(`Falha ao rebaixar líder: ${getErrorMessage(error)}`);
             } else {
-                await fetchInvitedUsers(true); // Force refetch
+                await refetchUsers(); // Force refetch
                 onDataChange(); // Refetch leaders list in App.tsx
             }
         } else {
@@ -177,7 +161,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             if (error) {
                 alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
             } else {
-                await fetchInvitedUsers(true); // Force refetch
+                await refetchUsers(); // Force refetch
             }
         }
 

@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabaseClient';
+import { DetailedVolunteer, VolunteerSchedule, Invitation } from '../types';
+import { User } from '@supabase/supabase-js';
 
 // ============================================
 // DEPARTMENTS HOOKS
@@ -124,6 +126,7 @@ export const useTodaysEvents = (userId: string, userRole: string, departmentId?:
         staleTime: 5 * 60 * 1000, // 5 minutos
         gcTime: 15 * 60 * 1000, // Garbage collection após 15 minutos
         refetchOnWindowFocus: false, // Não refetch ao mudar de aba
+        enabled: !!userId,
         // refetchInterval removido - usar Realtime para atualizações
     });
 };
@@ -345,3 +348,181 @@ export const useInvalidateQueries = () => {
         invalidateAll: () => queryClient.invalidateQueries(),
     };
 };
+
+// ============================================
+// ADMIN HOOKS
+// ============================================
+
+// Função auxiliar para fetch de usuários (compartilhada)
+const fetchAdminUsers = async () => {
+    const { data, error: fetchError } = await supabase.functions.invoke('list-users');
+    if (fetchError) throw fetchError;
+    if (data && data.error) throw new Error(data.error);
+    return data.users || [];
+};
+
+export const useAdminUsers = () => {
+    return useQuery({
+        queryKey: ['admin', 'users'],
+        queryFn: fetchAdminUsers,
+        staleTime: 5 * 60 * 1000, // 5 minutos
+        gcTime: 15 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+};
+
+export const useLeaders = () => {
+    return useQuery({
+        queryKey: ['admin', 'users'], // Compartilha cache com useAdminUsers
+        queryFn: fetchAdminUsers,
+        select: (users: any[]) => {
+            return users.filter((user) => {
+                const role = user.user_metadata?.role;
+                return (role === 'leader' || role === 'lider' || role === 'admin') && user.app_status === 'Ativo';
+            });
+        },
+        staleTime: 5 * 60 * 1000,
+        gcTime: 15 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+};
+
+export const useVolunteerDashboardData = (userId: string | undefined, leaders: User[]) => {
+    return useQuery({
+        queryKey: ['volunteer', 'dashboard', userId],
+        queryFn: async () => {
+            if (!userId) throw new Error("User ID is required");
+
+            // 1. Fetch Volunteer Profile & Departments
+            const { data: volProfile, error: volProfileError } = await supabase
+                .from('volunteers')
+                .select('id, name, departments:volunteer_departments(departments(id, name))')
+                .eq('user_id', userId)
+                .single();
+
+            if (volProfileError) throw volProfileError;
+            if (!volProfile) throw new Error("Perfil de voluntário não encontrado.");
+
+            const volunteerId = volProfile.id;
+
+            // 2. Fetch Data in Parallel
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = today.toISOString().split('T')[0];
+
+            const [scheduleRes, rawInvitationsRes, totalPresencesRes, totalScheduledRes] = await Promise.all([
+                supabase
+                    .from('event_volunteers')
+                    .select(`
+                        present,
+                        department_id,
+                        departments(name),
+                        events(
+                            id, name, date, start_time, end_time, status, local, observations,
+                            cronograma_principal_id, cronograma_kids_id
+                        )
+                    `)
+                    .eq('volunteer_id', volunteerId)
+                    .gte('events.date', todayStr)
+                    .eq('events.status', 'Confirmado')
+                    .order('date', { foreignTable: 'events', ascending: true })
+                    .order('start_time', { foreignTable: 'events', ascending: true }),
+
+                supabase.from('invitations').select('id, created_at, leader_id, departments(id, name)').eq('volunteer_id', volunteerId).eq('status', 'pendente'),
+
+                supabase
+                    .from('event_volunteers')
+                    .select('events!inner(id)', { count: 'exact', head: true })
+                    .eq('volunteer_id', volunteerId)
+                    .eq('present', true)
+                    .eq('events.status', 'Confirmado'),
+
+                supabase
+                    .from('event_volunteers')
+                    .select('events!inner(id)', { count: 'exact', head: true })
+                    .eq('volunteer_id', volunteerId)
+                    .eq('events.status', 'Confirmado'),
+            ]);
+
+            if (scheduleRes.error) throw scheduleRes.error;
+            if (rawInvitationsRes.error) throw rawInvitationsRes.error;
+
+            // Process Invitations
+            const rawInvitations = rawInvitationsRes.data || [];
+            const leadersMap = new Map<string, string | null>();
+            leaders.forEach(l => leadersMap.set(l.id, l.user_metadata?.name || null));
+
+            const invitations: Invitation[] = rawInvitations.map((inv: any) => ({
+                id: inv.id,
+                created_at: inv.created_at,
+                departments: inv.departments,
+                profiles: { name: inv.leader_id ? leadersMap.get(inv.leader_id) || 'Líder' : 'Líder' }
+            }));
+
+            // Process Profile
+            const transformedDepartments = (volProfile.departments || []).map((d: any) => d.departments).filter(Boolean);
+            const completeProfile = { ...volProfile, departments: transformedDepartments } as unknown as DetailedVolunteer;
+
+            // Process Schedule
+            const rawSchedule = scheduleRes.data || [];
+            const relevantDeptIds = [...new Set(rawSchedule.map((item: any) => item.department_id))];
+
+            const { data: deptLeaders } = await supabase
+                .from('department_leaders')
+                .select('department_id, leader_id')
+                .in('department_id', relevantDeptIds);
+
+            const deptLeaderMap = new Map<number, string>();
+            (deptLeaders || []).forEach((dl: any) => {
+                const leaderUser = leaders.find(u => u.id === dl.leader_id);
+                if (leaderUser) {
+                    deptLeaderMap.set(dl.department_id, leaderUser.user_metadata?.name || 'Líder');
+                }
+            });
+
+            const allMySchedules: VolunteerSchedule[] = rawSchedule
+                .filter((item: any) => item.events)
+                .map((item: any) => {
+                    const evt = item.events;
+                    return {
+                        id: evt.id,
+                        name: evt.name,
+                        date: evt.date,
+                        start_time: evt.start_time,
+                        end_time: evt.end_time,
+                        status: evt.status,
+                        local: evt.local,
+                        observations: evt.observations,
+                        department_id: item.department_id,
+                        department_name: item.departments?.name || 'Departamento',
+                        leader_name: deptLeaderMap.get(item.department_id) || '',
+                        present: item.present,
+                        cronograma_principal_id: evt.cronograma_principal_id,
+                        cronograma_kids_id: evt.cronograma_kids_id,
+                    };
+                });
+
+            const todayEvents = allMySchedules.filter(e => e.date === todayStr);
+            const upcomingEvents = allMySchedules.filter(e => e.date > todayStr);
+
+            const stats = {
+                upcoming: upcomingEvents.length,
+                attended: totalPresencesRes.count ?? 0,
+                totalScheduled: totalScheduledRes.count ?? 0,
+                eventsToday: todayEvents.length,
+            };
+
+            return {
+                volunteerProfile: completeProfile,
+                todayEvents,
+                upcomingEvents,
+                invitations,
+                stats
+            };
+        },
+        enabled: !!userId && leaders.length > 0,
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+};
+
