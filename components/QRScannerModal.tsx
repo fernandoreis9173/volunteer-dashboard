@@ -137,10 +137,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       } catch (error: any) {
         if (currentInitId !== initializationIdRef.current) return;
         console.error('Erro ao iniciar câmera/scanner:', error);
+        console.error('Nome do erro:', error.name);
+        console.error('Mensagem:', error.message);
+        console.error('Stack:', error.stack);
 
         if (error.name === 'AbortError') return;
 
-        let msg = "Erro ao acessar a câmera.";
+        let msg = `Erro: ${error.name} - ${error.message}`;
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
           msg = "Permissão de câmera negada.";
         } else if (error.name === 'NotFoundError') {
