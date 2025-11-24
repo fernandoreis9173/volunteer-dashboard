@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -20,6 +20,16 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isStartingRef = useRef(false);
   const hasProcessedScanRef = useRef(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+
+  // Função helper para adicionar logs
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    setDebugLogs(prev => [...prev.slice(-10), logMessage]); // Mantém apenas os últimos 10 logs
+  };
 
   // Detecta se é mobile
   const isMobile = () => {
@@ -28,41 +38,42 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
   useEffect(() => {
     const stopScanner = async () => {
-      console.log('[Scanner] Parando scanner...');
+      addDebugLog('Parando scanner...');
       if (scannerRef.current && scannerRef.current.isScanning) {
         try {
           await scannerRef.current.stop();
-          console.log('[Scanner] Scanner parado com sucesso');
+          addDebugLog('✅ Scanner parado');
         } catch (e) {
-          console.error('[Scanner] Erro ao parar scanner:', e);
+          addDebugLog('❌ Erro ao parar: ' + e);
         }
       }
       isStartingRef.current = false;
     };
 
     if (!isOpen || scanResult) {
-      console.log('[Scanner] Modal fechado ou resultado presente, parando scanner');
+      addDebugLog('Modal fechado, parando');
       stopScanner();
       return;
     }
 
     if (isStartingRef.current) {
-      console.log('[Scanner] Scanner já está iniciando, ignorando');
+      addDebugLog('⚠️ Já está iniciando');
       return;
     }
 
     // Reset da flag quando o modal abre
     hasProcessedScanRef.current = false;
     isStartingRef.current = true;
+    setDebugLogs([]); // Limpa logs anteriores
 
     const startScanner = async () => {
       try {
-        console.log('[Scanner] Iniciando scanner...');
+        addDebugLog('🚀 Iniciando scanner...');
         const scanner = new Html5Qrcode('qr-reader');
         scannerRef.current = scanner;
 
         const mobile = isMobile();
-        console.log('[Scanner] Dispositivo mobile:', mobile);
+        addDebugLog(`📱 Mobile: ${mobile}`);
 
         // Configuração sem forçar resolução - usa configuração nativa da câmera
         const config = {
@@ -72,21 +83,22 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         };
 
         const facingMode = mobile ? "environment" : "user";
-        console.log('[Scanner] Usando facingMode:', facingMode);
+        addDebugLog(`📷 Camera: ${facingMode}`);
 
         // Callback de sucesso
         const onScanSuccessCallback = async (decodedText: string) => {
           // Previne múltiplas chamadas
           if (hasProcessedScanRef.current) {
-            console.log('[Scanner] QR code já processado, ignorando');
+            addDebugLog('⚠️ QR já processado');
             return;
           }
 
           hasProcessedScanRef.current = true;
-          console.log('[Scanner] ✅ QR Code detectado:', decodedText);
+          addDebugLog('✅ QR detectado!');
+          addDebugLog(`Dados: ${decodedText.substring(0, 50)}...`);
 
           // Chama o callback ANTES de parar o scanner
-          console.log('[Scanner] Chamando onScanSuccess...');
+          addDebugLog('📞 Chamando callback...');
           onScanSuccess(decodedText);
 
           // Aguarda um pouco antes de parar o scanner para garantir que o callback foi processado
@@ -104,14 +116,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             // Ignora erros de scan (normal quando não há QR code)
           }
         ).catch(async (err) => {
-          console.log(`[Scanner] ⚠️ Falhou com ${facingMode}, tentando fallback...`, err);
+          addDebugLog(`⚠️ Falha ${facingMode}, tentando fallback`);
 
           // Fallback: tenta com a primeira câmera disponível
           try {
             const devices = await Html5Qrcode.getCameras();
-            console.log('[Scanner] Câmeras disponíveis:', devices.length);
+            addDebugLog(`📷 ${devices.length} câmeras disponíveis`);
             if (devices && devices.length > 0) {
-              console.log('[Scanner] Usando câmera:', devices[0].label || devices[0].id);
+              addDebugLog(`Usando: ${devices[0].label || devices[0].id}`);
               await scanner.start(
                 devices[0].id,
                 config,
@@ -122,13 +134,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               );
             }
           } catch (fallbackErr) {
-            console.error('[Scanner] ❌ Fallback falhou:', fallbackErr);
+            addDebugLog('❌ Fallback falhou: ' + fallbackErr);
           }
         });
 
-        console.log('[Scanner] ✅ Scanner iniciado com sucesso!');
+        addDebugLog('✅ Scanner iniciado!');
       } catch (error) {
-        console.error('[Scanner] ❌ Erro ao iniciar scanner:', error);
+        addDebugLog('❌ Erro: ' + error);
         isStartingRef.current = false;
       }
     };
@@ -197,6 +209,31 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
                   <p className="text-white text-sm font-medium">Aponte para o QR Code</p>
                 </div>
               </div>
+
+              {/* Botão de Debug */}
+              <div className="absolute top-20 right-4">
+                <button
+                  onClick={() => setShowDebug(!showDebug)}
+                  className="bg-black/60 backdrop-blur-md p-2 rounded-full border border-white/20 text-white text-xs"
+                >
+                  {showDebug ? '🔍 Ocultar' : '🔍 Debug'}
+                </button>
+              </div>
+
+              {/* Painel de Debug */}
+              {showDebug && (
+                <div className="absolute top-32 left-4 right-4 bg-black/80 backdrop-blur-md p-3 rounded-lg border border-white/20 max-h-64 overflow-y-auto">
+                  <div className="text-white text-xs font-mono space-y-1">
+                    {debugLogs.length === 0 ? (
+                      <p className="text-white/60">Aguardando logs...</p>
+                    ) : (
+                      debugLogs.map((log, i) => (
+                        <p key={i} className="break-all">{log}</p>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
