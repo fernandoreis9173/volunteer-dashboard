@@ -22,6 +22,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const hasProcessedScanRef = useRef(false);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Função helper para adicionar logs
   const addDebugLog = (message: string) => {
@@ -34,6 +36,31 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   // Detecta se é mobile
   const isMobile = () => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
+  // Detecta se está em iOS PWA
+  const isIOSPWA = () => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+    return isIOS && isPWA;
+  };
+
+  // Handler para upload de imagem
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      addDebugLog('📸 Processando imagem...');
+      const scanner = new Html5Qrcode('qr-reader-file');
+      const result = await scanner.scanFile(file, false);
+      addDebugLog('✅ QR detectado na imagem!');
+      onScanSuccess(result);
+    } catch (err) {
+      addDebugLog('❌ Erro ao ler imagem: ' + err);
+      setScannerError('Não foi possível ler o QR code da imagem. Tente novamente.');
+    }
   };
 
   useEffect(() => {
@@ -166,8 +193,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         });
 
         addDebugLog('✅ Scanner iniciado!');
-      } catch (error) {
+      } catch (error: any) {
         addDebugLog('❌ Erro: ' + error);
+        setScannerError(error.message || 'Erro ao iniciar câmera');
         isStartingRef.current = false;
       }
     };
@@ -211,6 +239,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         {/* Scanner Area - Tela Cheia */}
         <div className="flex-1 relative bg-black overflow-hidden">
           <div id="qr-reader" className="absolute inset-0"></div>
+          <div id="qr-reader-file" className="hidden"></div>
 
           {/* Overlay de Scan Animado */}
           {!scanResult && (
@@ -231,14 +260,61 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               </div>
 
               {/* Instrução */}
-              <div className="absolute bottom-32 left-0 right-0 flex justify-center">
-                <div className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-full border border-white/20">
-                  <p className="text-white text-sm font-medium">Aponte para o QR Code</p>
-                </div>
+              <div className="absolute bottom-32 left-0 right-0 flex flex-col items-center gap-3 px-4">
+                {!scannerError && (
+                  <div className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-full border border-white/20">
+                    <p className="text-white text-sm font-medium">Aponte para o QR Code</p>
+                  </div>
+                )}
+
+                {/* Aviso de iOS PWA */}
+                {isIOSPWA() && scannerError && (
+                  <div className="bg-yellow-500/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-yellow-300 max-w-sm">
+                    <p className="text-white text-sm font-bold mb-2">⚠️ Scanner não funciona em PWA</p>
+                    <p className="text-white text-xs mb-3">O scanner de QR code funciona no Safari, mas não no app instalado (PWA).</p>
+                    <button
+                      onClick={() => {
+                        const url = window.location.href;
+                        window.open(url, '_blank');
+                      }}
+                      className="w-full bg-white text-yellow-700 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-yellow-50 transition-colors"
+                    >
+                      🌐 Abrir no Safari
+                    </button>
+                  </div>
+                )}
+
+                {/* Erro genérico */}
+                {scannerError && !isIOSPWA() && (
+                  <div className="bg-red-500/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-red-300 max-w-sm">
+                    <p className="text-white text-sm font-bold mb-2">❌ Erro ao iniciar câmera</p>
+                    <p className="text-white text-xs">{scannerError}</p>
+                  </div>
+                )}
+
+                {/* Botão de Upload como Fallback */}
+                {scannerError && (
+                  <div className="pointer-events-auto">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-full font-semibold text-sm shadow-lg transition-colors"
+                    >
+                      📸 Tirar Foto do QR Code
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Botão de Debug */}
-              <div className="absolute top-20 right-4">
+              <div className="absolute top-20 right-4 pointer-events-auto">
                 <button
                   onClick={() => setShowDebug(!showDebug)}
                   className="bg-black/60 backdrop-blur-md p-2 rounded-full border border-white/20 text-white text-xs"
@@ -249,7 +325,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
               {/* Painel de Debug */}
               {showDebug && (
-                <div className="absolute top-32 left-4 right-4 bg-black/80 backdrop-blur-md p-3 rounded-lg border border-white/20 max-h-64 overflow-y-auto">
+                <div className="absolute top-32 left-4 right-4 bg-black/80 backdrop-blur-md p-3 rounded-lg border border-white/20 max-h-64 overflow-y-auto pointer-events-auto">
                   <div className="text-white text-xs font-mono space-y-1">
                     {debugLogs.length === 0 ? (
                       <p className="text-white/60">Aguardando logs...</p>
