@@ -69,11 +69,35 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
     const startScanner = async () => {
       try {
         addDebugLog('🚀 Iniciando scanner...');
-        const scanner = new Html5Qrcode('qr-reader');
-        scannerRef.current = scanner;
+
+        // Detecta se está rodando como PWA
+        const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+          (window.navigator as any).standalone === true;
+        addDebugLog(`📱 PWA: ${isPWA}`);
 
         const mobile = isMobile();
         addDebugLog(`📱 Mobile: ${mobile}`);
+
+        // Verifica se está no iOS
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        addDebugLog(`🍎 iOS: ${isIOS}`);
+
+        // Solicita permissão de câmera explicitamente (importante para iOS PWA)
+        try {
+          addDebugLog('🔐 Solicitando permissão de câmera...');
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: mobile ? 'environment' : 'user' }
+          });
+          // Para o stream imediatamente - só queríamos verificar a permissão
+          stream.getTracks().forEach(track => track.stop());
+          addDebugLog('✅ Permissão de câmera concedida');
+        } catch (permErr) {
+          addDebugLog('❌ Permissão negada: ' + permErr);
+          throw new Error('Permissão de câmera negada. Por favor, permita o acesso à câmera nas configurações do seu dispositivo.');
+        }
+
+        const scanner = new Html5Qrcode('qr-reader');
+        scannerRef.current = scanner;
 
         // Configuração sem forçar resolução - usa configuração nativa da câmera
         const config = {
@@ -132,9 +156,12 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
                   // Ignora erros de scan
                 }
               );
+            } else {
+              throw new Error('Nenhuma câmera encontrada');
             }
           } catch (fallbackErr) {
             addDebugLog('❌ Fallback falhou: ' + fallbackErr);
+            throw fallbackErr;
           }
         });
 
