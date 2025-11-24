@@ -19,6 +19,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isStartingRef = useRef(false);
+  const hasProcessedScanRef = useRef(false);
 
   // Detecta se é mobile
   const isMobile = () => {
@@ -27,33 +28,41 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
   useEffect(() => {
     const stopScanner = async () => {
+      console.log('[Scanner] Parando scanner...');
       if (scannerRef.current && scannerRef.current.isScanning) {
         try {
           await scannerRef.current.stop();
+          console.log('[Scanner] Scanner parado com sucesso');
         } catch (e) {
-          console.error('Erro ao parar scanner:', e);
+          console.error('[Scanner] Erro ao parar scanner:', e);
         }
       }
       isStartingRef.current = false;
     };
 
     if (!isOpen || scanResult) {
+      console.log('[Scanner] Modal fechado ou resultado presente, parando scanner');
       stopScanner();
       return;
     }
 
     if (isStartingRef.current) {
+      console.log('[Scanner] Scanner já está iniciando, ignorando');
       return;
     }
 
+    // Reset da flag quando o modal abre
+    hasProcessedScanRef.current = false;
     isStartingRef.current = true;
 
     const startScanner = async () => {
       try {
+        console.log('[Scanner] Iniciando scanner...');
         const scanner = new Html5Qrcode('qr-reader');
         scannerRef.current = scanner;
 
         const mobile = isMobile();
+        console.log('[Scanner] Dispositivo mobile:', mobile);
 
         // Configuração sem forçar resolução - usa configuração nativa da câmera
         const config = {
@@ -63,45 +72,63 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         };
 
         const facingMode = mobile ? "environment" : "user";
+        console.log('[Scanner] Usando facingMode:', facingMode);
+
+        // Callback de sucesso
+        const onScanSuccessCallback = async (decodedText: string) => {
+          // Previne múltiplas chamadas
+          if (hasProcessedScanRef.current) {
+            console.log('[Scanner] QR code já processado, ignorando');
+            return;
+          }
+
+          hasProcessedScanRef.current = true;
+          console.log('[Scanner] ✅ QR Code detectado:', decodedText);
+
+          // Chama o callback ANTES de parar o scanner
+          console.log('[Scanner] Chamando onScanSuccess...');
+          onScanSuccess(decodedText);
+
+          // Aguarda um pouco antes de parar o scanner para garantir que o callback foi processado
+          setTimeout(async () => {
+            await stopScanner();
+          }, 100);
+        };
 
         // Tenta iniciar com facingMode apropriado
         await scanner.start(
           { facingMode },
           config,
-          (decodedText) => {
-            stopScanner();
-            onScanSuccess(decodedText);
-          },
+          onScanSuccessCallback,
           (errorMessage) => {
             // Ignora erros de scan (normal quando não há QR code)
           }
         ).catch(async (err) => {
-          console.log(`[Scanner] Falhou com ${facingMode}, tentando fallback...`, err);
+          console.log(`[Scanner] ⚠️ Falhou com ${facingMode}, tentando fallback...`, err);
 
           // Fallback: tenta com a primeira câmera disponível
           try {
             const devices = await Html5Qrcode.getCameras();
+            console.log('[Scanner] Câmeras disponíveis:', devices.length);
             if (devices && devices.length > 0) {
+              console.log('[Scanner] Usando câmera:', devices[0].label || devices[0].id);
               await scanner.start(
                 devices[0].id,
                 config,
-                (decodedText) => {
-                  stopScanner();
-                  onScanSuccess(decodedText);
-                },
+                onScanSuccessCallback,
                 (errorMessage) => {
                   // Ignora erros de scan
                 }
               );
             }
           } catch (fallbackErr) {
-            console.error('[Scanner] Fallback falhou:', fallbackErr);
+            console.error('[Scanner] ❌ Fallback falhou:', fallbackErr);
           }
         });
 
-        console.log('[Scanner] Scanner iniciado com sucesso!');
+        console.log('[Scanner] ✅ Scanner iniciado com sucesso!');
       } catch (error) {
-        console.error('Erro ao iniciar scanner:', error);
+        console.error('[Scanner] ❌ Erro ao iniciar scanner:', error);
         isStartingRef.current = false;
       }
     };

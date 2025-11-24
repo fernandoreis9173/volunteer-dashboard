@@ -199,28 +199,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
     };
 
     const handleAutoConfirmAttendance = useCallback(async (decodedText: string) => {
+        console.log('[AdminDashboard] 🎯 handleAutoConfirmAttendance chamado com:', decodedText);
+        console.log('[AdminDashboard] scanResult atual:', scanResult);
+        console.log('[AdminDashboard] scanningEvent:', scanningEvent?.name);
+
         // Se já estiver processando um resultado (ex: mostrando sucesso), ignora novos scans
-        if (scanResult) return;
+        if (scanResult) {
+            console.log('[AdminDashboard] ⚠️ Ignorando scan - já existe um resultado sendo exibido');
+            return;
+        }
 
         try {
+            console.log('[AdminDashboard] 📝 Parseando QR code...');
             const data = JSON.parse(decodedText);
+            console.log('[AdminDashboard] Dados parseados:', { vId: data.vId, eId: data.eId, dId: data.dId });
 
             // Validações básicas
             if (!data.vId || !data.eId || !data.dId) {
+                console.log('[AdminDashboard] ❌ QR Code incompleto');
                 throw new Error("QR Code incompleto.");
             }
             if (data.eId !== scanningEvent?.id) {
+                console.log('[AdminDashboard] ❌ Evento incorreto. Esperado:', scanningEvent?.id, 'Recebido:', data.eId);
                 throw new Error("Evento incorreto.");
             }
+
+            console.log('[AdminDashboard] ✅ Validações passaram');
 
             // Mostra feedback de carregamento (opcional, ou apenas espera)
             // setScanResult({ type: 'loading', message: 'Processando...' });
 
+            console.log('[AdminDashboard] 🔐 Obtendo sessão...');
             const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !sessionData.session) {
+                console.log('[AdminDashboard] ❌ Sessão inválida:', sessionError);
                 throw new Error("Sessão inválida.");
             }
+            console.log('[AdminDashboard] ✅ Sessão obtida');
 
+            console.log('[AdminDashboard] 📡 Chamando edge function mark-attendance...');
             const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
                 headers: {
                     Authorization: `Bearer ${sessionData.session.access_token}`,
@@ -228,35 +245,47 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                 body: { volunteerId: data.vId, eventId: data.eId, departmentId: data.dId },
             });
 
-            if (invokeError) throw invokeError;
+            if (invokeError) {
+                console.log('[AdminDashboard] ❌ Erro na edge function:', invokeError);
+                throw invokeError;
+            }
+            console.log('[AdminDashboard] ✅ Edge function executada com sucesso');
 
             const volunteerName = scanningEvent?.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
+            console.log('[AdminDashboard] 👤 Nome do voluntário:', volunteerName);
 
             // Sucesso!
+            console.log('[AdminDashboard] 🎉 Definindo resultado de sucesso');
             setScanResult({ type: 'success', message: `${volunteerName}` });
             invalidateEvents();
 
             // Limpa o resultado após 2.5s para permitir novo scan
             setTimeout(() => {
+                console.log('[AdminDashboard] 🧹 Limpando resultado de sucesso');
                 setScanResult(null);
             }, 2500);
 
         } catch (err: any) {
+            console.log('[AdminDashboard] ❌ Erro capturado:', err);
             let errorMsg = "Erro ao confirmar.";
             if (err.context && typeof err.context.json === 'function') {
                 try {
                     const errorJson = await err.context.json();
+                    console.log('[AdminDashboard] Erro JSON da edge function:', errorJson);
                     if (errorJson && errorJson.error) errorMsg = errorJson.error;
                 } catch { }
             } else {
                 errorMsg = getErrorMessage(err);
             }
 
+            console.log('[AdminDashboard] 📢 Mensagem de erro final:', errorMsg);
+
             // Erro!
             setScanResult({ type: 'error', message: errorMsg });
 
             // Limpa o erro após 4s
             setTimeout(() => {
+                console.log('[AdminDashboard] 🧹 Limpando resultado de erro');
                 setScanResult(null);
             }, 4000);
         }
