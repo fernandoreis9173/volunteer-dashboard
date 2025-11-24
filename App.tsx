@@ -149,6 +149,7 @@ const App: React.FC = () => {
     const isUserDisabled = useMemo(() => userProfile?.status === 'Inativo', [userProfile]);
 
     // --- NEW: Force reload on Service Worker Update ---
+    /*
     useEffect(() => {
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -157,6 +158,7 @@ const App: React.FC = () => {
             });
         }
     }, []);
+    */
     // ---------------------------------------------------
 
     useEffect(() => {
