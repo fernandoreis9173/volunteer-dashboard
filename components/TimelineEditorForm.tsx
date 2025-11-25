@@ -36,7 +36,7 @@ const LinkManager: React.FC<{
             setEditingLink(null);
         }
     };
-    
+
     const handleCancel = () => {
         setUrl('');
         setTitle('');
@@ -57,7 +57,7 @@ const LinkManager: React.FC<{
                 <div className="space-y-2 mb-3">
                     {links.map(link => (
                         <div key={link.id} className="flex items-center justify-between bg-white p-2 rounded-md border border-slate-200">
-                             <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline min-w-0">
+                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline min-w-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.536a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                                 </svg>
@@ -65,8 +65,8 @@ const LinkManager: React.FC<{
                             </a>
                             <div className="flex items-center gap-1 flex-shrink-0">
                                 <button type="button" onClick={() => handleEditClick(link)} className="p-0.5 text-slate-400 hover:bg-slate-200 rounded-full">
-  <img src={EditIcon} alt="Calendário" className="w-4 h-4 grayscale opacity-50" />
-</button>
+                                    <img src={EditIcon} alt="Calendário" className="w-4 h-4 grayscale opacity-50" />
+                                </button>
                                 <button type="button" onClick={() => onRemove(itemIndex, link.id)} className="p-0 text-red-500 hover:bg-red-100 rounded-full">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                                 </button>
@@ -75,7 +75,7 @@ const LinkManager: React.FC<{
                     ))}
                 </div>
             )}
-            
+
             {!showForm && (
                 <button type="button" onClick={() => { setEditingLink(null); setShowForm(true); setUrl(''); setTitle(''); }} className="text-xs font-semibold text-blue-600 hover:underline">
                     + Adicionar Link
@@ -85,8 +85,8 @@ const LinkManager: React.FC<{
             {showForm && (
                 <div className="space-y-2 p-3 bg-white rounded-md border border-slate-300">
                     <p className="text-sm font-semibold text-slate-700">{editingLink ? 'Editar Link' : 'Novo Link'}</p>
-                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título do Link (Ex: Louvor 1)" className="w-full text-sm p-1 border-slate-300 rounded-md"/>
-                    <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://youtube.com/..." className="w-full text-sm p-1 border-slate-300 rounded-md"/>
+                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título do Link (Ex: Louvor 1)" className="w-full text-sm p-1 border-slate-300 rounded-md" />
+                    <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://youtube.com/..." className="w-full text-sm p-1 border-slate-300 rounded-md" />
                     <div className="flex justify-end gap-2 mt-1">
                         <button type="button" onClick={handleCancel} className="text-xs px-2 py-1 rounded-md bg-slate-200 hover:bg-slate-300">Cancelar</button>
                         <button type="button" onClick={handleSaveLink} className="text-xs px-2 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700">{editingLink ? 'Salvar' : 'Salvar Link'}</button>
@@ -127,7 +127,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                 }
                 return {
                     ...item,
-                    links: Array.isArray(parsedLinks) ? parsedLinks.map(link => ({...link, id: link.id || crypto.randomUUID()})) : []
+                    links: Array.isArray(parsedLinks) ? parsedLinks.map(link => ({ ...link, id: link.id || crypto.randomUUID() })) : []
                 };
             });
             setItems(parsedItems);
@@ -176,7 +176,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
     const handleUpdateLink = (itemIndex: number, linkId: string, updatedLink: { url: string; title: string; }) => {
         const newItems = [...items];
         const currentItem = { ...newItems[itemIndex] };
-        currentItem.links = (currentItem.links || []).map(link => 
+        currentItem.links = (currentItem.links || []).map(link =>
             link.id === linkId ? { ...link, ...updatedLink } : link
         );
         newItems[itemIndex] = currentItem;
@@ -205,11 +205,11 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
         dragOverItem.current = null;
         setItems(newItems.map((item, index) => ({ ...item, ordem: index })));
     };
-    
+
     const handleImportTemplate = (template: TimelineTemplate) => {
         const itemsToImport = (template.cronograma_itens || []).map(item => {
             let parsedLinks = item.links || [];
-             if (typeof item.links === 'string') {
+            if (typeof item.links === 'string') {
                 try {
                     parsedLinks = JSON.parse(item.links);
                 } catch (e) {
@@ -218,7 +218,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
             }
             return {
                 ...item,
-                links: Array.isArray(parsedLinks) ? parsedLinks.map(link => ({...link, id: link.id || crypto.randomUUID()})) : []
+                links: Array.isArray(parsedLinks) ? parsedLinks.map(link => ({ ...link, id: link.id || crypto.randomUUID() })) : []
             };
         });
         setItems(prevItems => [...prevItems, ...itemsToImport].map((item, index) => ({ ...item, ordem: index })));
@@ -232,21 +232,21 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
         }
         setIsSaving(true);
         setError(null);
-    
+
         try {
             const templatePayload = {
                 id: initialData?.id,
                 nome_modelo: name.trim(),
                 admin_id: initialData?.admin_id, // Deixe a função lidar com o ID do usuário se for novo
             };
-    
+
             const itemsPayload = items.map((item, index) => {
                 const linksArray = Array.isArray(item.links)
                     ? item.links
                         .filter(link => link && link.url && link.title)
                         .map(({ id, ...rest }) => rest) // remove o id do lado do cliente para um payload limpo
                     : [];
-                
+
                 // Remove o id do item, pois ele é gerado pelo banco de dados
                 const { id, ...itemData } = item;
 
@@ -257,7 +257,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                     links: linksArray.length > 0 ? linksArray : null,
                 };
             });
-    
+
             // Chame a edge function
             const { error: invokeError } = await supabase.functions.invoke('save-timeline-template', {
                 body: {
@@ -265,7 +265,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                     items: itemsPayload,
                 },
             });
-    
+
             if (invokeError) {
                 // Tenta obter uma mensagem de erro mais específica da resposta da função
                 if (invokeError.context && typeof invokeError.context.json === 'function') {
@@ -280,7 +280,7 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                 }
                 throw invokeError;
             }
-    
+
             // Sucesso
             onSave();
         } catch (err) {
@@ -299,17 +299,17 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                             <div className="flex items-center gap-2 w-full">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16m-7 6h7" /></svg>
-                                <input type="text" value={item.titulo_item} onChange={(e) => handleItemChange(index, 'titulo_item', e.target.value)} className="w-full font-bold text-slate-700 bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1"/>
+                                <input type="text" value={item.titulo_item} onChange={(e) => handleItemChange(index, 'titulo_item', e.target.value)} className="w-full font-bold text-slate-700 bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1" />
                             </div>
                             <div className="flex items-center gap-2 w-full justify-end">
-                                <input type="number" value={item.duracao_minutos} onChange={(e) => handleItemChange(index, 'duracao_minutos', parseInt(e.target.value, 10) || 0)} className="w-24 text-right px-2 py-1 border border-slate-300 rounded-md"/>
+                                <input type="number" value={item.duracao_minutos} onChange={(e) => handleItemChange(index, 'duracao_minutos', parseInt(e.target.value, 10) || 0)} className="w-24 text-right px-2 py-1 border border-slate-300 rounded-md" />
                                 <span className="text-sm text-slate-500">min</span>
                                 <button onClick={() => handleRemoveItem(index)} className="p-1 text-red-500 hover:bg-red-100 rounded-full">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                 </button>
                             </div>
                         </div>
-                        <textarea value={item.detalhes} onChange={(e) => handleItemChange(index, 'detalhes', e.target.value)} placeholder="Detalhes (ex: lista de músicas, nome do preletor...)" rows={2} className="w-full text-sm px-2 py-1 border border-slate-300 rounded-md"/>
+                        <textarea value={item.detalhes} onChange={(e) => handleItemChange(index, 'detalhes', e.target.value)} placeholder="Detalhes (ex: lista de músicas, nome do preletor...)" rows={2} className="w-full text-sm px-2 py-1 border border-slate-300 rounded-md" />
                         <LinkManager itemIndex={index} links={item.links} onAdd={handleAddLink} onRemove={handleRemoveLink} onUpdate={handleUpdateLink} />
                     </div>
                 ))}
@@ -331,27 +331,12 @@ const TimelineEditorForm: React.FC<TimelineEditorFormProps> = ({ initialData, on
             <div className="space-y-6">
                 <div>
                     <label htmlFor="templateName" className="block text-sm font-medium text-slate-700 mb-1">Nome do Modelo *</label>
-                    <input id="templateName" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Modelo - Culto Principal" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm"/>
+                    <input id="templateName" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Modelo - Culto Principal" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm" />
                 </div>
-                
+
                 {renderItemList()}
-                
-                <div className="pt-6 border-t border-slate-200">
-                    <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg" role="alert">
-                        <div className="flex">
-                            <div className="flex-shrink-0">
-                                <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                            <div className="ml-3">
-                                <p className="text-sm text-blue-800">
-                                    Na hora de criar ou editar seu evento na página 'Eventos', você poderá associar este cronograma a ele.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
+
 
 
                 <div className="pt-6 border-t border-slate-200 flex justify-end items-center gap-3">

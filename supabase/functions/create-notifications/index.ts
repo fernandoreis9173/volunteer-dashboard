@@ -52,6 +52,7 @@ Deno.serve(async (req: any) => {
             broadcastMessage,
             notifyType,
             event,
+            events,
             // New targeted notification parameters
             message,
             targetType,
@@ -134,6 +135,44 @@ Deno.serve(async (req: any) => {
             } else {
                 console.log("⚠️ Nenhum líder encontrado para receber notificação de criação de evento.");
             }
+        } else if (notifyType === 'bulk_timeline_associated' && events && Array.isArray(events)) {
+            console.log(`Processando associação em massa para ${events.length} eventos.`);
+
+            for (const evt of events) {
+                console.log(`Buscando voluntários escalados no evento ${evt.id} para notificação de cronograma.`);
+                const { data: eventVolunteers, error: evNotifyError } = await supabaseAdmin
+                    .from('event_volunteers')
+                    .select('volunteers(user_id)')
+                    .eq('event_id', evt.id);
+
+                if (evNotifyError) {
+                    console.error(`Erro ao buscar voluntários do evento ${evt.id}:`, evNotifyError);
+                    continue;
+                }
+
+                if (eventVolunteers && eventVolunteers.length > 0) {
+                    const notifiedVolunteerUserIds = new Set<string>();
+                    const volunteerNotifications = eventVolunteers
+                        .map(ev => (Array.isArray(ev.volunteers) ? ev.volunteers[0] : ev.volunteers)?.user_id)
+                        .filter((userId): userId is string => {
+                            if (userId && !notifiedVolunteerUserIds.has(userId)) {
+                                notifiedVolunteerUserIds.add(userId);
+                                return true;
+                            }
+                            return false;
+                        })
+                        .map(userId => ({
+                            user_id: userId,
+                            message: `O cronograma do evento "${evt.name}" foi atualizado. Verifique as mudanças.`,
+                            type: 'event_update',
+                            related_event_id: evt.id,
+                        }));
+
+                    console.log(`Encontrados ${volunteerNotifications.length} voluntários únicos para notificar no evento ${evt.id}.`);
+                    notificationsToProcess.push(...volunteerNotifications);
+                }
+            }
+
         } else if (notifyType === 'event_updated' && event) {
             const { data: deptsFromAssoc, error: edError } = await supabaseAdmin.from('event_departments').select('department_id').eq('event_id', event.id);
             const { data: deptsFromVols, error: evError } = await supabaseAdmin.from('event_volunteers').select('department_id').eq('event_id', event.id);

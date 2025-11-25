@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Event, Department, TimelineTemplate } from '../types';
+import { Event, Department } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import ConfirmationModal from './ConfirmationModal';
 import CustomDatePicker from './CustomDatePicker';
@@ -136,7 +136,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
 
 
 const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError: initialSaveError, userRole, leaderDepartmentId, allDepartments }) => {
-    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '', cronograma_principal_id: '', cronograma_kids_id: '' });
+    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
     const [selectedVolunteers, setSelectedVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [allVolunteers, setAllVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [volunteerSearch, setVolunteerSearch] = useState('');
@@ -146,9 +146,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const statusDropdownRef = useRef<HTMLDivElement>(null);
     const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
     const [saveError, setSaveError] = useState<string | null>(initialSaveError);
-    // FIX: The state for timeline templates only needs `id` and `nome_modelo` for the dropdown.
-    // The type has been adjusted to match the data fetched from Supabase, resolving the type error.
-    const [timelineTemplates, setTimelineTemplates] = useState<{ id?: string, nome_modelo: string }[]>([]);
+
 
 
     const isEditing = !!initialData;
@@ -171,22 +169,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
     const isSchedulingAllowed = isSchedulingMode && formData.status === 'Confirmado' && isDepartmentInvolved && !hasEventStarted;
 
-    useEffect(() => {
-        const fetchTimelineTemplates = async () => {
-            if (isAdminMode) {
-                const { data, error } = await supabase
-                    .from('cronograma_modelos')
-                    .select('id, nome_modelo')
-                    .order('nome_modelo');
-                if (error) {
-                    console.error("Failed to fetch timeline templates:", getErrorMessage(error));
-                } else {
-                    setTimelineTemplates(data || []);
-                }
-            }
-        };
-        fetchTimelineTemplates();
-    }, [isAdminMode]);
+
 
     useEffect(() => {
         setSaveError(initialSaveError);
@@ -278,8 +261,6 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 status: initialData.status,
                 observations: initialData.observations || '',
                 color: initialData.color || '',
-                cronograma_principal_id: initialData.cronograma_principal_id || '',
-                cronograma_kids_id: initialData.cronograma_kids_id || '',
             });
 
             if (isSchedulingMode && leaderDepartmentId) {
@@ -309,7 +290,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 setSelectedDepartments(initialSelectedDepts);
             }
         } else {
-            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '', cronograma_principal_id: '', cronograma_kids_id: '' });
+            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
             setSelectedVolunteers([]);
             setSelectedDepartments([]);
         }
@@ -413,8 +394,6 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
 
         const payload: any = {
             ...formData,
-            cronograma_principal_id: formData.cronograma_principal_id || null,
-            cronograma_kids_id: formData.cronograma_kids_id || null,
         };
 
         if (isEditing) {
@@ -569,28 +548,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                         )}
                         <div><label className="block text-sm font-medium text-slate-700 mb-1">Observações</label><textarea name="observations" value={formData.observations} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"></textarea></div>
 
-                        {isAdminMode && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Principal</label>
-                                    <select name="cronograma_principal_id" value={formData.cronograma_principal_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
-                                        <option value="">Nenhum</option>
-                                        {timelineTemplates.map(template => (
-                                            <option key={template.id} value={template.id}>{template.nome_modelo}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Cronograma Kids</label>
-                                    <select name="cronograma_kids_id" value={formData.cronograma_kids_id || ''} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm">
-                                        <option value="">Nenhum</option>
-                                        {timelineTemplates.map(template => (
-                                            <option key={template.id} value={template.id}>{template.nome_modelo}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                        )}
+
                     </>
                 )}
 

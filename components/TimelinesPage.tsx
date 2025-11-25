@@ -53,7 +53,7 @@ const TimelinesPage: React.FC = () => {
         setIsFormVisible(false);
         setEditingTemplate(null);
     };
-    
+
     const handleCancel = () => {
         setIsFormVisible(false);
         setEditingTemplate(null);
@@ -88,11 +88,11 @@ const TimelinesPage: React.FC = () => {
         const minutes = totalMinutes % 60;
         return `${hours}h ${String(minutes).padStart(2, '0')}min`;
     };
-    
+
     const renderContent = () => {
         if (loading) return <p className="text-center text-slate-500 mt-10">Carregando modelos...</p>;
         if (error) return <p className="text-center text-red-500 mt-10">{error}</p>;
-        
+
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {templates.map(template => (
@@ -126,12 +126,12 @@ const TimelinesPage: React.FC = () => {
                 <div>
                     <h1 className="text-3xl font-bold text-slate-800">Cronogramas</h1>
                     <p className="text-slate-500 mt-1">Crie e gerencie modelos de cronograma para os eventos.</p>
-              </div>
+                </div>
                 {!isFormVisible && (
                     <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
                         <button onClick={() => setIsBulkAssociateModalOpen(true)} className="w-full md:w-auto justify-center bg-green-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-green-700 transition-colors shadow-sm">
-                            
-                           <span>Associar a Eventos</span>
+
+                            <span>Associar a Eventos</span>
                         </button>
                         <button onClick={handleNewTemplate} className="w-full md:w-auto justify-center bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -140,7 +140,7 @@ const TimelinesPage: React.FC = () => {
                     </div>
                 )}
             </div>
-            
+
             {isFormVisible ? (
                 <TimelineEditorForm
                     initialData={editingTemplate}
