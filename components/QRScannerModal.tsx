@@ -23,18 +23,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const hasProcessedScanRef = useRef(false);
   const lastScannedCodeRef = useRef<string | null>(null);
   const lastScanTimeRef = useRef<number>(0);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [showDebug, setShowDebug] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Função helper para adicionar logs
-  const addDebugLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logMessage = `[${timestamp}] ${message}`;
-    console.log(logMessage);
-    setDebugLogs(prev => [...prev.slice(-10), logMessage]); // Mantém apenas os últimos 10 logs
-  };
 
   // Detecta se é mobile
   const isMobile = () => {
@@ -55,28 +45,23 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
     if (!file) return;
 
     try {
-      addDebugLog('📸 Processando imagem...');
       const codeReader = new BrowserMultiFormatReader();
       const result = await codeReader.decodeFromImageUrl(URL.createObjectURL(file));
-      addDebugLog('✅ QR detectado na imagem!');
       onScanSuccess(result.getText());
     } catch (err) {
-      addDebugLog('❌ Erro ao ler imagem: ' + err);
+      console.error('Erro ao ler imagem:', err);
       setScannerError('Não foi possível ler o QR code da imagem. Certifique-se de que o QR code está visível e nítido.');
     }
   };
 
   useEffect(() => {
     const stopScanner = () => {
-      addDebugLog('Parando scanner...');
-
       // Para o code reader
       if (codeReaderRef.current) {
         try {
           codeReaderRef.current.reset();
-          addDebugLog('✅ Scanner parado');
         } catch (e) {
-          addDebugLog('❌ Erro ao parar scanner: ' + e);
+          console.error('Erro ao parar scanner:', e);
         }
       }
 
@@ -85,7 +70,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => {
           track.stop();
-          addDebugLog('🔴 Câmera desligada');
         });
         videoRef.current.srcObject = null;
       }
@@ -94,43 +78,27 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
     };
 
     if (!isOpen) {
-      addDebugLog('Modal fechado, parando');
       stopScanner();
       return;
     }
 
     // Se houver resultado sendo exibido, não inicia novo scanner ainda
     if (scanResult) {
-      addDebugLog('Resultado sendo exibido, aguardando...');
       return;
     }
 
     if (isStartingRef.current) {
-      addDebugLog('⚠️ Já está iniciando');
       return;
     }
 
     // Reset da flag quando o modal abre
     hasProcessedScanRef.current = false;
     isStartingRef.current = true;
-    setDebugLogs([]); // Limpa logs anteriores
     setScannerError(null); // Limpa erros anteriores
 
     const startScanner = async () => {
       try {
-        addDebugLog('🚀 Iniciando scanner...');
-
-        // Detecta se está rodando como PWA
-        const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
-          (window.navigator as any).standalone === true;
-        addDebugLog(`📱 PWA: ${isPWA}`);
-
         const mobile = isMobile();
-        addDebugLog(`📱 Mobile: ${mobile}`);
-
-        // Verifica se está no iOS
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        addDebugLog(`🍎 iOS: ${isIOS}`);
 
         if (!videoRef.current) {
           throw new Error('Elemento de vídeo não encontrado');
@@ -141,9 +109,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         codeReaderRef.current = codeReader;
 
         // Solicita permissão e lista dispositivos
-        addDebugLog('🔐 Listando câmeras...');
         const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
-        addDebugLog(`📷 ${videoInputDevices.length} câmeras disponíveis`);
 
         if (videoInputDevices.length === 0) {
           throw new Error('Nenhuma câmera encontrada');
@@ -154,8 +120,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         // Em mobile, FORÇA o uso da câmera traseira
         if (mobile) {
-          addDebugLog('📱 Buscando câmera traseira...');
-
           // Procura pela câmera traseira
           const backCamera = videoInputDevices.find(device => {
             const label = device.label.toLowerCase();
@@ -167,7 +131,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
           if (backCamera) {
             selectedDeviceId = backCamera.deviceId;
-            addDebugLog(`✅ Câmera traseira encontrada: ${backCamera.label}`);
           } else {
             // Se não encontrar pelo label, tenta pela última câmera (geralmente é a traseira)
             // ou filtra câmeras que NÃO são frontais
@@ -181,20 +144,15 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
             if (notFrontCamera) {
               selectedDeviceId = notFrontCamera.deviceId;
-              addDebugLog(`✅ Usando câmera (não frontal): ${notFrontCamera.label}`);
             } else {
               // Última tentativa: usa a última câmera da lista (geralmente traseira)
               selectedDeviceId = videoInputDevices[videoInputDevices.length - 1].deviceId;
-              addDebugLog(`⚠️ Usando última câmera: ${videoInputDevices[videoInputDevices.length - 1].label}`);
             }
           }
         } else {
           // Desktop: usa a primeira câmera disponível
           selectedDeviceId = videoInputDevices[0].deviceId;
-          addDebugLog(`📷 Desktop - Usando: ${videoInputDevices[0].label}`);
         }
-
-        addDebugLog('✅ Permissão de câmera concedida');
 
         // Configurações de vídeo para melhor captura
         const videoConstraints: MediaTrackConstraints = {
@@ -218,17 +176,15 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             await videoTrack.applyConstraints({
               advanced: [{ exposureMode: 'continuous' } as any]
             });
-            addDebugLog('✅ Exposição automática ativada');
           }
 
           // Para o stream temporário
           stream.getTracks().forEach(track => track.stop());
         } catch (err) {
-          addDebugLog('⚠️ Não foi possível ajustar exposição: ' + err);
+          console.warn('Não foi possível ajustar exposição:', err);
         }
 
         // Inicia o scanner
-        addDebugLog('🎥 Iniciando decodificação contínua...');
         await codeReader.decodeFromVideoDevice(
           selectedDeviceId,
           videoRef.current,
@@ -245,7 +201,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               // Previne scan do mesmo QR code em menos de 8 segundos
               if (lastScannedCodeRef.current === decodedText &&
                 (currentTime - lastScanTimeRef.current) < 8000) {
-                addDebugLog('⚠️ Mesmo QR code detectado muito rápido, ignorando');
                 return;
               }
 
@@ -253,27 +208,21 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               lastScannedCodeRef.current = decodedText;
               lastScanTimeRef.current = currentTime;
 
-              addDebugLog('✅ QR detectado!');
-              addDebugLog(`Dados: ${decodedText.substring(0, 50)}...`);
-
               // Chama o callback
-              addDebugLog('📞 Chamando callback...');
               onScanSuccess(decodedText);
 
               // Pausa o scanner temporariamente (não fecha completamente)
               setTimeout(() => {
                 stopScanner();
-                addDebugLog('⏸️ Câmera pausada para mostrar resultado');
               }, 100);
             }
             // Ignora erros de decodificação (normal quando não há QR code no frame)
           }
         );
 
-        addDebugLog('✅ Scanner iniciado!');
         isStartingRef.current = false;
       } catch (error: any) {
-        addDebugLog('❌ Erro: ' + error);
+        console.error('Erro ao iniciar scanner:', error);
         setScannerError(error.message || 'Erro ao iniciar câmera');
         isStartingRef.current = false;
       }
@@ -409,31 +358,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
                   </div>
                 )}
               </div>
-
-              {/* Botão de Debug */}
-              <div className="absolute top-20 right-4 pointer-events-auto">
-                <button
-                  onClick={() => setShowDebug(!showDebug)}
-                  className="bg-black/60 backdrop-blur-md p-2 rounded-full border border-white/20 text-white text-xs"
-                >
-                  {showDebug ? '🔍 Ocultar' : '🔍 Debug'}
-                </button>
-              </div>
-
-              {/* Painel de Debug */}
-              {showDebug && (
-                <div className="absolute top-32 left-4 right-4 bg-black/80 backdrop-blur-md p-3 rounded-lg border border-white/20 max-h-64 overflow-y-auto pointer-events-auto">
-                  <div className="text-white text-xs font-mono space-y-1">
-                    {debugLogs.length === 0 ? (
-                      <p className="text-white/60">Aguardando logs...</p>
-                    ) : (
-                      debugLogs.map((log, i) => (
-                        <p key={i} className="break-all">{log}</p>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
