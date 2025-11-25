@@ -21,6 +21,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
   const isStartingRef = useRef(false);
   const hasProcessedScanRef = useRef(false);
+  const lastScannedCodeRef = useRef<string | null>(null);
+  const lastScanTimeRef = useRef<number>(0);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
@@ -67,20 +69,39 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   useEffect(() => {
     const stopScanner = () => {
       addDebugLog('Parando scanner...');
+
+      // Para o code reader
       if (codeReaderRef.current) {
         try {
           codeReaderRef.current.reset();
           addDebugLog('✅ Scanner parado');
         } catch (e) {
-          addDebugLog('❌ Erro ao parar: ' + e);
+          addDebugLog('❌ Erro ao parar scanner: ' + e);
         }
       }
+
+      // Garante que todos os tracks de vídeo sejam parados (desliga a câmera)
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => {
+          track.stop();
+          addDebugLog('🔴 Câmera desligada');
+        });
+        videoRef.current.srcObject = null;
+      }
+
       isStartingRef.current = false;
     };
 
-    if (!isOpen || scanResult) {
+    if (!isOpen) {
       addDebugLog('Modal fechado, parando');
       stopScanner();
+      return;
+    }
+
+    // Se houver resultado sendo exibido, não inicia novo scanner ainda
+    if (scanResult) {
+      addDebugLog('Resultado sendo exibido, aguardando...');
       return;
     }
 
@@ -175,6 +196,37 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         addDebugLog('✅ Permissão de câmera concedida');
 
+        // Configurações de vídeo para melhor captura
+        const videoConstraints: MediaTrackConstraints = {
+          deviceId: selectedDeviceId,
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
+          facingMode: mobile ? 'environment' : 'user',
+        };
+
+        // Tenta aplicar configurações avançadas de exposição
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: videoConstraints
+          });
+
+          const videoTrack = stream.getVideoTracks()[0];
+          const capabilities = videoTrack.getCapabilities();
+
+          // Ajusta exposição se disponível
+          if ('exposureMode' in capabilities) {
+            await videoTrack.applyConstraints({
+              advanced: [{ exposureMode: 'continuous' } as any]
+            });
+            addDebugLog('✅ Exposição automática ativada');
+          }
+
+          // Para o stream temporário
+          stream.getTracks().forEach(track => track.stop());
+        } catch (err) {
+          addDebugLog('⚠️ Não foi possível ajustar exposição: ' + err);
+        }
+
         // Inicia o scanner
         addDebugLog('🎥 Iniciando decodificação contínua...');
         await codeReader.decodeFromVideoDevice(
@@ -182,13 +234,25 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           videoRef.current,
           (result, error) => {
             if (result) {
+              const decodedText = result.getText();
+              const currentTime = Date.now();
+
               // Previne múltiplas chamadas
               if (hasProcessedScanRef.current) {
                 return;
               }
 
+              // Previne scan do mesmo QR code em menos de 8 segundos
+              if (lastScannedCodeRef.current === decodedText &&
+                (currentTime - lastScanTimeRef.current) < 8000) {
+                addDebugLog('⚠️ Mesmo QR code detectado muito rápido, ignorando');
+                return;
+              }
+
               hasProcessedScanRef.current = true;
-              const decodedText = result.getText();
+              lastScannedCodeRef.current = decodedText;
+              lastScanTimeRef.current = currentTime;
+
               addDebugLog('✅ QR detectado!');
               addDebugLog(`Dados: ${decodedText.substring(0, 50)}...`);
 
@@ -196,9 +260,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               addDebugLog('📞 Chamando callback...');
               onScanSuccess(decodedText);
 
-              // Para o scanner
+              // Pausa o scanner temporariamente (não fecha completamente)
               setTimeout(() => {
                 stopScanner();
+                addDebugLog('⏸️ Câmera pausada para mostrar resultado');
               }, 100);
             }
             // Ignora erros de decodificação (normal quando não há QR code no frame)
@@ -254,7 +319,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         <div className="flex-1 relative bg-black overflow-hidden">
           <video
             ref={videoRef}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full md:object-contain object-cover"
+            style={{
+              transform: 'scaleX(-1)',
+              filter: 'contrast(1.1) brightness(0.95)'
+            }}
             autoPlay
             playsInline
             muted

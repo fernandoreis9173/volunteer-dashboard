@@ -12,7 +12,6 @@ import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import { useEvents, useDepartments, useInvalidateQueries } from '../hooks/useQueries';
 import QRScannerModal from './QRScannerModal';
-import QRCodeDisplayModal from './QRCodeDisplayModal';
 import AttendanceFlashCards from './AttendanceFlashCards';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
 
@@ -78,14 +77,10 @@ interface LeaderDashboardProps {
 
 const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEvent, onNavigate }) => {
     const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
-    // const [allDepartmentEvents, setAllDepartmentEvents] = useState<DashboardEvent[]>([]); // Removed in favor of React Query
     const [departmentVolunteers, setDepartmentVolunteers] = useState<DetailedVolunteer[]>([]);
-    // const [error, setError] = useState<string | null>(null); // Managed by React Query
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
-    const [isQrDisplayOpen, setIsQrDisplayOpen] = useState(false);
-    const [scannedQrData, setScannedQrData] = useState<string | null>(null);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
     const [departmentName, setDepartmentName] = useState<string>('');
 
@@ -226,6 +221,8 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
         };
     }, [allDepartmentEvents, departmentVolunteers, userProfile.department_id]);
 
+    const [scanResult, setScanResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
     const showNotification = useCallback((message: string, type: 'success' | 'error') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 5000);
@@ -236,25 +233,23 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
         setIsScannerOpen(true);
     };
 
-    const handleScanSuccess = useCallback((decodedText: string) => {
-        setIsScannerOpen(false);
-        setScannedQrData(decodedText);
-        setIsQrDisplayOpen(true);
-    }, []);
-
-    const handleConfirmAttendance = useCallback(async () => {
-        if (!scannedQrData || !scanningEvent || !userProfile?.department_id) {
-            showNotification("Dados insuficientes para confirmar presença.", 'error');
+    const handleAutoConfirmAttendance = useCallback(async (decodedText: string) => {
+        // Se já estiver processando um resultado, ignora novos scans
+        if (scanResult) {
+            console.log('[LeaderDashboard] ⚠️ Ignorando scan - já existe um resultado sendo exibido');
             return;
         }
 
         try {
-            const data = JSON.parse(scannedQrData);
+            console.log('[LeaderDashboard] 🎯 Auto-confirmando presença...');
+            const data = JSON.parse(decodedText);
+
+            // Validações básicas
             if (!data.vId || !data.eId || !data.dId) {
-                throw new Error("QR Code inválido: Faltando dados essenciais.");
+                throw new Error("QR Code incompleto.");
             }
             if (data.eId !== scanningEvent?.id) {
-                throw new Error("Este QR Code é para um evento diferente.");
+                throw new Error("Evento incorreto.");
             }
             if (data.dId !== userProfile.department_id) {
                 throw new Error("Este voluntário não pertence ao seu departamento para este evento.");
@@ -262,7 +257,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
 
             const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !sessionData.session) {
-                throw new Error("Sessão de usuário não encontrada. Por favor, faça login novamente.");
+                throw new Error("Sessão inválida.");
             }
 
             const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
@@ -275,42 +270,36 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
             if (invokeError) throw invokeError;
 
             const volunteerName = scanningEvent?.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário';
-            showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
 
+            // Sucesso!
+            setScanResult({ type: 'success', message: `${volunteerName}` });
             invalidateEvents();
 
+            // Limpa o resultado após 2.5s para permitir novo scan
+            setTimeout(() => {
+                setScanResult(null);
+            }, 2500);
+
         } catch (err: any) {
+            let errorMsg = "Erro ao confirmar.";
             if (err.context && typeof err.context.json === 'function') {
                 try {
                     const errorJson = await err.context.json();
-                    if (errorJson && errorJson.error) {
-                        showNotification(errorJson.error, 'error');
-                    } else {
-                        showNotification(getErrorMessage(err), 'error');
-                    }
-                } catch (parseError) {
-                    showNotification(getErrorMessage(err), 'error');
-                }
+                    if (errorJson && errorJson.error) errorMsg = errorJson.error;
+                } catch { }
             } else {
-                showNotification(getErrorMessage(err), 'error');
+                errorMsg = getErrorMessage(err);
             }
-        } finally {
-            setScannedQrData(null);
-            setIsQrDisplayOpen(false);
-            setScanningEvent(null);
-        }
-    }, [scannedQrData, scanningEvent, userProfile, showNotification, invalidateEvents]);
 
-    const scannedVolunteerName = useMemo(() => {
-        if (!scannedQrData || !scanningEvent) return 'Voluntário';
-        try {
-            const data = JSON.parse(scannedQrData);
-            return scanningEvent.event_volunteers?.find(v => v.volunteer_id === data.vId)?.volunteers?.name || 'Voluntário Desconhecido';
-        } catch {
-            return 'Dados Inválidos';
-        }
-    }, [scannedQrData, scanningEvent]);
+            // Erro!
+            setScanResult({ type: 'error', message: errorMsg });
 
+            // Limpa o erro após 4s
+            setTimeout(() => {
+                setScanResult(null);
+            }, 4000);
+        }
+    }, [scanningEvent, scanResult, userProfile, invalidateEvents]);
 
     const handleViewDetails = (event: DashboardEvent) => {
         setSelectedEvent(event);
@@ -389,23 +378,10 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
             {isScannerOpen && (
                 <QRScannerModal
                     isOpen={isScannerOpen}
-                    onClose={() => { setIsScannerOpen(false); setScanningEvent(null); }}
-                    onScanSuccess={handleScanSuccess}
+                    onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
+                    onScanSuccess={handleAutoConfirmAttendance}
                     scanningEventName={scanningEvent?.name}
-                />
-            )}
-            {isQrDisplayOpen && (
-                <QRCodeDisplayModal
-                    isOpen={isQrDisplayOpen}
-                    onClose={() => {
-                        setIsQrDisplayOpen(false);
-                        setScannedQrData(null);
-                    }}
-                    data={scannedQrData ? JSON.parse(scannedQrData) : null}
-                    title={`Confirmar Presença`}
-                    volunteerName={scannedVolunteerName}
-                    description="Verifique os dados do voluntário e confirme a presença."
-                    onConfirm={handleConfirmAttendance}
+                    scanResult={scanResult}
                 />
             )}
             <EventTimelineViewerModal
