@@ -129,23 +129,48 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         }
 
         // Seleciona a câmera apropriada
-        let selectedDeviceId = videoInputDevices[0].deviceId;
+        let selectedDeviceId: string;
 
-        // Em mobile, tenta encontrar a câmera traseira
+        // Em mobile, FORÇA o uso da câmera traseira
         if (mobile) {
-          const backCamera = videoInputDevices.find(device =>
-            device.label.toLowerCase().includes('back') ||
-            device.label.toLowerCase().includes('rear') ||
-            device.label.toLowerCase().includes('environment')
-          );
+          addDebugLog('📱 Buscando câmera traseira...');
+
+          // Procura pela câmera traseira
+          const backCamera = videoInputDevices.find(device => {
+            const label = device.label.toLowerCase();
+            return label.includes('back') ||
+              label.includes('rear') ||
+              label.includes('environment') ||
+              label.includes('traseira');
+          });
+
           if (backCamera) {
             selectedDeviceId = backCamera.deviceId;
-            addDebugLog(`📷 Usando câmera traseira: ${backCamera.label}`);
+            addDebugLog(`✅ Câmera traseira encontrada: ${backCamera.label}`);
           } else {
-            addDebugLog(`📷 Usando primeira câmera: ${videoInputDevices[0].label}`);
+            // Se não encontrar pelo label, tenta pela última câmera (geralmente é a traseira)
+            // ou filtra câmeras que NÃO são frontais
+            const notFrontCamera = videoInputDevices.find(device => {
+              const label = device.label.toLowerCase();
+              return !label.includes('front') &&
+                !label.includes('user') &&
+                !label.includes('frontal') &&
+                !label.includes('face');
+            });
+
+            if (notFrontCamera) {
+              selectedDeviceId = notFrontCamera.deviceId;
+              addDebugLog(`✅ Usando câmera (não frontal): ${notFrontCamera.label}`);
+            } else {
+              // Última tentativa: usa a última câmera da lista (geralmente traseira)
+              selectedDeviceId = videoInputDevices[videoInputDevices.length - 1].deviceId;
+              addDebugLog(`⚠️ Usando última câmera: ${videoInputDevices[videoInputDevices.length - 1].label}`);
+            }
           }
         } else {
-          addDebugLog(`📷 Usando câmera: ${videoInputDevices[0].label}`);
+          // Desktop: usa a primeira câmera disponível
+          selectedDeviceId = videoInputDevices[0].deviceId;
+          addDebugLog(`📷 Desktop - Usando: ${videoInputDevices[0].label}`);
         }
 
         addDebugLog('✅ Permissão de câmera concedida');
