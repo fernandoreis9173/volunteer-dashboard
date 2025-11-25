@@ -83,6 +83,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       return;
     }
 
+    // Se for iOS PWA, não tenta iniciar o scanner - mostra fallback direto
+    if (isIOSPWA()) {
+      addDebugLog('⚠️ iOS PWA detectado - scanner ao vivo não funciona');
+      setScannerError('O scanner ao vivo não funciona em apps instalados no iPhone. Use uma das opções abaixo:');
+      return;
+    }
+
     if (isStartingRef.current) {
       addDebugLog('⚠️ Já está iniciando');
       return;
@@ -92,6 +99,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
     hasProcessedScanRef.current = false;
     isStartingRef.current = true;
     setDebugLogs([]); // Limpa logs anteriores
+    setScannerError(null); // Limpa erros anteriores
 
     const startScanner = async () => {
       try {
@@ -270,17 +278,26 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 {/* Aviso de iOS PWA */}
                 {isIOSPWA() && scannerError && (
                   <div className="bg-yellow-500/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-yellow-300 max-w-sm">
-                    <p className="text-white text-sm font-bold mb-2">⚠️ Scanner não funciona em PWA</p>
-                    <p className="text-white text-xs mb-3">O scanner de QR code funciona no Safari, mas não no app instalado (PWA).</p>
-                    <button
-                      onClick={() => {
-                        const url = window.location.href;
-                        window.open(url, '_blank');
-                      }}
-                      className="w-full bg-white text-yellow-700 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-yellow-50 transition-colors"
-                    >
-                      🌐 Abrir no Safari
-                    </button>
+                    <p className="text-white text-sm font-bold mb-2">⚠️ App Instalado (PWA)</p>
+                    <p className="text-white text-xs mb-3">O scanner ao vivo não funciona no app instalado do iPhone. Escolha uma opção:</p>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => {
+                          const url = window.location.href;
+                          window.open(url, '_blank');
+                        }}
+                        className="w-full bg-white text-yellow-700 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-yellow-50 transition-colors"
+                      >
+                        🌐 Abrir no Safari
+                      </button>
+                      <p className="text-white text-xs text-center">ou</p>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors"
+                      >
+                        📸 Tirar Foto do QR Code
+                      </button>
+                    </div>
                   </div>
                 )}
 
