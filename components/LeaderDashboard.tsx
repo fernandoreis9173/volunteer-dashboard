@@ -236,12 +236,10 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
     const handleAutoConfirmAttendance = useCallback(async (decodedText: string) => {
         // Se já estiver processando um resultado, ignora novos scans
         if (scanResult) {
-            console.log('[LeaderDashboard] ⚠️ Ignorando scan - já existe um resultado sendo exibido');
             return;
         }
 
         try {
-            console.log('[LeaderDashboard] 🎯 Auto-confirmando presença...');
             const data = JSON.parse(decodedText);
 
             // Validações básicas

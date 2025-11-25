@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BrowserMultiFormatReader, IScannerControls } from '@zxing/browser';
 
 interface QRScannerModalProps {
   isOpen: boolean;
@@ -18,7 +18,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   scanResult
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
   const isStartingRef = useRef(false);
   const hasProcessedScanRef = useRef(false);
   const lastScannedCodeRef = useRef<string | null>(null);
@@ -49,19 +49,19 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       const result = await codeReader.decodeFromImageUrl(URL.createObjectURL(file));
       onScanSuccess(result.getText());
     } catch (err) {
-      console.error('Erro ao ler imagem:', err);
       setScannerError('Não foi possível ler o QR code da imagem. Certifique-se de que o QR code está visível e nítido.');
     }
   };
 
   useEffect(() => {
     const stopScanner = () => {
-      // Para o code reader
-      if (codeReaderRef.current) {
+      // Para o scanner usando os controles
+      if (controlsRef.current) {
         try {
-          codeReaderRef.current.reset();
+          controlsRef.current.stop();
+          controlsRef.current = null;
         } catch (e) {
-          console.error('Erro ao parar scanner:', e);
+          // Silently ignore stop errors
         }
       }
 
@@ -106,7 +106,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         // Cria o code reader
         const codeReader = new BrowserMultiFormatReader();
-        codeReaderRef.current = codeReader;
 
         // Solicita permissão e lista dispositivos
         const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
@@ -181,11 +180,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           // Para o stream temporário
           stream.getTracks().forEach(track => track.stop());
         } catch (err) {
-          console.warn('Não foi possível ajustar exposição:', err);
+          // Silently ignore exposure errors
         }
 
-        // Inicia o scanner
-        await codeReader.decodeFromVideoDevice(
+        // Inicia o scanner e guarda os controles
+        controlsRef.current = await codeReader.decodeFromVideoDevice(
           selectedDeviceId,
           videoRef.current,
           (result, error) => {
@@ -222,7 +221,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         isStartingRef.current = false;
       } catch (error: any) {
-        console.error('Erro ao iniciar scanner:', error);
         setScannerError(error.message || 'Erro ao iniciar câmera');
         isStartingRef.current = false;
       }
