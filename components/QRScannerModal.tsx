@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Html5Qrcode } from 'html5-qrcode';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 
 interface QRScannerModalProps {
   isOpen: boolean;
@@ -17,7 +17,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   scanningEventName,
   scanResult
 }) => {
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
   const isStartingRef = useRef(false);
   const hasProcessedScanRef = useRef(false);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -53,22 +54,22 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
     try {
       addDebugLog('📸 Processando imagem...');
-      const scanner = new Html5Qrcode('qr-reader-file');
-      const result = await scanner.scanFile(file, false);
+      const codeReader = new BrowserMultiFormatReader();
+      const result = await codeReader.decodeFromImageUrl(URL.createObjectURL(file));
       addDebugLog('✅ QR detectado na imagem!');
-      onScanSuccess(result);
+      onScanSuccess(result.getText());
     } catch (err) {
       addDebugLog('❌ Erro ao ler imagem: ' + err);
-      setScannerError('Não foi possível ler o QR code da imagem. Tente novamente.');
+      setScannerError('Não foi possível ler o QR code da imagem. Certifique-se de que o QR code está visível e nítido.');
     }
   };
 
   useEffect(() => {
-    const stopScanner = async () => {
+    const stopScanner = () => {
       addDebugLog('Parando scanner...');
-      if (scannerRef.current && scannerRef.current.isScanning) {
+      if (codeReaderRef.current) {
         try {
-          await scannerRef.current.stop();
+          codeReaderRef.current.reset();
           addDebugLog('✅ Scanner parado');
         } catch (e) {
           addDebugLog('❌ Erro ao parar: ' + e);
@@ -80,13 +81,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
     if (!isOpen || scanResult) {
       addDebugLog('Modal fechado, parando');
       stopScanner();
-      return;
-    }
-
-    // Se for iOS PWA, não tenta iniciar o scanner - mostra fallback direto
-    if (isIOSPWA()) {
-      addDebugLog('⚠️ iOS PWA detectado - scanner ao vivo não funciona');
-      setScannerError('O scanner ao vivo não funciona em apps instalados no iPhone. Use uma das opções abaixo:');
       return;
     }
 
@@ -117,90 +111,77 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         addDebugLog(`🍎 iOS: ${isIOS}`);
 
-        // Solicita permissão de câmera explicitamente (importante para iOS PWA)
-        try {
-          addDebugLog('🔐 Solicitando permissão de câmera...');
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: mobile ? 'environment' : 'user' }
-          });
-          // Para o stream imediatamente - só queríamos verificar a permissão
-          stream.getTracks().forEach(track => track.stop());
-          addDebugLog('✅ Permissão de câmera concedida');
-        } catch (permErr) {
-          addDebugLog('❌ Permissão negada: ' + permErr);
-          throw new Error('Permissão de câmera negada. Por favor, permita o acesso à câmera nas configurações do seu dispositivo.');
+        if (!videoRef.current) {
+          throw new Error('Elemento de vídeo não encontrado');
         }
 
-        const scanner = new Html5Qrcode('qr-reader');
-        scannerRef.current = scanner;
+        // Cria o code reader
+        const codeReader = new BrowserMultiFormatReader();
+        codeReaderRef.current = codeReader;
 
-        // Configuração sem forçar resolução - usa configuração nativa da câmera
-        const config = {
-          fps: 30,
-          qrbox: { width: 300, height: 300 },
-          disableFlip: false
-        };
+        // Solicita permissão e lista dispositivos
+        addDebugLog('🔐 Listando câmeras...');
+        const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
+        addDebugLog(`📷 ${videoInputDevices.length} câmeras disponíveis`);
 
-        const facingMode = mobile ? "environment" : "user";
-        addDebugLog(`📷 Camera: ${facingMode}`);
+        if (videoInputDevices.length === 0) {
+          throw new Error('Nenhuma câmera encontrada');
+        }
 
-        // Callback de sucesso
-        const onScanSuccessCallback = async (decodedText: string) => {
-          // Previne múltiplas chamadas
-          if (hasProcessedScanRef.current) {
-            addDebugLog('⚠️ QR já processado');
-            return;
+        // Seleciona a câmera apropriada
+        let selectedDeviceId = videoInputDevices[0].deviceId;
+
+        // Em mobile, tenta encontrar a câmera traseira
+        if (mobile) {
+          const backCamera = videoInputDevices.find(device =>
+            device.label.toLowerCase().includes('back') ||
+            device.label.toLowerCase().includes('rear') ||
+            device.label.toLowerCase().includes('environment')
+          );
+          if (backCamera) {
+            selectedDeviceId = backCamera.deviceId;
+            addDebugLog(`📷 Usando câmera traseira: ${backCamera.label}`);
+          } else {
+            addDebugLog(`📷 Usando primeira câmera: ${videoInputDevices[0].label}`);
           }
+        } else {
+          addDebugLog(`📷 Usando câmera: ${videoInputDevices[0].label}`);
+        }
 
-          hasProcessedScanRef.current = true;
-          addDebugLog('✅ QR detectado!');
-          addDebugLog(`Dados: ${decodedText.substring(0, 50)}...`);
+        addDebugLog('✅ Permissão de câmera concedida');
 
-          // Chama o callback ANTES de parar o scanner
-          addDebugLog('📞 Chamando callback...');
-          onScanSuccess(decodedText);
+        // Inicia o scanner
+        addDebugLog('🎥 Iniciando decodificação contínua...');
+        await codeReader.decodeFromVideoDevice(
+          selectedDeviceId,
+          videoRef.current,
+          (result, error) => {
+            if (result) {
+              // Previne múltiplas chamadas
+              if (hasProcessedScanRef.current) {
+                return;
+              }
 
-          // Aguarda um pouco antes de parar o scanner para garantir que o callback foi processado
-          setTimeout(async () => {
-            await stopScanner();
-          }, 100);
-        };
+              hasProcessedScanRef.current = true;
+              const decodedText = result.getText();
+              addDebugLog('✅ QR detectado!');
+              addDebugLog(`Dados: ${decodedText.substring(0, 50)}...`);
 
-        // Tenta iniciar com facingMode apropriado
-        await scanner.start(
-          { facingMode },
-          config,
-          onScanSuccessCallback,
-          (errorMessage) => {
-            // Ignora erros de scan (normal quando não há QR code)
-          }
-        ).catch(async (err) => {
-          addDebugLog(`⚠️ Falha ${facingMode}, tentando fallback`);
+              // Chama o callback
+              addDebugLog('📞 Chamando callback...');
+              onScanSuccess(decodedText);
 
-          // Fallback: tenta com a primeira câmera disponível
-          try {
-            const devices = await Html5Qrcode.getCameras();
-            addDebugLog(`📷 ${devices.length} câmeras disponíveis`);
-            if (devices && devices.length > 0) {
-              addDebugLog(`Usando: ${devices[0].label || devices[0].id}`);
-              await scanner.start(
-                devices[0].id,
-                config,
-                onScanSuccessCallback,
-                (errorMessage) => {
-                  // Ignora erros de scan
-                }
-              );
-            } else {
-              throw new Error('Nenhuma câmera encontrada');
+              // Para o scanner
+              setTimeout(() => {
+                stopScanner();
+              }, 100);
             }
-          } catch (fallbackErr) {
-            addDebugLog('❌ Fallback falhou: ' + fallbackErr);
-            throw fallbackErr;
+            // Ignora erros de decodificação (normal quando não há QR code no frame)
           }
-        });
+        );
 
         addDebugLog('✅ Scanner iniciado!');
+        isStartingRef.current = false;
       } catch (error: any) {
         addDebugLog('❌ Erro: ' + error);
         setScannerError(error.message || 'Erro ao iniciar câmera');
@@ -246,8 +227,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         {/* Scanner Area - Tela Cheia */}
         <div className="flex-1 relative bg-black overflow-hidden">
-          <div id="qr-reader" className="absolute inset-0"></div>
-          <div id="qr-reader-file" className="hidden"></div>
+          <video
+            ref={videoRef}
+            className="absolute inset-0 w-full h-full object-cover"
+            autoPlay
+            playsInline
+            muted
+          />
 
           {/* Overlay de Scan Animado */}
           {!scanResult && (
@@ -384,41 +370,6 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
       </div>
 
       <style>{`
-        /* Esconde completamente a UI do html5-qrcode */
-        #qr-reader {
-          width: 100% !important;
-          height: 100% !important;
-        }
-        
-        /* Mobile: vídeo vertical em tela cheia */
-        @media (max-width: 768px) {
-          #qr-reader video {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover !important;
-            border: none !important;
-          }
-        }
-        
-        /* Desktop: vídeo horizontal sem cortar */
-        @media (min-width: 769px) {
-          #qr-reader video {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: contain !important;
-            border: none !important;
-          }
-        }
-        
-        #qr-reader__dashboard,
-        #qr-reader__dashboard_section,
-        #qr-reader__dashboard_section_csr,
-        #qr-reader__header_message,
-        #qr-reader__camera_selection,
-        #qr-reader__scan_region {
-          display: none !important;
-        }
-        
         /* Animação da linha de scan */
         @keyframes scan-line {
           0% { 
