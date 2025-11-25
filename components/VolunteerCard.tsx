@@ -16,7 +16,7 @@ interface VolunteerCardProps {
   onInvite: (volunteer: DetailedVolunteer) => void;
   onRemoveFromDepartment: (volunteer: DetailedVolunteer) => void;
   onRequestAction: (volunteer: DetailedVolunteer, type: 'disable' | 'enable') => void;
-  onPromote: (volunteer: DetailedVolunteer) => void; // Nova prop
+  onPromote: (volunteer: DetailedVolunteer) => void;
   userRole: string | null;
   leaderDepartmentName: string | null;
   isInvitePending: boolean;
@@ -95,8 +95,12 @@ const VolunteerCard: React.FC<VolunteerCardProps> = ({ volunteer, onEdit, onInvi
     <div className={`p-5 rounded-xl shadow-sm border flex flex-col space-y-4 transition-colors ${isAlreadyInDepartment ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}>
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-lg">
-            {volunteer.initials}
+          <div className="w-12 h-12 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-lg overflow-hidden">
+            {volunteer.avatar_url ? (
+              <img src={volunteer.avatar_url} alt={volunteer.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              volunteer.initials
+            )}
           </div>
           <div>
             <p className="font-bold text-slate-800">{volunteer.name}</p>

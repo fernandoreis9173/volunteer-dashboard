@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
 import Pagination from './Pagination';
 import QRScannerModal from './QRScannerModal';
-import PromoteToLeaderModal from './PromoteToLeaderModal'; // Importar o novo modal
+import PromoteToLeaderModal from './PromoteToLeaderModal';
 
 interface VolunteersPageProps {
   isFormOpen: boolean;
@@ -31,7 +31,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   const [inputValue, setInputValue] = useState(''); // For immediate input
   const [searchQuery, setSearchQuery] = useState(''); // For debounced filtering
   const [currentPage, setCurrentPage] = useState(1);
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -56,26 +56,26 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
 
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
-  
+
   // Debounce search query
   useEffect(() => {
     const timer = setTimeout(() => {
-        setSearchQuery(inputValue);
+      setSearchQuery(inputValue);
     }, 300); // 300ms delay
 
     return () => {
-        clearTimeout(timer);
+      clearTimeout(timer);
     };
   }, [inputValue]);
 
   useEffect(() => {
     if (isLeader && leaderDepartmentId) {
-        const fetchDeptName = async () => {
-            const { data, error } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
-            if (data) setLeaderDepartmentName(data.name);
-            else console.error("Could not fetch leader department name", error);
-        };
-        fetchDeptName();
+      const fetchDeptName = async () => {
+        const { data, error } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
+        if (data) setLeaderDepartmentName(data.name);
+        else console.error("Could not fetch leader department name", error);
+      };
+      fetchDeptName();
     }
   }, [isLeader, leaderDepartmentId]);
 
@@ -84,10 +84,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     setLoading(true);
     setError(null);
     try {
-        // Fetch all volunteers and all their department relationships.
-        const { data: rawVolunteers, error: fetchError } = await supabase
-            .from('volunteers')
-            .select(`
+      // Fetch all volunteers and all their department relationships.
+      const { data: rawVolunteers, error: fetchError } = await supabase
+        .from('volunteers')
+        .select(`
                 id,
                 user_id,
                 name,
@@ -102,60 +102,77 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                     departments ( id, name )
                 )
             `)
-            .order('created_at', { ascending: false });
-        
-        if (fetchError) throw fetchError;
-        
-        // Manually process the data to ensure the logic is clear.
-        const transformedData = (rawVolunteers || []).map(volunteer => {
-            // All relations in volunteer_departments are now considered approved.
-            const approvedDepartments = (volunteer.volunteer_departments || [])
-                .filter(relation => relation.departments)
-                .flatMap(relation => relation.departments);
-            
-            // Create the final volunteer object for the state.
-            return {
-                ...volunteer,
-                departments: approvedDepartments, // This array will ONLY contain approved departments.
-                volunteer_departments: volunteer.volunteer_departments 
-            };
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw fetchError;
+
+      // Fetch all users to get avatars
+      const { data: usersData, error: usersError } = await supabase.functions.invoke('list-users', {
+        body: { context: 'volunteers_page' }
+      });
+
+      const avatarMap = new Map<string, string>();
+      if (usersData && usersData.users) {
+        usersData.users.forEach((u: any) => {
+          const meta = u.user_metadata;
+          const avatar = meta?.avatar_url || meta?.picture;
+          if (avatar) {
+            avatarMap.set(u.id, avatar);
+          }
         });
+      }
 
-        setMasterVolunteers(transformedData as unknown as DetailedVolunteer[]);
+      // Manually process the data to ensure the logic is clear.
+      const transformedData = (rawVolunteers || []).map(volunteer => {
+        // All relations in volunteer_departments are now considered approved.
+        const approvedDepartments = (volunteer.volunteer_departments || [])
+          .filter(relation => relation.departments)
+          .flatMap(relation => relation.departments);
 
-        // Also fetch pending invites for the leader's department
-        if (isLeader && leaderDepartmentId) {
-          const { data: invitesData, error: invitesError } = await supabase
-            .from('invitations')
-            .select('volunteer_id')
-            .eq('department_id', leaderDepartmentId)
-            .eq('status', 'pendente');
+        // Create the final volunteer object for the state.
+        return {
+          ...volunteer,
+          departments: approvedDepartments, // This array will ONLY contain approved departments.
+          volunteer_departments: volunteer.volunteer_departments,
+          avatar_url: volunteer.user_id ? avatarMap.get(volunteer.user_id) : undefined
+        };
+      });
 
-          if (invitesError) throw invitesError;
-          
-          setPendingInvites(new Set(invitesData.map(i => i.volunteer_id)));
-        }
+      setMasterVolunteers(transformedData as unknown as DetailedVolunteer[]);
+
+      // Also fetch pending invites for the leader's department
+      if (isLeader && leaderDepartmentId) {
+        const { data: invitesData, error: invitesError } = await supabase
+          .from('invitations')
+          .select('volunteer_id')
+          .eq('department_id', leaderDepartmentId)
+          .eq('status', 'pendente');
+
+        if (invitesError) throw invitesError;
+
+        setPendingInvites(new Set(invitesData.map(i => i.volunteer_id)));
+      }
 
     } catch (error: any) {
-        const errorMessage = getErrorMessage(error);
-        console.error('Error fetching volunteers:', errorMessage);
-        setError(`Falha ao carregar voluntários: ${errorMessage}`);
-        setMasterVolunteers([]);
+      const errorMessage = getErrorMessage(error);
+      console.error('Error fetching volunteers:', errorMessage);
+      setError(`Falha ao carregar voluntários: ${errorMessage}`);
+      setMasterVolunteers([]);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-}, [isLeader, leaderDepartmentId]);
-  
+  }, [isLeader, leaderDepartmentId]);
+
   const fetchActiveDepartments = useCallback(async () => {
     const { data, error } = await supabase
-        .from('departments')
-        .select('id, name')
-        .eq('status', 'Ativo')
-        .order('name', { ascending: true });
+      .from('departments')
+      .select('id, name')
+      .eq('status', 'Ativo')
+      .order('name', { ascending: true });
     if (error) {
-        console.error('Error fetching active departments:', getErrorMessage(error));
+      console.error('Error fetching active departments:', getErrorMessage(error));
     } else {
-        setDepartments(data as Department[] || []);
+      setDepartments(data as Department[] || []);
     }
   }, []);
 
@@ -168,12 +185,12 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     let volunteers = masterVolunteers;
 
     if (!searchQuery) {
-        return volunteers;
+      return volunteers;
     }
     const lowercasedQuery = searchQuery.toLowerCase();
-    return volunteers.filter(v => 
-        v.name.toLowerCase().includes(lowercasedQuery) ||
-        v.email.toLowerCase().includes(lowercasedQuery)
+    return volunteers.filter(v =>
+      v.name.toLowerCase().includes(lowercasedQuery) ||
+      v.email.toLowerCase().includes(lowercasedQuery)
     );
   }, [searchQuery, masterVolunteers]);
 
@@ -183,7 +200,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   }, [currentPage, filteredVolunteers]);
 
   const totalPages = Math.ceil(filteredVolunteers.length / ITEMS_PER_PAGE);
-  
+
   const volunteersToDisplay = paginatedVolunteers;
 
   useEffect(() => {
@@ -198,12 +215,12 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     setIsFormOpen(false);
     setEditingVolunteer(null);
   };
-  
+
   const handleEditVolunteer = (volunteer: DetailedVolunteer) => {
     setEditingVolunteer(volunteer);
     showForm();
   };
-  
+
   const showNotification = useCallback((message: string, type: 'success' | 'error') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 5000);
@@ -213,58 +230,58 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     setIsScannerOpen(false);
 
     if (!activeEvent || !leaderDepartmentId) {
-        showNotification('Não há evento ativo ou departamento de líder definido para marcar a presença.', 'error');
-        return;
+      showNotification('Não há evento ativo ou departamento de líder definido para marcar a presença.', 'error');
+      return;
     }
 
     try {
-        const data = JSON.parse(decodedText);
-        if (!data.vId || !data.eId || !data.dId) {
-            throw new Error("QR Code inválido: Faltando dados essenciais.");
-        }
-        if (data.eId !== activeEvent.id) {
-            throw new Error("Este QR Code é para um evento diferente.");
-        }
-        if (data.dId !== leaderDepartmentId) {
-            throw new Error("Este voluntário não pertence ao seu departamento para este evento.");
-        }
+      const data = JSON.parse(decodedText);
+      if (!data.vId || !data.eId || !data.dId) {
+        throw new Error("QR Code inválido: Faltando dados essenciais.");
+      }
+      if (data.eId !== activeEvent.id) {
+        throw new Error("Este QR Code é para um evento diferente.");
+      }
+      if (data.dId !== leaderDepartmentId) {
+        throw new Error("Este voluntário não pertence ao seu departamento para este evento.");
+      }
 
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !sessionData.session) {
-            throw new Error("Sessão de usuário não encontrada. Por favor, faça login novamente.");
-        }
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        throw new Error("Sessão de usuário não encontrada. Por favor, faça login novamente.");
+      }
 
-        const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
-            headers: {
-                Authorization: `Bearer ${sessionData.session.access_token}`,
-            },
-            body: { volunteerId: data.vId, eventId: data.eId, departmentId: data.dId },
-        });
+      const { error: invokeError } = await supabase.functions.invoke('mark-attendance', {
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+        body: { volunteerId: data.vId, eventId: data.eId, departmentId: data.dId },
+      });
 
-        if (invokeError) throw invokeError;
-        
-        const volunteer = masterVolunteers.find(v => v.id === data.vId);
-        const volunteerName = volunteer?.name || 'Voluntário';
-        showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
-        onDataChange();
-        
+      if (invokeError) throw invokeError;
+
+      const volunteer = masterVolunteers.find(v => v.id === data.vId);
+      const volunteerName = volunteer?.name || 'Voluntário';
+      showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
+      onDataChange();
+
     } catch (err: any) {
-        if (err.context && typeof err.context.json === 'function') {
-            try {
-                const errorJson = await err.context.json();
-                if (errorJson && errorJson.error) {
-                    showNotification(errorJson.error, 'error');
-                } else {
-                    showNotification(getErrorMessage(err), 'error');
-                }
-            } catch (parseError) {
-                showNotification(getErrorMessage(err), 'error');
-            }
-        } else {
+      if (err.context && typeof err.context.json === 'function') {
+        try {
+          const errorJson = await err.context.json();
+          if (errorJson && errorJson.error) {
+            showNotification(errorJson.error, 'error');
+          } else {
             showNotification(getErrorMessage(err), 'error');
+          }
+        } catch (parseError) {
+          showNotification(getErrorMessage(err), 'error');
         }
+      } else {
+        showNotification(getErrorMessage(err), 'error');
+      }
     }
-}, [activeEvent, leaderDepartmentId, showNotification, masterVolunteers, onDataChange]);
+  }, [activeEvent, leaderDepartmentId, showNotification, masterVolunteers, onDataChange]);
 
 
   const handleInviteRequest = (volunteer: DetailedVolunteer) => {
@@ -288,10 +305,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       showNotification(`Convite enviado para ${volunteerToInvite.name}!`, 'success');
       setPendingInvites(prev => new Set(prev).add(volunteerToInvite.id!));
     } catch (err: any) {
-        showNotification(`Erro ao convidar: ${getErrorMessage(err)}`, 'error');
+      showNotification(`Erro ao convidar: ${getErrorMessage(err)}`, 'error');
     } finally {
-        setIsInviting(false);
-        handleCancelInvite();
+      setIsInviting(false);
+      handleCancelInvite();
     }
   };
 
@@ -299,34 +316,34 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     setSaveError(null);
     setIsSaving(true);
     if (!volunteerData.id) { // Only show loading modal for new invites
-        setIsSendingInviteModalOpen(true);
+      setIsSendingInviteModalOpen(true);
     }
 
     const functionToCall = volunteerData.id ? 'disable-user' : 'invite-volunteer';
 
     try {
-        const { error: invokeError } = await supabase.functions.invoke(functionToCall, {
-            body: { 
-              email: volunteerData.email,
-              name: volunteerData.name,
-              departmentIds: departmentIds
-            },
-        });
-        
-        if (invokeError) throw invokeError;
-        
-        showNotification(
-            volunteerData.id ? 'Voluntário atualizado com sucesso!' : 'Convite enviado com sucesso!',
-            'success'
-        );
-        hideForm();
-        await fetchVolunteers();
-        onDataChange();
+      const { error: invokeError } = await supabase.functions.invoke(functionToCall, {
+        body: {
+          email: volunteerData.email,
+          name: volunteerData.name,
+          departmentIds: departmentIds
+        },
+      });
+
+      if (invokeError) throw invokeError;
+
+      showNotification(
+        volunteerData.id ? 'Voluntário atualizado com sucesso!' : 'Convite enviado com sucesso!',
+        'success'
+      );
+      hideForm();
+      await fetchVolunteers();
+      onDataChange();
     } catch (err) {
-        setSaveError(`Falha ao salvar: ${getErrorMessage(err)}`);
+      setSaveError(`Falha ao salvar: ${getErrorMessage(err)}`);
     } finally {
-        setIsSaving(false);
-        setIsSendingInviteModalOpen(false);
+      setIsSaving(false);
+      setIsSendingInviteModalOpen(false);
     }
   };
 
@@ -335,12 +352,12 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     setVolunteerToRemove(volunteer);
     setIsRemoveModalOpen(true);
   };
-  
+
   const handleCancelRemove = () => {
     setIsRemoveModalOpen(false);
     setVolunteerToRemove(null);
   };
-  
+
   const handleConfirmRemove = async () => {
     if (!volunteerToRemove || !volunteerToRemove.id) return;
     setIsRemoving(true);
@@ -352,7 +369,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       showNotification(`${volunteerToRemove.name} removido do departamento!`, 'success');
       await fetchVolunteers(); // Refetch to update the UI
     } catch (err: any) {
-      showNotification(`Erro ao remover: ${getErrorMessage(err)}`, 'error');
+      showNotification(`Erro ao remover: ${getErrorMessage(err)} `, 'error');
     } finally {
       setIsRemoving(false);
       handleCancelRemove();
@@ -360,33 +377,33 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   };
 
   const handleRequestAction = (volunteer: DetailedVolunteer, type: 'disable' | 'enable') => {
-      setVolunteerForAction(volunteer);
-      setActionType(type);
-      setIsStatusModalOpen(true);
+    setVolunteerForAction(volunteer);
+    setActionType(type);
+    setIsStatusModalOpen(true);
   };
 
   const handleConfirmAction = async () => {
-      if (!volunteerForAction || !actionType) return;
-      
-      const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
-      
-      try {
-          const { error } = await supabase.functions.invoke(functionName, {
-              body: { userId: volunteerForAction.user_id, volunteerId: volunteerForAction.id },
-          });
-  
-          if (error) throw error;
-          
-          showNotification(`Voluntário ${actionType === 'disable' ? 'desativado' : 'reativado'} com sucesso!`, 'success');
-          await fetchVolunteers(); // Refetch to update UI
-  
-      } catch (err: any) {
-          showNotification(`Erro ao ${actionType === 'disable' ? 'desativar' : 'reativar'} voluntário: ${getErrorMessage(err)}`, 'error');
-      } finally {
-          setIsStatusModalOpen(false);
-          setVolunteerForAction(null);
-          setActionType(null);
-      }
+    if (!volunteerForAction || !actionType) return;
+
+    const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
+
+    try {
+      const { error } = await supabase.functions.invoke(functionName, {
+        body: { userId: volunteerForAction.user_id, volunteerId: volunteerForAction.id },
+      });
+
+      if (error) throw error;
+
+      showNotification(`Voluntário ${actionType === 'disable' ? 'desativado' : 'reativado'} com sucesso!`, 'success');
+      await fetchVolunteers(); // Refetch to update UI
+
+    } catch (err: any) {
+      showNotification(`Erro ao ${actionType === 'disable' ? 'desativar' : 'reativar'} voluntário: ${getErrorMessage(err)} `, 'error');
+    } finally {
+      setIsStatusModalOpen(false);
+      setVolunteerForAction(null);
+      setActionType(null);
+    }
   };
 
   const handleRequestPromotion = (volunteer: DetailedVolunteer) => {
@@ -400,18 +417,18 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     setIsPromoting(true);
     setPromoteError(null);
     try {
-        const { error } = await supabase.functions.invoke('promote-to-leader', {
-            body: { userId: volunteerToPromote.user_id, departmentId },
-        });
-        if (error) throw error;
-        showNotification(`${volunteerToPromote.name} foi promovido a líder com sucesso!`, 'success');
-        await fetchVolunteers();
-        setIsPromoteModalOpen(false);
-        setVolunteerToPromote(null);
+      const { error } = await supabase.functions.invoke('promote-to-leader', {
+        body: { userId: volunteerToPromote.user_id, departmentId },
+      });
+      if (error) throw error;
+      showNotification(`${volunteerToPromote.name} foi promovido a líder com sucesso!`, 'success');
+      await fetchVolunteers();
+      setIsPromoteModalOpen(false);
+      setVolunteerToPromote(null);
     } catch (err) {
-        setPromoteError(getErrorMessage(err));
+      setPromoteError(getErrorMessage(err));
     } finally {
-        setIsPromoting(false);
+      setIsPromoting(false);
     }
   };
 
@@ -421,26 +438,26 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     return (
       <div className="space-y-6">
         <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-            <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
-                </div>
-                <input 
-                    type="text"
-                    placeholder="Buscar por nome ou email do voluntário..."
-                    className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                />
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
             </div>
+            <input
+              type="text"
+              placeholder="Buscar por nome ou email do voluntário..."
+              className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+            />
+          </div>
         </div>
 
         {volunteersToDisplay.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {volunteersToDisplay.map((volunteer) => (
-                <VolunteerCard 
-                  key={volunteer.id} 
+                <VolunteerCard
+                  key={volunteer.id}
                   volunteer={volunteer}
                   onEdit={handleEditVolunteer}
                   onInvite={handleInviteRequest}
@@ -453,7 +470,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                 />
               ))}
             </div>
-            <Pagination 
+            <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={setCurrentPage}
@@ -472,9 +489,9 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   return (
     <div className="space-y-6">
       {notification && (
-          <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-              {notification.message}
-          </div>
+        <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+          {notification.message}
+        </div>
       )}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -482,7 +499,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
           <p className="text-slate-500 mt-1">Gerencie os voluntários de sua organização.</p>
         </div>
         {!isFormOpen && (
-          <button 
+          <button
             onClick={() => { setEditingVolunteer(null); showForm(); }}
             className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto justify-center"
           >
@@ -493,7 +510,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       </div>
 
       {isFormOpen ? (
-        <NewVolunteerForm 
+        <NewVolunteerForm
           initialData={editingVolunteer}
           onCancel={hideForm}
           onSave={handleSaveVolunteer}
@@ -527,17 +544,17 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         confirmButtonClass="bg-red-600 hover:bg-red-700 focus:ring-red-500"
         iconType="warning"
       />
-       {isSendingInviteModalOpen && (
+      {isSendingInviteModalOpen && (
         <ConfirmationModal
-            isOpen={isSendingInviteModalOpen}
-            onClose={() => {}}
-            onConfirm={() => {}}
-            title="Enviando Convite..."
-            message="Aguarde enquanto o convite é processado."
-            isLoading={true}
+          isOpen={isSendingInviteModalOpen}
+          onClose={() => { }}
+          onConfirm={() => { }}
+          title="Enviando Convite..."
+          message="Aguarde enquanto o convite é processado."
+          isLoading={true}
         />
-    )}
-    <ConfirmationModal
+      )}
+      <ConfirmationModal
         isOpen={isStatusModalOpen}
         onClose={() => setIsStatusModalOpen(false)}
         onConfirm={handleConfirmAction}
@@ -546,8 +563,8 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         isLoading={isSaving}
         confirmButtonClass={actionType === 'disable' ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'}
         iconType={actionType === 'disable' ? 'warning' : 'info'}
-    />
-     <PromoteToLeaderModal
+      />
+      <PromoteToLeaderModal
         isOpen={isPromoteModalOpen}
         onClose={() => setIsPromoteModalOpen(false)}
         onConfirm={handleConfirmPromotion}
@@ -555,7 +572,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         departments={departments}
         isPromoting={isPromoting}
         error={promoteError}
-    />
+      />
     </div>
   );
 };

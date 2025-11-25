@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-// FIX: Restored Supabase v2 types for type safety.
 import { type Session, type User } from '@supabase/supabase-js';
 import { DetailedVolunteer } from '../types';
 import { getErrorMessage, parseArrayFromString } from '../lib/utils';
@@ -135,7 +134,6 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
         setError(null);
         try {
             // Step 1: Update the user's auth metadata (name, phone)
-            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
             const { error: updateError } = await supabase.auth.updateUser({
                 data: {
                     name: name.trim(),
@@ -178,7 +176,6 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
             }
 
             // 1. Verify current password by attempting to sign in.
-            // FIX: Updated to Supabase v2 API `signInWithPassword` to match library version.
             const { error: signInError } = await supabase.auth.signInWithPassword({
                 email: user.email,
                 password: currentPassword,
@@ -192,7 +189,6 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
             }
 
             // 2. If verification is successful, update to the new password.
-            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
             const { error: updateError } = await supabase.auth.updateUser({ password });
             if (updateError) throw updateError;
 
@@ -236,8 +232,12 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
 
             <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-                    <div className="w-24 h-24 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-4xl">
-                        {getInitials(user?.user_metadata?.name)}
+                    <div className="w-24 h-24 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white font-bold text-4xl overflow-hidden border-4 border-white shadow-md">
+                        {(user?.user_metadata?.avatar_url || user?.user_metadata?.picture) ? (
+                            <img src={user?.user_metadata?.avatar_url || user?.user_metadata?.picture} alt={user?.user_metadata?.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                            getInitials(user?.user_metadata?.name)
+                        )}
                     </div>
                     <div className="flex-1 text-center sm:text-left">
                         {isEditingProfile ? (

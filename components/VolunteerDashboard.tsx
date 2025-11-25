@@ -250,9 +250,20 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                 </div>
             )}
             <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Olá, {userName}!</h1>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1">Bem-vindo(a) ao seu painel de voluntário.</p>
+                <div className="flex items-center space-x-4">
+                    {(session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture) ? (
+                        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white shadow-sm">
+                            <img src={session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture} alt={userName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                    ) : (
+                        <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold border-2 border-white shadow-sm">
+                            {userName.charAt(0).toUpperCase()}
+                        </div>
+                    )}
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Olá, {userName}!</h1>
+                        <p className="text-slate-500 dark:text-slate-400 mt-1">Bem-vindo(a) ao seu painel de voluntário.</p>
+                    </div>
                 </div>
                 {activeEvent && <LiveEventTimer event={activeEvent} onShowDetails={handleLiveEventNavigate} />}
             </div>

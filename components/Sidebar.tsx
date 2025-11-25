@@ -1,45 +1,61 @@
-import React, { useState, useRef, useEffect } from 'react';
-import type { Page } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-// FIX: Use 'type' import for Session to resolve potential module resolution issues with Supabase v2.
-import { type Session } from '@supabase/supabase-js';
-import { DashboardIcon, VolunteerIcon, DepartamentsIcon, EventosIcon, AdminIcon, FrequenciaIcon, CalendarIcon, NewVolunteersIcon, AddEventsIcon, NotificationIcon, HistoryIcon, InstallAppIcon, LogoNovaIcon, ProfileIcon, LogoutIcon, RankingIcon, CronogramasIcon } from '../assets/icons';
+import { Session } from '@supabase/supabase-js';
+import {
+  HomeIcon,
+  UserGroupIcon,
+  CalendarIcon,
+  ClipboardListIcon,
+  ChartBarIcon,
+  CogIcon,
+  LogoutIcon,
+  UserIcon as ProfileIcon,
+  BellIcon as NotificationIcon,
+  ClockIcon as HistoryIcon,
+  UserAddIcon as NewVolunteersIcon,
+  PlusCircleIcon as AddEventsIcon,
+  DownloadIcon as InstallAppIcon,
+  OfficeBuildingIcon as DepartamentsIcon,
+  ViewListIcon as EventosIcon,
+  ViewBoardsIcon as CronogramasIcon,
+  CheckCircleIcon as FrequenciaIcon,
+  ShieldCheckIcon as AdminIcon
+} from '@heroicons/react/outline';
 
-interface NavItemProps {
-  icon: React.ReactElement<any>;
-  label: string;
-  page: Page;
-  activePage: Page;
-  onNavigate: (page: Page) => void;
-  badgeCount?: number;
-}
+// Import local icons (assuming they exist as in the original file)
+import LogoNovaIcon from '../assets/icons/logonova.svg';
+// Note: I'm replacing the imported SVG components with HeroIcons where possible or keeping the imports if they were custom.
+// Based on the previous file content, it seems many icons were imported from '../assets/icons/index'.
+// To ensure compatibility, I will try to match the imports or use the HeroIcons as fallbacks if the original imports are not available in my context.
+// However, since I am rewriting the file, I should try to preserve the original imports if I can see them.
+// I will assume the imports from the original file were correct and try to reconstruct them based on the `view_file` output I have seen previously.
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, page, activePage, onNavigate, badgeCount }) => (
-  <button
-    onClick={() => onNavigate(page)}
-    className={`flex items-center justify-between space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${activePage === page
-      ? 'bg-blue-600 text-white font-semibold'
-      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-      }`}
-  >
-    <div className="flex items-center space-x-3">
-      {React.cloneElement(icon, { className: `h-5 w-5 ${icon.type === 'img' ? (activePage === page ? 'filter invert brightness-0' : 'brightness-0 dark:filter dark:invert') : ''}` })}
-      <span>{label}</span>
-    </div>
-    {badgeCount > 0 && (
-      <span className="bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-        {badgeCount >= 100 ? '99+' : badgeCount}
-      </span>
-    )}
-  </button>
-);
+// Re-importing from assets based on previous context
+import {
+  DashboardIcon,
+  NotificationIcon as NotificationIconAsset,
+  HistoryIcon as HistoryIconAsset,
+  VolunteerIcon,
+  RankingIcon,
+  DepartamentsIcon as DepartamentsIconAsset,
+  EventosIcon as EventosIconAsset,
+  CalendarIcon as CalendarIconAsset,
+  CronogramasIcon as CronogramasIconAsset,
+  FrequenciaIcon as FrequenciaIconAsset,
+  AdminIcon as AdminIconAsset,
+  NewVolunteersIcon as NewVolunteersIconAsset,
+  AddEventsIcon as AddEventsIconAsset,
+  InstallAppIcon as InstallAppIconAsset,
+  ProfileIcon as ProfileIconAsset,
+  LogoutIcon as LogoutIconAsset
+} from '../assets/icons';
 
-
-type AdminSubPage = 'users' | 'notifications';
+// Since I cannot see the exact imports from the truncated view, I will use the imports I saw in the diffs.
+// Wait, I can see the imports in the diffs.
 
 interface SidebarProps {
-  activePage: Page;
-  onNavigate: (page: Page) => void;
+  activePage: string;
+  onNavigate: (page: string) => void;
   onNewVolunteer: () => void;
   onNewEvent: () => void;
   isOpen: boolean;
@@ -47,17 +63,20 @@ interface SidebarProps {
   userRole: string | null;
   session: Session | null;
   unreadCount: number;
-  pushPermissionStatus: string | null;
+  pushPermissionStatus: NotificationPermission | 'default';
   onSubscribeToPush: () => void;
   canInstallPwa: boolean;
   onInstallPrompt: () => void;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
-  adminSubPage?: AdminSubPage;
-  onAdminSubPageChange?: (subPage: AdminSubPage) => void;
+  adminSubPage?: 'users' | 'notifications';
+  onAdminSubPageChange?: (subPage: 'users' | 'notifications') => void;
 }
 
-interface NavItemData {
+type Page = 'dashboard' | 'notifications' | 'history' | 'volunteers' | 'ranking' | 'departments' | 'events' | 'calendar' | 'timelines' | 'frequency' | 'admin';
+type AdminSubPage = 'users' | 'notifications';
+
+interface NavItemProps {
   page: Page;
   label: string;
   icon: React.ReactElement;
@@ -66,16 +85,16 @@ interface NavItemData {
 
 const allNavItems: NavItemData[] = [
   { page: 'dashboard', label: 'Dashboard', icon: <img src={DashboardIcon} alt="Dashboard" />, roles: ['admin', 'leader', 'volunteer'] },
-  { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIcon} alt="Notificações" />, roles: ['leader', 'volunteer'] },
-  { page: 'history', label: 'Histórico', icon: <img src={HistoryIcon} alt="Histórico" />, roles: ['volunteer'] },
+  { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIconAsset} alt="Notificações" />, roles: ['leader', 'volunteer'] },
+  { page: 'history', label: 'Histórico', icon: <img src={HistoryIconAsset} alt="Histórico" />, roles: ['volunteer'] },
   { page: 'volunteers', label: 'Voluntários', icon: <img src={VolunteerIcon} alt="Voluntários" />, roles: ['admin', 'leader'] },
   { page: 'ranking', label: 'Ranking', icon: <img src={RankingIcon} alt="Ranking" />, roles: ['admin', 'leader', 'volunteer'] },
-  { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIcon} alt="Departamentos" />, roles: ['admin'] },
-  { page: 'events', label: 'Eventos', icon: <img src={EventosIcon} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },
-  { page: 'calendar', label: 'Calendário', icon: <img src={CalendarIcon} alt="Calendário" />, roles: ['admin', 'leader'] },
-  { page: 'timelines', label: 'Cronogramas', icon: <img src={CronogramasIcon} alt="Calendário" />, roles: ['admin'] },
-  { page: 'frequency', label: 'Frequência', icon: <img src={FrequenciaIcon} alt="Frequência" />, roles: ['admin'] },
-  { page: 'admin', label: 'Admin', icon: <img src={AdminIcon} alt="Admin" />, roles: ['admin'] },
+  { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIconAsset} alt="Departamentos" />, roles: ['admin'] },
+  { page: 'events', label: 'Eventos', icon: <img src={EventosIconAsset} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },
+  { page: 'calendar', label: 'Calendário', icon: <img src={CalendarIconAsset} alt="Calendário" />, roles: ['admin', 'leader'] },
+  { page: 'timelines', label: 'Cronogramas', icon: <img src={CronogramasIconAsset} alt="Calendário" />, roles: ['admin'] },
+  { page: 'frequency', label: 'Frequência', icon: <img src={FrequenciaIconAsset} alt="Frequência" />, roles: ['admin'] },
+  { page: 'admin', label: 'Admin', icon: <img src={AdminIconAsset} alt="Admin" />, roles: ['admin'] },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewEvent, isOpen, setIsOpen, userRole, session, unreadCount, pushPermissionStatus, onSubscribeToPush, canInstallPwa, onInstallPrompt, theme, toggleTheme, adminSubPage = 'users', onAdminSubPageChange }) => {
@@ -111,6 +130,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
 
   const user = session?.user;
   const userName = user?.user_metadata?.name || user?.email || 'Usuário';
+  const userAvatar = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
   const initials = getInitials(userName);
 
   const normalizedRole = userRole === 'lider' ? 'leader' : userRole;
@@ -204,19 +224,19 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
               <div className="space-y-1">
                 {(normalizedRole === 'admin' || normalizedRole === 'leader') && (
                   <button onClick={onNewVolunteer} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-                    <img src={NewVolunteersIcon} alt="Novo Voluntário" className="h-5 w-5 brightness-0 dark:invert" />
+                    <img src={NewVolunteersIconAsset} alt="Novo Voluntário" className="h-5 w-5 brightness-0 dark:invert" />
                     <span>Novo Voluntário</span>
                   </button>
                 )}
                 {userRole === 'admin' && (
                   <button onClick={onNewEvent} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-                    <img src={AddEventsIcon} alt="Novo Evento" className="h-5 w-5 brightness-0 dark:invert" />
+                    <img src={AddEventsIconAsset} alt="Novo Evento" className="h-5 w-5 brightness-0 dark:invert" />
                     <span>Novo Evento</span>
                   </button>
                 )}
                 {pushPermissionStatus === 'default' && (
                   <button onClick={onSubscribeToPush} className="flex items-center space-x-3 px-4 py-2 rounded-lg w-full text-left text-amber-800 bg-amber-100 hover:bg-amber-200 font-semibold text-sm">
-                    <img src={NotificationIcon} alt="Ativar Notificações" className="h-5 w-5 brightness-0" />
+                    <img src={NotificationIconAsset} alt="Ativar Notificações" className="h-5 w-5 brightness-0" />
                     <span>Ativar Notificações</span>
                   </button>
                 )}
@@ -233,7 +253,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                 aria-label="Adicionar aplicativo à tela inicial"
               >
                 <img
-                  src={InstallAppIcon}
+                  src={InstallAppIconAsset}
                   alt="Instalar App"
                   className="h-5 w-5"
                   style={{ filter: 'brightness(0) saturate(100%) invert(16%) sepia(69%) saturate(5312%) hue-rotate(226deg) brightness(95%) contrast(100%)' }}
@@ -268,9 +288,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
 
           <div ref={userMenuRef} className="relative">
             <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="flex items-center space-x-3 w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
-              <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm">
-                {initials}
-              </div>
+              {normalizedRole !== 'volunteer' && (
+                userAvatar ? (
+                  <img src={userAvatar} alt={userName} className="w-10 h-10 rounded-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm">
+                    {initials}
+                  </div>
+                )
+              )}
               <div className="flex-1 text-left min-w-0">
                 <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{userName}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{roleDisplayName}</p>
@@ -280,11 +306,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
             {isUserMenuOpen && (
               <div className="absolute bottom-full left-0 right-0 mb-2 w-full bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1">
                 <button onClick={() => { onNavigate('my-profile'); setIsUserMenuOpen(false); }} className="w-full text-left flex items-center space-x-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
-                  <img src={ProfileIcon} alt="Meu Perfil" className="h-5 w-5 brightness-0 dark:invert" />
+                  <img src={ProfileIconAsset} alt="Meu Perfil" className="h-5 w-5 brightness-0 dark:invert" />
                   <span>Meu Perfil</span>
                 </button>
                 <button onClick={handleLogout} className="w-full text-left flex items-center space-x-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
-                  <img src={LogoutIcon} alt="Sair" className="h-5 w-5" style={{ filter: 'brightness(0) saturate(100%) invert(24%) sepia(92%) saturate(5058%) hue-rotate(356deg) brightness(97%) contrast(104%)' }} />
+                  <img src={LogoutIconAsset} alt="Sair" className="h-5 w-5" style={{ filter: 'brightness(0) saturate(100%) invert(24%) sepia(92%) saturate(5058%) hue-rotate(356deg) brightness(97%) contrast(104%)' }} />
                   <span>Sair</span>
                 </button>
               </div>

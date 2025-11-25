@@ -90,6 +90,7 @@ export interface DetailedVolunteer {
   skills: string[];
   availability: string[] | string;
   created_at?: string;
+  avatar_url?: string;
 }
 
 export interface Department {
