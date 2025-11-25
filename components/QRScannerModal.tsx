@@ -268,7 +268,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             ref={videoRef}
             className="absolute inset-0 w-full h-full md:object-contain object-cover"
             style={{
-              transform: 'scaleX(-1)',
+              transform: isMobile() ? 'none' : 'scaleX(-1)',
               filter: 'contrast(1.1) brightness(0.95)'
             }}
             autoPlay
