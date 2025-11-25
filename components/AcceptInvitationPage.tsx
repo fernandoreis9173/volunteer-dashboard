@@ -33,8 +33,8 @@ const InputField: React.FC<InputFieldProps> = ({ label, type, name, value, onCha
         <label htmlFor={name} className="block text-sm font-medium text-slate-700 mb-1">
             {label} {required && <span className="text-red-500">*</span>}
         </label>
-        <input 
-            type={type} 
+        <input
+            type={type}
             id={name}
             name={name}
             value={value}
@@ -56,8 +56,8 @@ interface CheckboxFieldProps {
 
 const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onChange }) => (
     <div className="flex items-center">
-        <input 
-            type="checkbox" 
+        <input
+            type="checkbox"
             name={name}
             id={name}
             checked={checked}
@@ -114,10 +114,10 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
     );
 };
 
-const TagInputField: React.FC<{ 
-    label: string; 
-    placeholder: string; 
-    tags: string[]; 
+const TagInputField: React.FC<{
+    label: string;
+    placeholder: string;
+    tags: string[];
     setTags: React.Dispatch<React.SetStateAction<string[]>>;
     color: 'blue' | 'yellow';
 }> = ({ label, placeholder, tags, setTags, color }) => {
@@ -143,31 +143,31 @@ const TagInputField: React.FC<{
     };
 
     return (
-    <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
-        <div className="flex">
-            <input 
-                type="text" 
-                placeholder={placeholder}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
-            />
-            <button 
-                type="button"
-                onClick={handleAddTag}
-                className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300"
-            >
-                +
-            </button>
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+            <div className="flex">
+                <input
+                    type="text"
+                    placeholder={placeholder}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
+                />
+                <button
+                    type="button"
+                    onClick={handleAddTag}
+                    className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300"
+                >
+                    +
+                </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                    <RemovableTag key={tag} text={tag} color={color} onRemove={() => handleRemoveTag(tag)} />
+                ))}
+            </div>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-            {tags.map((tag) => (
-                <RemovableTag key={tag} text={tag} color={color} onRemove={() => handleRemoveTag(tag)} />
-            ))}
-        </div>
-    </div>
     );
 };
 
@@ -193,68 +193,70 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [isVolunteer, setIsVolunteer] = useState(false);
-    
+
     const [departments, setDepartments] = useState<Department[]>([]);
     const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
     const [areDepartmentsPreselected, setAreDepartmentsPreselected] = useState(false);
-    
+
     useEffect(() => {
         const validateTokenAndFetchData = async () => {
-          setIsValidating(true);
-          setError(null);
-    
-          // FIX: Updated to Supabase v2 async API `getSession` to match library version.
-          const { data: { session } } = await supabase.auth.getSession();
-    
-          if (!session || session.user.aud !== 'authenticated') {
-            setError("Token de convite inválido ou ausente. Por favor, use o link do seu e-mail.");
-            setIsValidating(false);
-            return;
-          }
-          
-          const user = session.user;
-          setFullName(user.user_metadata?.name || '');
-          setEmail(user.email || '');
-    
-          if (user.user_metadata?.role === 'volunteer') {
-            setIsVolunteer(true);
-            const { data: deptData, error: deptError } = await supabase
-              .from('departments')
-              .select('id, name')
-              .eq('status', 'Ativo')
-              .order('name');
+            setIsValidating(true);
+            setError(null);
 
-            if (deptError) {
-              console.error("Could not fetch departments for volunteer", getErrorMessage(deptError));
-            } else {
-              const allDepts = (deptData as Department[] || []);
-              setDepartments(allDepts);
+            // FIX: Updated to Supabase v2 async API `getSession` to match library version.
+            const { data: { session } } = await supabase.auth.getSession();
 
-              const invitedDeptIds = user.user_metadata?.invited_department_ids;
-              if (Array.isArray(invitedDeptIds) && invitedDeptIds.length > 0) {
-                  const preselected = allDepts.filter(d => d.id && invitedDeptIds.includes(d.id));
-                  if (preselected.length > 0) {
-                      setSelectedDepartments(preselected);
-                      setAreDepartmentsPreselected(true);
-                  }
-              }
+            if (!session || session.user.aud !== 'authenticated') {
+                // FIX: If there's no valid session, redirect to login instead of showing error
+                // This handles the case where user completed registration and session was cleared
+                setIsValidating(false);
+                setAuthView('login');
+                return;
             }
-          }
-          setIsValidating(false);
+
+            const user = session.user;
+            setFullName(user.user_metadata?.name || '');
+            setEmail(user.email || '');
+
+            if (user.user_metadata?.role === 'volunteer') {
+                setIsVolunteer(true);
+                const { data: deptData, error: deptError } = await supabase
+                    .from('departments')
+                    .select('id, name')
+                    .eq('status', 'Ativo')
+                    .order('name');
+
+                if (deptError) {
+                    console.error("Could not fetch departments for volunteer", getErrorMessage(deptError));
+                } else {
+                    const allDepts = (deptData as Department[] || []);
+                    setDepartments(allDepts);
+
+                    const invitedDeptIds = user.user_metadata?.invited_department_ids;
+                    if (Array.isArray(invitedDeptIds) && invitedDeptIds.length > 0) {
+                        const preselected = allDepts.filter(d => d.id && invitedDeptIds.includes(d.id));
+                        if (preselected.length > 0) {
+                            setSelectedDepartments(preselected);
+                            setAreDepartmentsPreselected(true);
+                        }
+                    }
+                }
+            }
+            setIsValidating(false);
         };
-    
+
         const timer = setTimeout(validateTokenAndFetchData, 250);
         return () => clearTimeout(timer);
-    
-      }, []);
-    
+
+    }, []);
+
     const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setPhone(formatPhoneNumber(e.target.value));
     };
 
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, checked } = e.target;
-        setAvailability(prev => ({...prev, [name]: checked}));
+        setAvailability(prev => ({ ...prev, [name]: checked }));
     };
 
     const handleSelectDepartment = (item: SearchItem) => {
@@ -302,8 +304,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             // FIX: Updated to Supabase v2 API `updateUser` to match library version.
             const { data: { user: authUser }, error: updateError } = await supabase.auth.updateUser({
                 password: password,
-                data: { 
-                    name: fullName, 
+                data: {
+                    name: fullName,
                     phone: phone.replace(/[^\d]/g, ''),
                     status: 'Ativo', // CRITICAL FIX: Update status upon registration
                 }
@@ -319,10 +321,10 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 const selectedAvailabilityDays = Object.entries(availability)
                     .filter(([, isSelected]) => isSelected)
                     .map(([day]) => day);
-                
+
                 const nameParts = fullName.trim().split(' ').filter(p => p.length > 0);
                 const calculatedInitials = (
-                    (nameParts[0]?.[0] || '') + 
+                    (nameParts[0]?.[0] || '') +
                     (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
                 ).toUpperCase();
 
@@ -335,7 +337,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                     initials: calculatedInitials,
                     skills: skills,
                 };
-                
+
                 const departmentIds = selectedDepartments.map(d => d.id!).filter(id => id != null);
 
                 const { error: saveProfileError } = await supabase.functions.invoke('save-volunteer-profile', {
@@ -353,20 +355,18 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 // It is now removed, as only the auth user data needs updating at this stage.
                 console.log(`Admin/Leader registration for ${user.email}. Profile was created during invitation.`);
             }
-            
-            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login para você acessar sua conta.');
-            
+
+            setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login...');
+
             // Sign out the user session from the invite link
             // FIX: Explicitly set the scope to 'local' to resolve a 403 Forbidden error.
             // After registration, the temporary invite session must be cleared locally
             // to allow for a clean login. The default global scope was failing.
             await supabase.auth.signOut({ scope: 'local' });
-            
-            // Redirect to login page after a short delay
-            setTimeout(() => {
-                setAuthView('login');
-                window.location.hash = ''; 
-            }, 3000);
+
+            // FIX: Redirect immediately to login after signOut
+            // The useEffect will detect no session and redirect automatically
+            setAuthView('login');
 
         } catch (error: any) {
             const errorMessage = getErrorMessage(error);
@@ -376,18 +376,18 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             setLoading(false);
         }
     };
-    
+
     if (isValidating) {
         return (
-          <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4">
-            <p className="text-lg text-slate-500">Validando convite...</p>
-          </div>
+            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4">
+                <p className="text-lg text-slate-500">Validando convite...</p>
+            </div>
         );
     }
 
     return (
         <div className="h-full w-full overflow-y-auto bg-gradient-to-br from-slate-50 to-slate-200">
-             <style>{`
+            <style>{`
                 input[type="checkbox"]:checked {
                     background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
                 }
@@ -396,11 +396,11 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 <div className="w-full max-w-md p-6 sm:p-8 space-y-8 bg-white rounded-2xl shadow-lg my-8">
                     <div className="text-center">
                         <div className="flex justify-center mb-4">
-                          <div className="p-3 bg-blue-600 text-white rounded-xl">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-                            </svg>
-                          </div>
+                            <div className="p-3 bg-blue-600 text-white rounded-xl">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                                </svg>
+                            </div>
                         </div>
                         <h1 className="text-3xl font-bold text-slate-800">
                             Complete seu Cadastro
@@ -417,28 +417,28 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                         </div>
                     ) : (
                         <form className="mt-8 space-y-6" onSubmit={handleAcceptInvite}>
-                            <InputField 
-                                label="Nome Completo" 
-                                type="text" 
-                                name="fullName" 
-                                value={fullName} 
-                                onChange={(e) => setFullName(e.target.value)} 
-                                required 
+                            <InputField
+                                label="Nome Completo"
+                                type="text"
+                                name="fullName"
+                                value={fullName}
+                                onChange={(e) => setFullName(e.target.value)}
+                                required
                             />
-                             <InputField 
-                                label="Email" 
-                                type="email" 
-                                name="email" 
-                                value={email} 
-                                onChange={() => {}}
+                            <InputField
+                                label="Email"
+                                type="email"
+                                name="email"
+                                value={email}
+                                onChange={() => { }}
                                 readOnly
                             />
-                             <InputField 
-                                label="Telefone" 
-                                type="tel" 
-                                name="phone" 
-                                value={phone} 
-                                onChange={handlePhoneChange} 
+                            <InputField
+                                label="Telefone"
+                                type="tel"
+                                name="phone"
+                                value={phone}
+                                onChange={handlePhoneChange}
                                 placeholder="(11) 99876-5432"
                                 required={isVolunteer}
                             />
@@ -467,9 +467,9 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                         </div>
                                     </div>
 
-                                    <TagInputField 
-                                        label="Habilidades e Talentos" 
-                                        placeholder="Ex: Música, Tecnologia, Liderança..." 
+                                    <TagInputField
+                                        label="Habilidades e Talentos"
+                                        placeholder="Ex: Música, Tecnologia, Liderança..."
                                         tags={skills}
                                         setTags={setSkills}
                                         color="blue"
@@ -490,7 +490,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                 </>
                             )}
 
-                            <InputField 
+                            <InputField
                                 label="Crie sua Senha"
                                 type="password"
                                 name="password"
@@ -499,8 +499,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                 placeholder="Mínimo de 6 caracteres"
                                 required
                             />
-                            
-                            <InputField 
+
+                            <InputField
                                 label="Confirme sua Senha"
                                 type="password"
                                 name="confirmPassword"

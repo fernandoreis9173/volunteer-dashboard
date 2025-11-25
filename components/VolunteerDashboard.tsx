@@ -61,7 +61,7 @@ const getShortName = (fullName?: string | null): string => {
 };
 
 const GenericDepartmentIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" />
     </svg>
@@ -252,11 +252,11 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
                 <div className="flex items-center space-x-4">
                     {(session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture) ? (
-                        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white shadow-sm">
-                            <img src={session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture} alt={userName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                            <img src={session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture} alt={userName} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
                         </div>
                     ) : (
-                        <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold border-2 border-white shadow-sm">
+                        <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold border-2 border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
                             {userName.charAt(0).toUpperCase()}
                         </div>
                     )}
@@ -475,13 +475,13 @@ const EventCard: React.FC<{
                     <p className="font-bold text-slate-800 dark:text-slate-100 truncate" title={event.name}>{event.name}</p>
                     <div className="mt-2 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
                         <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" />
                             </svg>
                             <span>{formattedDate}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
                             <span>{startTime} - {endTime}</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -490,13 +490,13 @@ const EventCard: React.FC<{
                         </div>
                         {event.leader_name && (
                             <div className="flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
                                 <span className="font-medium">Líder: {event.leader_name}</span>
                             </div>
                         )}
                         {(event.cronograma_principal_id || event.cronograma_kids_id) && !isFinished && (
                             <div className="flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
                                 </svg>
                                 <button

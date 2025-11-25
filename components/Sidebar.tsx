@@ -99,15 +99,15 @@ const NavItem: React.FC<NavItemProps> = ({ page, label, icon, activePage, onNavi
       }`}
   >
     <span className={`w-5 h-5 flex items-center justify-center transition-all ${activePage === page
-        ? 'brightness-0 invert'
-        : 'brightness-0 opacity-70 group-hover:opacity-100'
+      ? 'brightness-0 invert'
+      : 'brightness-0 dark:invert opacity-70 group-hover:opacity-100'
       }`}>
       {icon}
     </span>
     <span className="font-medium text-sm">{label}</span>
     {badgeCount && badgeCount > 0 ? (
-      <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-        {badgeCount}
+      <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+        {badgeCount > 99 ? '99+' : badgeCount}
       </span>
     ) : null}
   </button>
