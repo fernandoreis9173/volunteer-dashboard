@@ -83,6 +83,36 @@ interface NavItemProps {
   roles: string[]; // Roles that can see this item
 }
 
+interface NavItemData {
+  page: Page;
+  label: string;
+  icon: React.ReactElement;
+  roles: string[]; // Roles that can see this item
+}
+
+const NavItem: React.FC<NavItemProps> = ({ page, label, icon, activePage, onNavigate, badgeCount }) => (
+  <button
+    onClick={() => onNavigate(page)}
+    className={`group flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors w-full text-left relative ${activePage === page
+      ? 'bg-blue-600 text-white shadow-md shadow-blue-200 dark:shadow-none'
+      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+      }`}
+  >
+    <span className={`w-5 h-5 flex items-center justify-center transition-all ${activePage === page
+        ? 'brightness-0 invert'
+        : 'brightness-0 opacity-70 group-hover:opacity-100'
+      }`}>
+      {icon}
+    </span>
+    <span className="font-medium text-sm">{label}</span>
+    {badgeCount && badgeCount > 0 ? (
+      <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+        {badgeCount}
+      </span>
+    ) : null}
+  </button>
+);
+
 const allNavItems: NavItemData[] = [
   { page: 'dashboard', label: 'Dashboard', icon: <img src={DashboardIcon} alt="Dashboard" />, roles: ['admin', 'leader', 'volunteer'] },
   { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIconAsset} alt="Notificações" />, roles: ['leader', 'volunteer'] },
