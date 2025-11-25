@@ -327,7 +327,7 @@ const AdminNotificationsPage: React.FC<AdminNotificationsPageProps> = ({ onDataC
                                     onChange={(val) => setSelectedEventId(Number(val))}
                                     options={events.map(event => ({
                                         value: event.id,
-                                        label: `${event.name} - ${new Date(event.date).toLocaleDateString('pt-BR')}`
+                                        label: `${event.name} - ${event.date.split('-').reverse().join('/')}`
                                     }))}
                                     placeholder="Selecione um evento..."
                                 />
