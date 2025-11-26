@@ -122,6 +122,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
         );
     }, [searchQuery, invitedUsers]);
 
+    const adminCount = useMemo(() => {
+        return invitedUsers.filter(user => user.user_metadata?.role === 'admin').length;
+    }, [invitedUsers]);
+
 
     const handleInviteSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -412,7 +416,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
                                                                         <li><button onClick={() => handleRequestAction(user, 'demote')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Voluntário</button></li>
                                                                     </>
                                                                 )}
-                                                                {user.user_metadata?.role === 'admin' && (
+                                                                {user.user_metadata?.role === 'admin' && adminCount > 1 && (
                                                                     <li><button onClick={() => handleRequestAction(user, 'make_leader')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Líder</button></li>
                                                                 )}
                                                                 {user.app_status === 'Inativo' ? (
