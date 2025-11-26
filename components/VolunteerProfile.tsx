@@ -12,12 +12,12 @@ interface VolunteerProfileProps {
 }
 
 const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
-  const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";
-  const colorClasses = {
-    yellow: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200",
-    blue: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200",
-  };
-  return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
+    const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";
+    const colorClasses = {
+        yellow: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200",
+        blue: "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200",
+    };
+    return <span className={`${baseClasses} ${colorClasses[color]}`}>{children}</span>
 };
 
 const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, leaders }) => {
@@ -38,7 +38,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     const [newPassword, setNewPassword] = useState('');
     const [confirmNewPassword, setConfirmNewPassword] = useState('');
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
-    
+
     // FIX: Stabilize dependency by extracting the user ID. This prevents the fetch effect
     // from re-running on every session token refresh, which caused the page to loop/refresh.
     const userId = session?.user?.id;
@@ -48,7 +48,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
         setSuccessMessage(message);
         setTimeout(() => setSuccessMessage(null), 3000);
     };
-    
+
     const fetchProfileData = useCallback(async () => {
         if (!userId) return;
         setLoading(true);
@@ -59,43 +59,46 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                 .select('*, volunteer_departments(departments(id, name))')
                 .eq('user_id', userId)
                 .single();
-    
+
             if (fetchError) throw fetchError;
-    
+
             const departments = (volunteerProfile.volunteer_departments || []).map((vd: any) => vd.departments).filter(Boolean);
             const transformedProfile = {
                 ...volunteerProfile,
                 departments: departments
             };
             setVolunteerData(transformedProfile as DetailedVolunteer);
-    
+
             const departmentIds = departments.map((d: any) => d.id);
-    
+
             if (departmentIds.length > 0) {
-                const { data: leadersData, error: leadersError } = await supabase
+                const { data: deptLeaders, error: leadersError } = await supabase
                     .from('department_leaders')
-                    .select('department_id, leader_id')
+                    .select('department_id, user_id')
                     .in('department_id', departmentIds);
                 if (leadersError) throw leadersError;
-    
-                const leaderMap = new Map(leaders.map(l => [l.id, l.user_metadata?.name]));
-    
+
+                const deptLeaderMap = new Map<number, string>();
+                (deptLeaders || []).forEach((rel: any) => {
+                    const leaderUser = leaders.find(u => u.id === rel.user_id);
+                    if (leaderUser) {
+                        deptLeaderMap.set(rel.department_id, leaderUser.user_metadata?.name || 'Líder');
+                    }
+                });
+
                 const finalDepartmentDetails = departments.map((dept: any) => {
-                    const deptLeaders = leadersData
-                        .filter(rel => rel.department_id === dept.id)
-                        .map(rel => leaderMap.get(rel.leader_id))
-                        .filter(Boolean);
-                    
+                    const leaderName = deptLeaderMap.get(dept.id);
+
                     return {
                         name: dept.name,
-                        leader: deptLeaders.join(', ') || 'Não atribuído'
+                        leader: leaderName || 'Não atribuído'
                     };
                 });
                 setDepartmentDetails(finalDepartmentDetails);
             } else {
                 setDepartmentDetails([]);
             }
-    
+
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
@@ -115,10 +118,10 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                 phone: volunteerData.phone || ''
             });
             setSkills(parseArrayFromString(volunteerData.skills));
-            
+
             const availabilityKeys = { domingo: false, segunda: false, terca: false, quarta: false, quinta: false, sexta: false, sabado: false };
             const availabilityArray = parseArrayFromString(volunteerData.availability).map(d => d.toLowerCase());
-            
+
             availabilityArray.forEach(day => {
                 if (day in availabilityKeys) {
                     availabilityKeys[day as keyof typeof availabilityKeys] = true;
@@ -129,7 +132,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     }, [volunteerData]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData(prev => ({...prev, [e.target.name]: e.target.value }));
+        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,9 +143,9 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
         if (!supabase || !volunteerData) return;
         setIsSaving(true);
         setError(null);
-        
+
         try {
-            const selectedAvailability = Object.entries(availability).filter(([,v]) => v).map(([k]) => k);
+            const selectedAvailability = Object.entries(availability).filter(([, v]) => v).map(([k]) => k);
             const { error: updateError } = await supabase
                 .from('volunteers')
                 .update({
@@ -152,9 +155,9 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                     availability: JSON.stringify(selectedAvailability)
                 })
                 .eq('id', volunteerData.id);
-            
+
             if (updateError) throw updateError;
-            
+
             // FIX: Use the correct Supabase v2 API `updateUser` to update user metadata.
             await supabase.auth.updateUser({ data: { name: formData.name } });
 
@@ -184,44 +187,44 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
             setError('As novas senhas não coincidem.');
             return;
         }
-    
+
         setIsSaving(true);
         try {
             if (!session?.user?.email) {
                 throw new Error("Email do usuário não encontrado para verificação.");
             }
-    
+
             // 1. Verify current password
             const { error: signInError } = await supabase.auth.signInWithPassword({
                 email: session.user.email,
                 password: currentPassword,
             });
-    
+
             if (signInError) {
                 if (signInError.message === 'Invalid login credentials') {
                     throw new Error('Sua senha atual está incorreta.');
                 }
                 throw signInError;
             }
-    
+
             // 2. Update to the new password
             const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
             if (updateError) throw updateError;
-    
+
             // Reset fields and close form
             setNewPassword('');
             setConfirmNewPassword('');
             setCurrentPassword('');
             setIsChangingPassword(false);
             showSuccess('Senha alterada com sucesso!');
-    
+
         } catch (err) {
             setError(getErrorMessage(err));
         } finally {
             setIsSaving(false);
         }
     };
-    
+
     const cancelPasswordChange = () => {
         setIsChangingPassword(false);
         setError(null);
@@ -239,14 +242,14 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     if (!volunteerData) {
         return <p className="text-red-500">Erro ao carregar perfil.</p>;
     }
-    
+
     const skillsList = parseArrayFromString(volunteerData.skills);
     const availabilityList = parseArrayFromString(volunteerData.availability);
 
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-             <style>{`
+            <style>{`
                 input[type="checkbox"]:checked {
                     background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
                 }
@@ -266,18 +269,18 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                     </button>
                 )}
             </div>
-            
+
             <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                 {isEditing ? (
                     <div className="space-y-6">
-                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Nome Completo</label><input type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md dark:bg-slate-900 dark:border-slate-600 dark:text-slate-300"/></div>
-                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Telefone</label><input type="text" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md dark:bg-slate-900 dark:border-slate-600 dark:text-slate-300"/></div>
-                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Habilidades</label><input type="text" value={skills.join(', ')} onChange={e => setSkills(e.target.value.split(',').map(s => s.trim()))} className="w-full mt-1 p-2 border rounded-md dark:bg-slate-900 dark:border-slate-600 dark:text-slate-300" placeholder="Ex: Canto, Fotografia, etc"/></div>
+                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Nome Completo</label><input type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md dark:bg-slate-900 dark:border-slate-600 dark:text-slate-300" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Telefone</label><input type="text" name="phone" value={formData.phone} onChange={handleInputChange} className="w-full mt-1 p-2 border rounded-md dark:bg-slate-900 dark:border-slate-600 dark:text-slate-300" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Habilidades</label><input type="text" value={skills.join(', ')} onChange={e => setSkills(e.target.value.split(',').map(s => s.trim()))} className="w-full mt-1 p-2 border rounded-md dark:bg-slate-900 dark:border-slate-600 dark:text-slate-300" placeholder="Ex: Canto, Fotografia, etc" /></div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Disponibilidade</label>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {Object.keys(availability).map(day => (
-                                    <div key={day} className="flex items-center"><input type="checkbox" name={day} id={day} checked={availability[day as keyof typeof availability]} onChange={handleCheckboxChange} className="mr-2 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-500"/><label htmlFor={day} className="capitalize text-slate-700 dark:text-slate-300">{day}</label></div>
+                                    <div key={day} className="flex items-center"><input type="checkbox" name={day} id={day} checked={availability[day as keyof typeof availability]} onChange={handleCheckboxChange} className="mr-2 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-500" /><label htmlFor={day} className="capitalize text-slate-700 dark:text-slate-300">{day}</label></div>
                                 ))}
                             </div>
                         </div>
@@ -332,20 +335,20 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                     <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">Segurança</h3>
                     {isChangingPassword ? (
                         <form onSubmit={handleSavePassword} className="mt-4 space-y-4 max-w-sm">
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Senha Atual *</label>
-                                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-100"/>
+                                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-100" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nova Senha *</label>
-                                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required placeholder="Mínimo de 6 caracteres" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-100"/>
+                                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required placeholder="Mínimo de 6 caracteres" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-100" />
                             </div>
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Confirmar Nova Senha *</label>
-                                <input type="password" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} required className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-100"/>
+                                <input type="password" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} required className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-100" />
                             </div>
                             {error && <p className="text-sm text-red-500">{error}</p>}
-                             <div className="flex items-center gap-2 pt-2">
+                            <div className="flex items-center gap-2 pt-2">
                                 <button type="submit" disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg text-sm disabled:bg-blue-400">
                                     {isSaving ? 'Salvando...' : 'Salvar Senha'}
                                 </button>
@@ -365,9 +368,9 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                 </div>
             </div>
             {successMessage && (
-                 <div className="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-scale">
+                <div className="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-scale">
                     {successMessage}
-                 </div>
+                </div>
             )}
         </div>
     );

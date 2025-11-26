@@ -67,7 +67,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                     const { data: leaderDeptRel, error: leaderDeptRelError } = await supabase
                         .from('department_leaders')
                         .select('department_id')
-                        .eq('leader_id', currentUser.id)
+                        .eq('user_id', currentUser.id)
                         .single();
 
                     if (leaderDeptRelError && leaderDeptRelError.code !== 'PGRST116') throw leaderDeptRelError;
@@ -87,13 +87,13 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                         // 3. Get ALL leaders for this department
                         const { data: allLeadersRel, error: allLeadersError } = await supabase
                             .from('department_leaders')
-                            .select('leader_id')
+                            .select('user_id')
                             .eq('department_id', departmentId);
 
                         if (allLeadersError) throw allLeadersError;
 
                         // 4. Map leader IDs to names using the 'leaders' prop
-                        const leaderIds = allLeadersRel.map(r => r.leader_id);
+                        const leaderIds = allLeadersRel.map(r => r.user_id);
                         const departmentLeadersNames = leaders
                             .filter(l => leaderIds.includes(l.id))
                             .map(l => l.user_metadata?.name)

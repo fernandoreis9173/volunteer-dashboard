@@ -84,8 +84,8 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     setLoading(true);
     setError(null);
     try {
-      // Fetch all volunteers and all their department relationships.
-      const { data: rawVolunteers, error: fetchError } = await supabase
+      // Build query for volunteers
+      let query = supabase
         .from('volunteers')
         .select(`
                 id,
@@ -101,42 +101,61 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
                 volunteer_departments (
                     departments ( id, name )
                 )
-            `)
-        .order('created_at', { ascending: false });
+            `);
+
+      // FIX: Leaders should only see active volunteers
+      // Admins can see all volunteers (active and inactive) for management
+      if (isLeader) {
+        query = query.eq('status', 'Ativo');
+      }
+
+      const { data: rawVolunteers, error: fetchError } = await query.order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
 
-      // Fetch all users to get avatars
-      const { data: usersData, error: usersError } = await supabase.functions.invoke('list-users', {
-        body: { context: 'volunteers_page' }
-      });
+      // FIX: Fetch profiles to get avatar_url AND role
+      // Filter out users who are no longer volunteers (promoted to leader/admin)
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, avatar_url, role');
 
       const avatarMap = new Map<string, string>();
-      if (usersData && usersData.users) {
-        usersData.users.forEach((u: any) => {
-          const meta = u.user_metadata;
-          const avatar = meta?.avatar_url || meta?.picture;
-          if (avatar) {
-            avatarMap.set(u.id, avatar);
+      const roleMap = new Map<string, string>();
+
+      if (profilesData && !profilesError) {
+        profilesData.forEach((profile: any) => {
+          if (profile.avatar_url) {
+            avatarMap.set(profile.id, profile.avatar_url);
+          }
+          if (profile.role) {
+            roleMap.set(profile.id, profile.role);
           }
         });
       }
 
       // Manually process the data to ensure the logic is clear.
-      const transformedData = (rawVolunteers || []).map(volunteer => {
-        // All relations in volunteer_departments are now considered approved.
-        const approvedDepartments = (volunteer.volunteer_departments || [])
-          .filter(relation => relation.departments)
-          .flatMap(relation => relation.departments);
+      const transformedData = (rawVolunteers || [])
+        .map(volunteer => {
+          // All relations in volunteer_departments are now considered approved.
+          const approvedDepartments = (volunteer.volunteer_departments || [])
+            .filter(relation => relation.departments)
+            .flatMap(relation => relation.departments);
 
-        // Create the final volunteer object for the state.
-        return {
-          ...volunteer,
-          departments: approvedDepartments, // This array will ONLY contain approved departments.
-          volunteer_departments: volunteer.volunteer_departments,
-          avatar_url: volunteer.user_id ? avatarMap.get(volunteer.user_id) : undefined
-        };
-      });
+          // Create the final volunteer object for the state.
+          return {
+            ...volunteer,
+            departments: approvedDepartments, // This array will ONLY contain approved departments.
+            volunteer_departments: volunteer.volunteer_departments,
+            avatar_url: volunteer.user_id ? avatarMap.get(volunteer.user_id) : undefined
+          };
+        })
+        // FIX: Filter out users who were promoted to leader/admin
+        // Only show users with role 'volunteer' in the Volunteers page
+        .filter(volunteer => {
+          if (!volunteer.user_id) return true; // Keep volunteers without user_id (shouldn't happen)
+          const userRole = roleMap.get(volunteer.user_id);
+          return userRole === 'volunteer'; // Only show actual volunteers
+        });
 
       setMasterVolunteers(transformedData as unknown as DetailedVolunteer[]);
 

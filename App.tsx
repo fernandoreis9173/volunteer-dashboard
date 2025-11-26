@@ -251,7 +251,7 @@ const App: React.FC = () => {
                 const { data: leaderDept, error: leaderDeptError } = await supabase
                     .from('department_leaders')
                     .select('department_id')
-                    .eq('leader_id', currentSession.user.id)
+                    .eq('user_id', currentSession.user.id)
                     .maybeSingle();
 
                 if (leaderDeptError) {
@@ -709,7 +709,7 @@ const App: React.FC = () => {
                     const { data } = await supabase
                         .from('department_leaders')
                         .select('department_id')
-                        .eq('leader_id', session.user.id);
+                        .eq('user_id', session.user.id);
 
                     // Se houver mudança, refetch user data
                     if (data && userProfile?.department_id) {

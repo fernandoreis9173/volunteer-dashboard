@@ -38,11 +38,11 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
   // Debounce search query
   useEffect(() => {
     const timer = setTimeout(() => {
-        setSearchQuery(inputValue);
+      setSearchQuery(inputValue);
     }, 300); // 300ms delay
 
     return () => {
-        clearTimeout(timer);
+      clearTimeout(timer);
     };
   }, [inputValue]);
 
@@ -61,8 +61,8 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
       // Step 2: Fetch all leader relationships
       const { data: leadersData, error: leadersError } = await supabase
         .from('department_leaders')
-        .select('department_id, leader_id');
-      
+        .select('department_id, user_id');
+
       if (leadersError) throw leadersError;
 
       // Step 3: Join them in the client AND build assignments map simultaneously
@@ -74,17 +74,17 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
         if (!leadersByDept.has(rel.department_id)) {
           leadersByDept.set(rel.department_id, []);
         }
-        leadersByDept.get(rel.department_id)!.push({ id: rel.leader_id, name: '' }); // Name is enriched later
+        leadersByDept.get(rel.department_id)!.push({ id: rel.user_id, name: '' }); // Name is enriched later
 
         // Build map for form validation (Optimization: done here to avoid extra fetch)
-        assignmentsMap.set(rel.leader_id, rel.department_id);
+        assignmentsMap.set(rel.user_id, rel.department_id);
       });
 
       const depts = (departmentsData || []).map((d: any) => ({
         ...d,
         leaders: leadersByDept.get(d.id) || []
       }));
-      
+
       setMasterDepartments(depts as Department[]);
       setLeaderAssignments(assignmentsMap);
 
@@ -101,27 +101,27 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
   useEffect(() => {
     fetchDepartments();
   }, [fetchDepartments]);
-  
+
   const enrichedDepartments = useMemo(() => {
     return masterDepartments.map(dept => {
-        const deptLeaders = dept.leaders.map(leaderInfo => {
-          const leaderUser = leaders.find(l => l.id === leaderInfo.id);
-          return {
-            id: leaderInfo.id,
-            name: leaderUser?.user_metadata?.name || 'Líder não encontrado'
-          };
-        });
-
+      const deptLeaders = dept.leaders.map(leaderInfo => {
+        const leaderUser = leaders.find(l => l.id === leaderInfo.id);
         return {
-            ...dept,
-            leaders: deptLeaders, // Now with names
-            // For filtering and backward compatibility where single leader is assumed
-            leader: deptLeaders.map(l => l.name).join(', ') || 'Não atribuído', 
-            leader_id: deptLeaders[0]?.id || null
+          id: leaderInfo.id,
+          name: leaderUser?.user_metadata?.name || 'Líder não encontrado'
         };
+      });
+
+      return {
+        ...dept,
+        leaders: deptLeaders, // Now with names
+        // For filtering and backward compatibility where single leader is assumed
+        leader: deptLeaders.map(l => l.name).join(', ') || 'Não atribuído',
+        leader_id: deptLeaders[0]?.id || null
+      };
     });
   }, [masterDepartments, leaders]);
-  
+
   const filteredDepartments = useMemo(() => {
     let departments = [...enrichedDepartments];
 
@@ -130,11 +130,11 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
     }
 
     if (searchQuery) {
-        const lowercasedQuery = searchQuery.toLowerCase();
-        return departments.filter(d => 
-            d.name.toLowerCase().includes(lowercasedQuery) ||
-            (d.leader && d.leader.toLowerCase().includes(lowercasedQuery))
-        );
+      const lowercasedQuery = searchQuery.toLowerCase();
+      return departments.filter(d =>
+        d.name.toLowerCase().includes(lowercasedQuery) ||
+        (d.leader && d.leader.toLowerCase().includes(lowercasedQuery))
+      );
     }
     return departments;
   }, [searchQuery, enrichedDepartments, isLeader, leaderDepartmentId]);
@@ -163,7 +163,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
     setEditingDepartment(department);
     showForm();
   };
-  
+
   const handleDeleteRequest = (id: number) => {
     setDepartmentToDeleteId(id);
     setIsDeleteModalOpen(true);
@@ -186,50 +186,50 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
     }
     handleCancelDelete();
   };
-  
+
   const handleSaveDepartment = async (departmentData: Omit<Department, 'created_at' | 'leaders'> & { leaders: any[] }, leader_ids: string[]) => {
     setIsSaving(true);
     setSaveError(null);
 
     try {
-        const { leaders, ...dbPayload } = departmentData;
-        
-        const { data: savedDept, error: deptError } = await supabase
-            .from('departments')
-            .upsert(dbPayload)
-            .select('id')
-            .single();
-        
-        if (deptError) {
-            if (deptError.code === '23505') {
-                 throw new Error(`O nome de departamento "${departmentData.name}" já está em uso.`);
-            }
-            throw deptError;
-        }
-        if (!savedDept) throw new Error("Falha ao salvar o departamento. Nenhum ID retornado.");
-        
-        // This function now correctly expects an array of leader IDs.
-        const { error: leaderUpdateError } = await supabase.functions.invoke('update-department-leader', {
-            body: {
-                department_id: savedDept.id,
-                leader_ids: leader_ids,
-            },
-        });
+      const { leaders, ...dbPayload } = departmentData;
 
-        if (leaderUpdateError) {
-            // Even if leader update fails, the department was saved. We should show an informative error.
-            throw new Error(`O departamento foi salvo, mas a atribuição de líderes falhou. Erro: ${getErrorMessage(leaderUpdateError)}`);
+      const { data: savedDept, error: deptError } = await supabase
+        .from('departments')
+        .upsert(dbPayload)
+        .select('id')
+        .single();
+
+      if (deptError) {
+        if (deptError.code === '23505') {
+          throw new Error(`O nome de departamento "${departmentData.name}" já está em uso.`);
         }
-        
-        await fetchDepartments(); // Refetch all department data
-        onLeadersChange(); // Trigger refetch of global leader list in App.tsx
-        hideForm();
+        throw deptError;
+      }
+      if (!savedDept) throw new Error("Falha ao salvar o departamento. Nenhum ID retornado.");
+
+      // This function now correctly expects an array of leader IDs.
+      const { error: leaderUpdateError } = await supabase.functions.invoke('update-department-leader', {
+        body: {
+          department_id: savedDept.id,
+          leader_ids: leader_ids,
+        },
+      });
+
+      if (leaderUpdateError) {
+        // Even if leader update fails, the department was saved. We should show an informative error.
+        throw new Error(`O departamento foi salvo, mas a atribuição de líderes falhou. Erro: ${getErrorMessage(leaderUpdateError)}`);
+      }
+
+      await fetchDepartments(); // Refetch all department data
+      onLeadersChange(); // Trigger refetch of global leader list in App.tsx
+      hideForm();
 
     } catch (error: any) {
-        setSaveError(getErrorMessage(error));
-        console.error("Error saving department:", error);
+      setSaveError(getErrorMessage(error));
+      console.error("Error saving department:", error);
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
     }
   };
 
@@ -240,35 +240,35 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
     return (
       <div className="space-y-6">
         <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-            <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
-                </div>
-                <input 
-                    type="text"
-                    placeholder="Buscar por nome ou líder do departamento..."
-                    className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                />
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
             </div>
+            <input
+              type="text"
+              placeholder="Buscar por nome ou líder do departamento..."
+              className="w-full pl-10 pr-4 py-2 border-0 bg-transparent rounded-lg focus:ring-0 text-slate-900"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+            />
+          </div>
         </div>
 
         {paginatedDepartments.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {paginatedDepartments.map((department) => (
-                <DepartmentCard 
-                  key={department.id} 
-                  department={department} 
-                  onEdit={handleEditDepartment} 
-                  onDelete={handleDeleteRequest} 
+                <DepartmentCard
+                  key={department.id}
+                  department={department}
+                  onEdit={handleEditDepartment}
+                  onDelete={handleDeleteRequest}
                   userRole={userRole}
                   isLeaderDepartment={department.id ? leaderDepartmentId === department.id : false}
                 />
               ))}
             </div>
-            <Pagination 
+            <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={setCurrentPage}
@@ -283,7 +283,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
       </div>
     );
   };
-  
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -292,7 +292,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
           <p className="text-slate-500 mt-1">Gerencie os departamentos da organização.</p>
         </div>
         {userRole === 'admin' && !isFormVisible && (
-          <button 
+          <button
             onClick={() => { setEditingDepartment(null); showForm(); }}
             className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto justify-center"
           >
@@ -304,18 +304,18 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
 
       {isLeader && (
         <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
-            <div className="flex">
-                <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                </div>
-                <div className="ml-3">
-                    <p className="text-sm text-blue-800">
-                        Como líder, a visibilidade está restrita apenas ao seu departamento.
-                    </p>
-                </div>
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
             </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-800">
+                Como líder, a visibilidade está restrita apenas ao seu departamento.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

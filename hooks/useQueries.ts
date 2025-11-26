@@ -428,7 +428,7 @@ export const useVolunteerDashboardData = (userId: string | undefined, leaders: U
                     .order('date', { foreignTable: 'events', ascending: true })
                     .order('start_time', { foreignTable: 'events', ascending: true }),
 
-                supabase.from('invitations').select('id, created_at, leader_id, departments(id, name)').eq('volunteer_id', volunteerId).eq('status', 'pendente'),
+                supabase.from('invitations').select('id, created_at, user_id, departments(id, name)').eq('volunteer_id', volunteerId).eq('status', 'pendente'),
 
                 supabase
                     .from('event_volunteers')
@@ -456,7 +456,7 @@ export const useVolunteerDashboardData = (userId: string | undefined, leaders: U
                 id: inv.id,
                 created_at: inv.created_at,
                 departments: inv.departments,
-                profiles: { name: inv.leader_id ? leadersMap.get(inv.leader_id) || 'Líder' : 'Líder' }
+                profiles: { name: inv.user_id ? leadersMap.get(inv.user_id) || 'Líder' : 'Líder' }
             }));
 
             // Process Profile
@@ -469,12 +469,12 @@ export const useVolunteerDashboardData = (userId: string | undefined, leaders: U
 
             const { data: deptLeaders } = await supabase
                 .from('department_leaders')
-                .select('department_id, leader_id')
+                .select('department_id, user_id')
                 .in('department_id', relevantDeptIds);
 
             const deptLeaderMap = new Map<number, string>();
             (deptLeaders || []).forEach((dl: any) => {
-                const leaderUser = leaders.find(u => u.id === dl.leader_id);
+                const leaderUser = leaders.find(u => u.id === dl.user_id);
                 if (leaderUser) {
                     deptLeaderMap.set(dl.department_id, leaderUser.user_metadata?.name || 'Líder');
                 }

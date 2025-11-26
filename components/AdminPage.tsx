@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 // FIX: Import the 'User' type from the central 'types.ts' module to resolve the export error.
-import { EnrichedUser, User } from '../types';
+import { EnrichedUser, User, Department } from '../types';
 import { useAdminUsers } from '../hooks/useQueries';
 import EditUserModal from './EditUserModal';
 import ConfirmationModal from './ConfirmationModal';
+import DemoteToVolunteerModal from './DemoteToVolunteerModal';
 import { getErrorMessage, getInitials } from '../lib/utils';
 
 interface AdminPageProps {
@@ -31,6 +32,13 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const [userToAction, setUserToAction] = useState<User | null>(null);
     const [actionType, setActionType] = useState<'disable' | 'enable' | 'demote' | null>(null);
 
+    // States for demote to volunteer modal
+    const [isDemoteModalOpen, setIsDemoteModalOpen] = useState(false);
+    const [userToDemote, setUserToDemote] = useState<{ id: string; name: string; email: string } | null>(null);
+    const [isDemoting, setIsDemoting] = useState(false);
+    const [demoteError, setDemoteError] = useState<string | null>(null);
+    const [departments, setDepartments] = useState<Department[]>([]);
+
     // States for custom role dropdown
     const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
     const roleDropdownRef = useRef<HTMLDivElement>(null);
@@ -42,6 +50,21 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     // React Query Hook
     const { data: invitedUsers = [], isLoading: listLoading, error: listErrorObject, refetch: refetchUsers } = useAdminUsers();
     const listError = listErrorObject ? getErrorMessage(listErrorObject) : null;
+
+    // Fetch departments for demote modal
+    useEffect(() => {
+        const fetchDepartments = async () => {
+            const { data, error } = await supabase
+                .from('departments')
+                .select('id, name')
+                .eq('status', 'Ativo')
+                .order('name');
+            if (data && !error) {
+                setDepartments(data);
+            }
+        };
+        fetchDepartments();
+    }, []);
 
     // Fetch Logic for User Management - REMOVED (Handled by useAdminUsers)
     /*
@@ -133,36 +156,58 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     };
 
     const handleRequestAction = (user: User, type: 'disable' | 'enable' | 'demote') => {
-        setUserToAction(user);
-        setActionType(type);
-        setIsActionModalOpen(true);
+        if (type === 'demote') {
+            // Open demote modal with department selection
+            setUserToDemote({
+                id: user.id,
+                name: user.user_metadata?.name || '',
+                email: user.email || ''
+            });
+            setIsDemoteModalOpen(true);
+            setDemoteError(null);
+        } else {
+            setUserToAction(user);
+            setActionType(type);
+            setIsActionModalOpen(true);
+        }
         setActiveMenu(null);
+    };
+
+    const handleConfirmDemote = async (departmentIds: number[]) => {
+        if (!userToDemote) return;
+        setIsDemoting(true);
+        setDemoteError(null);
+
+        try {
+            const { error } = await supabase.functions.invoke('demote-to-volunteer', {
+                body: { userId: userToDemote.id, departmentIds },
+            });
+
+            if (error) throw error;
+
+            await refetchUsers(); // Force refetch
+            onDataChange(); // Refetch leaders list in App.tsx
+            setIsDemoteModalOpen(false);
+            setUserToDemote(null);
+        } catch (err) {
+            setDemoteError(getErrorMessage(err));
+        } finally {
+            setIsDemoting(false);
+        }
     };
 
     const handleConfirmAction = async () => {
         if (!userToAction || !actionType) return;
 
-        if (actionType === 'demote') {
-            const { error } = await supabase.functions.invoke('demote-to-volunteer', {
-                body: { userId: userToAction.id },
-            });
-            if (error) {
-                alert(`Falha ao rebaixar líder: ${getErrorMessage(error)}`);
-            } else {
-                await refetchUsers(); // Force refetch
-                onDataChange(); // Refetch leaders list in App.tsx
-            }
+        // Only handle disable/enable here (demote is handled by handleConfirmDemote)
+        const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
+        const { error } = await supabase.functions.invoke(functionName, {
+            body: { userId: userToAction.id },
+        });
+        if (error) {
+            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
         } else {
-            // Existing disable/enable logic
-            const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
-            const { error } = await supabase.functions.invoke(functionName, {
-                body: { userId: userToAction.id },
-            });
-            if (error) {
-                alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
-            } else {
-                await refetchUsers(); // Force refetch
-            }
+            await refetchUsers(); // Force refetch
         }
 
         setIsActionModalOpen(false);
@@ -348,14 +393,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
                 isOpen={isActionModalOpen}
                 onClose={() => setIsActionModalOpen(false)}
                 onConfirm={handleConfirmAction}
-                title={
-                    actionType === 'demote' ? 'Tornar Voluntário' :
-                        `${actionType === 'disable' ? 'Desativar' : 'Reativar'} Usuário`
-                }
-                message={
-                    actionType === 'demote' ? `Tem certeza de que deseja tornar ${userToAction?.user_metadata?.name} para voluntário? Ele será removido da liderança e seu perfil de voluntário será reativado.` :
-                        `Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o usuário ${userToAction?.email}?`
-                }
+                title={`${actionType === 'disable' ? 'Desativar' : 'Reativar'} Usuário`}
+                message={`Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o usuário ${userToAction?.email}?`}
+            />
+
+            <DemoteToVolunteerModal
+                isOpen={isDemoteModalOpen}
+                onClose={() => setIsDemoteModalOpen(false)}
+                onConfirm={handleConfirmDemote}
+                user={userToDemote}
+                departments={departments}
+                isDemoting={isDemoting}
+                error={demoteError}
             />
         </div>
     );

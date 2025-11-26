@@ -94,17 +94,18 @@ const AdminNotificationsPage: React.FC<AdminNotificationsPageProps> = ({ onDataC
         if (!selectedDepartmentId) return;
 
         const recipientsList: Recipient[] = [];
+        const departmentIds = [selectedDepartmentId]; // Assuming selectedDepartmentId is a single ID
 
         // Fetch leaders if selected
         if (includeLeaders) {
             // Primeiro busca os IDs dos líderes do departamento
             const { data: leadersIds } = await supabase
                 .from('department_leaders')
-                .select('leader_id')
-                .eq('department_id', selectedDepartmentId);
+                .select('user_id')
+                .in('department_id', departmentIds);
 
-            if (leadersIds && leadersIds.length > 0) {
-                const ids = leadersIds.map((l: any) => l.leader_id);
+            if (leadersIds) {
+                const ids = leadersIds.map((l: any) => l.user_id);
 
                 // Busca os detalhes dos usuários (líderes) via edge function para garantir acesso
                 const { data: usersData, error: usersError } = await supabase.functions.invoke('list-users');
