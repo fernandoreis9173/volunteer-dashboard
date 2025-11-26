@@ -6,6 +6,7 @@ import { useAdminUsers } from '../hooks/useQueries';
 import EditUserModal from './EditUserModal';
 import ConfirmationModal from './ConfirmationModal';
 import DemoteToVolunteerModal from './DemoteToVolunteerModal';
+import MakeLeaderModal from './MakeLeaderModal';
 import { getErrorMessage, getInitials } from '../lib/utils';
 
 interface AdminPageProps {
@@ -30,7 +31,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [userToAction, setUserToAction] = useState<User | null>(null);
-    const [actionType, setActionType] = useState<'disable' | 'enable' | 'demote' | null>(null);
+    const [actionType, setActionType] = useState<'disable' | 'enable' | 'demote' | 'promote_admin' | 'make_leader' | null>(null);
 
     // States for demote to volunteer modal
     const [isDemoteModalOpen, setIsDemoteModalOpen] = useState(false);
@@ -38,6 +39,12 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const [isDemoting, setIsDemoting] = useState(false);
     const [demoteError, setDemoteError] = useState<string | null>(null);
     const [departments, setDepartments] = useState<Department[]>([]);
+
+    // States for make leader modal
+    const [isMakeLeaderModalOpen, setIsMakeLeaderModalOpen] = useState(false);
+    const [userToMakeLeader, setUserToMakeLeader] = useState<User | null>(null);
+    const [isMakingLeader, setIsMakingLeader] = useState(false);
+    const [makeLeaderError, setMakeLeaderError] = useState<string | null>(null);
 
     // States for custom role dropdown
     const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
@@ -155,7 +162,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
         }
     };
 
-    const handleRequestAction = (user: User, type: 'disable' | 'enable' | 'demote') => {
+    const handleRequestAction = (user: User, type: 'disable' | 'enable' | 'demote' | 'promote_admin' | 'make_leader') => {
         if (type === 'demote') {
             // Open demote modal with department selection
             setUserToDemote({
@@ -165,6 +172,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
             });
             setIsDemoteModalOpen(true);
             setDemoteError(null);
+        } else if (type === 'make_leader') {
+            setUserToMakeLeader(user);
+            setIsMakeLeaderModalOpen(true);
+            setMakeLeaderError(null);
         } else {
             setUserToAction(user);
             setActionType(type);
@@ -196,18 +207,53 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
         }
     };
 
+    const handleConfirmMakeLeader = async (departmentId: number) => {
+        if (!userToMakeLeader) return;
+        setIsMakingLeader(true);
+        setMakeLeaderError(null);
+
+        try {
+            // We can reuse promote-to-leader as it handles setting role to leader and assigning department
+            const { error } = await supabase.functions.invoke('promote-to-leader', {
+                body: { userId: userToMakeLeader.id, departmentId },
+            });
+
+            if (error) throw error;
+
+            await refetchUsers();
+            onDataChange();
+            setIsMakeLeaderModalOpen(false);
+            setUserToMakeLeader(null);
+        } catch (err) {
+            setMakeLeaderError(getErrorMessage(err));
+        } finally {
+            setIsMakingLeader(false);
+        }
+    };
+
     const handleConfirmAction = async () => {
         if (!userToAction || !actionType) return;
 
         // Only handle disable/enable here (demote is handled by handleConfirmDemote)
-        const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
-        const { error } = await supabase.functions.invoke(functionName, {
-            body: { userId: userToAction.id },
-        });
-        if (error) {
-            alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
+        if (actionType === 'promote_admin') {
+            const { error } = await supabase.functions.invoke('update-permissions', {
+                body: { userId: userToAction.id, role: 'admin', permissions: [] }
+            });
+            if (error) {
+                alert(`Falha ao promover usuário: ${getErrorMessage(error)}`);
+            } else {
+                await refetchUsers();
+            }
         } else {
-            await refetchUsers(); // Force refetch
+            const functionName = actionType === 'disable' ? 'disable-user' : 'enable-user';
+            const { error } = await supabase.functions.invoke(functionName, {
+                body: { userId: userToAction.id },
+            });
+            if (error) {
+                alert(`Falha ao ${actionType === 'disable' ? 'desativar' : 'reativar'} usuário: ${getErrorMessage(error)}`);
+            } else {
+                await refetchUsers(); // Force refetch
+            }
         }
 
         setIsActionModalOpen(false);
@@ -360,9 +406,14 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
                                                     {activeMenu === user.id && (
                                                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-slate-200">
                                                             <ul className="py-1">
-                                                                <li><button onClick={() => { setEditingUser(user); setIsEditModalOpen(true); setActiveMenu(null); }} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Editar Permissões</button></li>
                                                                 {(user.user_metadata?.role === 'leader' || user.user_metadata?.role === 'lider') && (
-                                                                    <li><button onClick={() => handleRequestAction(user, 'demote')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Voluntário</button></li>
+                                                                    <>
+                                                                        <li><button onClick={() => handleRequestAction(user, 'promote_admin')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Admin</button></li>
+                                                                        <li><button onClick={() => handleRequestAction(user, 'demote')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Voluntário</button></li>
+                                                                    </>
+                                                                )}
+                                                                {user.user_metadata?.role === 'admin' && (
+                                                                    <li><button onClick={() => handleRequestAction(user, 'make_leader')} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Tornar Líder</button></li>
                                                                 )}
                                                                 {user.app_status === 'Inativo' ? (
                                                                     <li><button onClick={() => handleRequestAction(user, 'enable')} className="block w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50">Reativar Usuário</button></li>
@@ -393,8 +444,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
                 isOpen={isActionModalOpen}
                 onClose={() => setIsActionModalOpen(false)}
                 onConfirm={handleConfirmAction}
-                title={`${actionType === 'disable' ? 'Desativar' : 'Reativar'} Usuário`}
-                message={`Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o usuário ${userToAction?.email}?`}
+                title={actionType === 'promote_admin' ? 'Promover a Admin' : `${actionType === 'disable' ? 'Desativar' : 'Reativar'} Usuário`}
+                message={actionType === 'promote_admin' ? `Tem certeza de que deseja promover o usuário ${userToAction?.email} a Administrador?` : `Tem certeza de que deseja ${actionType === 'disable' ? 'desativar' : 'reativar'} o usuário ${userToAction?.email}?`}
             />
 
             <DemoteToVolunteerModal
@@ -405,6 +456,16 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
                 departments={departments}
                 isDemoting={isDemoting}
                 error={demoteError}
+            />
+
+            <MakeLeaderModal
+                isOpen={isMakeLeaderModalOpen}
+                onClose={() => setIsMakeLeaderModalOpen(false)}
+                onConfirm={handleConfirmMakeLeader}
+                user={userToMakeLeader}
+                departments={departments}
+                isProcessing={isMakingLeader}
+                error={makeLeaderError}
             />
         </div>
     );
