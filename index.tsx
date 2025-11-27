@@ -1,6 +1,18 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
+// Suppress Supabase debug logs in development
+if (process.env.NODE_ENV === 'development') {
+  const originalLog = console.log;
+  console.log = function (...args: any[]) {
+    // Filter out Supabase search endpoint logs
+    if (args.length > 0 && typeof args[0] === 'string' && args[0].includes('Search endpoint requested')) {
+      return;
+    }
+    originalLog.apply(console, args);
+  };
+}
+
 // Fix passive event listener warnings
 // This makes all touchstart, touchmove, wheel, and mousewheel listeners passive by default
 (function () {

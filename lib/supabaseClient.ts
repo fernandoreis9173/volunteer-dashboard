@@ -11,5 +11,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Inicializa o client do Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Inicializa o client do Supabase com configuração para desabilitar logs
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'x-client-info': 'volunteer-dashboard',
+    },
+  },
+  // Desabilita logs de debug do Supabase
+  db: {
+    schema: 'public',
+  },
+});
