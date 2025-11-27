@@ -214,6 +214,10 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             )
             .subscribe();
 
+        return () => {
+            supabase.removeChannel(subscription);
+        };
+
     }, [volunteerProfile?.id, isQrModalOpen, qrCodeEvent, session]);
 
     const handleRequestSwap = (event: VolunteerSchedule) => {
@@ -243,6 +247,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             setSwapRequestEvent(null);
         }
     };
+
     const handleRefresh = async () => {
         await Promise.all([
             invalidateEvents(),
