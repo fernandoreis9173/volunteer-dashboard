@@ -1,5 +1,27 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+
+// Fix passive event listener warnings
+// This makes all touchstart, touchmove, wheel, and mousewheel listeners passive by default
+(function () {
+  if (typeof EventTarget !== "undefined") {
+    const originalAddEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (type: string, listener: any, options?: any) {
+      const passiveEvents = ['touchstart', 'touchmove', 'wheel', 'mousewheel'];
+      if (passiveEvents.includes(type)) {
+        if (typeof options === 'object' && options !== null) {
+          if (options.passive === undefined) {
+            options.passive = true;
+          }
+        } else {
+          options = { passive: true, capture: typeof options === 'boolean' ? options : false };
+        }
+      }
+      return originalAddEventListener.call(this, type, listener, options);
+    };
+  }
+})();
+
 import App from './App';
 
 // --- Service Worker Registration ---
@@ -16,7 +38,7 @@ if ('serviceWorker' in navigator) {
       });
   });
 } else {
-    console.warn('Service Workers are not supported by this browser.');
+  console.warn('Service Workers are not supported by this browser.');
 }
 
 
