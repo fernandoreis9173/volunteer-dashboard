@@ -36,14 +36,42 @@
 
   <!-- Fix passive event listeners and suppress logs BEFORE any other code runs -->
   <script>
-    // Suppress Supabase debug logs
+    // Suppress Supabase debug logs (all console methods)
     (function () {
-      const originalLog = console.log;
-      console.log = function (...args) {
-        if (args.length > 0 && typeof args[0] === 'string' && args[0].includes('Search endpoint requested')) {
-          return;
+      const filter = function (args) {
+        if (args.length > 0) {
+          const firstArg = String(args[0]);
+          if (firstArg.includes('Search endpoint requested') ||
+            firstArg.includes('init_embed.js')) {
+            return true;
+          }
         }
+        return false;
+      };
+
+      const originalLog = console.log;
+      const originalInfo = console.info;
+      const originalDebug = console.debug;
+      const originalWarn = console.warn;
+
+      console.log = function (...args) {
+        if (filter(args)) return;
         originalLog.apply(console, args);
+      };
+
+      console.info = function (...args) {
+        if (filter(args)) return;
+        originalInfo.apply(console, args);
+      };
+
+      console.debug = function (...args) {
+        if (filter(args)) return;
+        originalDebug.apply(console, args);
+      };
+
+      console.warn = function (...args) {
+        if (filter(args)) return;
+        originalWarn.apply(console, args);
       };
     })();
 
