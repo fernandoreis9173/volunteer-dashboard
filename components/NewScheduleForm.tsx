@@ -201,8 +201,9 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
             // Buscar voluntários do departamento do líder
             const { data: vols, error: vError } = await supabase
                 .from('volunteer_departments')
-                .select('volunteers(id, name, email, initials, volunteer_departments(departments(name)))')
-                .eq('department_id', leaderDepartmentId);
+                .select('volunteers!inner(id, name, email, initials, status, volunteer_departments(departments(name)))')
+                .eq('department_id', leaderDepartmentId)
+                .eq('volunteers.status', 'Ativo');
 
             if (vError) {
                 console.error("Error fetching volunteers for leader", vError);
