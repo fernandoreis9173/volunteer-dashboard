@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+// import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from './lib/queryClient';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -937,7 +937,7 @@ const AppWithProviders = () => {
             <SplashScreen isVisible={showSplash} />
             <App />
             {/* DevTools apenas em desenvolvimento */}
-            {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
+            {/* {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />} */}
         </QueryClientProvider>
     );
 };
