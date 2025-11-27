@@ -14,6 +14,7 @@ import { useEvents, useDepartments, useInvalidateQueries } from '../hooks/useQue
 import QRScannerModal from './QRScannerModal';
 import AttendanceFlashCards from './AttendanceFlashCards';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
+import PullToRefresh from './PullToRefresh';
 
 interface LiveEventTimerProps {
     event: Event;
@@ -306,88 +307,97 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
     const isLeader = userProfile?.role === 'leader' || userProfile?.role === 'lider';
     const isAdmin = userProfile?.role === 'admin';
 
+    const handleRefresh = async () => {
+        await Promise.all([
+            invalidateEvents(),
+            fetchVolunteersAndDept()
+        ]);
+    };
+
     return (
-        <div className="space-y-8">
-            {notification && (
-                <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                    {notification.message}
-                </div>
-            )}
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Dashboard {departmentName && <span className="text-blue-600">- {departmentName}</span>}</h1>
-                    <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
+        <PullToRefresh onRefresh={handleRefresh}>
+            <div className="space-y-8">
+                {notification && (
+                    <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                        {notification.message}
+                    </div>
+                )}
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-800">Dashboard {departmentName && <span className="text-blue-600">- {departmentName}</span>}</h1>
+                        <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
+                    </div>
+
+                    {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
                 </div>
 
-                {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
-            </div>
+                {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{error}</div>}
 
-            {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{error}</div>}
+                <StatsRow stats={dashboardData.stats} userRole={userProfile?.role} />
 
-            <StatsRow stats={dashboardData.stats} userRole={userProfile?.role} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
-                <div className="lg:col-span-2">
-                    {dashboardData.chartData ? (
-                        <AnalysisChart data={dashboardData.chartData} />
-                    ) : (
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full animate-pulse">
-                            <div className="h-8 bg-slate-200 rounded w-1/2 mb-6"></div>
-                            <div className="h-[300px] bg-slate-200 rounded"></div>
-                        </div>
-                    )}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+                    <div className="lg:col-span-2">
+                        {dashboardData.chartData ? (
+                            <AnalysisChart data={dashboardData.chartData} />
+                        ) : (
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full animate-pulse">
+                                <div className="h-8 bg-slate-200 rounded w-1/2 mb-6"></div>
+                                <div className="h-[300px] bg-slate-200 rounded"></div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="lg:col-span-1">
+                        <ActiveVolunteersList volunteers={departmentVolunteers} stats={dashboardData.stats} userRole={userProfile?.role} />
+                    </div>
                 </div>
-                <div className="lg:col-span-1">
-                    <ActiveVolunteersList volunteers={departmentVolunteers} stats={dashboardData.stats} userRole={userProfile?.role} />
-                </div>
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
-                <div className="lg:col-span-2">
-                    <UpcomingShiftsList
-                        todaySchedules={dashboardData.todaySchedules}
-                        upcomingSchedules={dashboardData.upcomingSchedules}
-                        onViewDetails={handleViewDetails}
-                        userRole={userProfile?.role ?? null}
-                        leaderDepartmentId={userProfile?.department_id}
-                        onMarkAttendance={handleMarkAttendance}
-                        onViewTimeline={setViewingTimelineFor}
-                    />
-                </div>
-                <div className="lg:col-span-1 space-y-8">
-                    {isLeader && userProfile && (
-                        <AttendanceFlashCards
-                            schedules={dashboardData.todaySchedules}
-                            userProfile={userProfile}
-                            departmentVolunteers={departmentVolunteers}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+                    <div className="lg:col-span-2">
+                        <UpcomingShiftsList
+                            todaySchedules={dashboardData.todaySchedules}
+                            upcomingSchedules={dashboardData.upcomingSchedules}
+                            onViewDetails={handleViewDetails}
+                            userRole={userProfile?.role ?? null}
+                            leaderDepartmentId={userProfile?.department_id}
+                            onMarkAttendance={handleMarkAttendance}
+                            onViewTimeline={setViewingTimelineFor}
                         />
-                    )}
-                    {isAdmin && <ActivityFeed leaders={dashboardData.activeLeaders} />}
+                    </div>
+                    <div className="lg:col-span-1 space-y-8">
+                        {isLeader && userProfile && (
+                            <AttendanceFlashCards
+                                schedules={dashboardData.todaySchedules}
+                                userProfile={userProfile}
+                                departmentVolunteers={departmentVolunteers}
+                            />
+                        )}
+                        {isAdmin && <ActivityFeed leaders={dashboardData.activeLeaders} />}
+                    </div>
                 </div>
-            </div>
 
-            <EventDetailsModal
-                isOpen={!!selectedEvent}
-                event={selectedEvent}
-                onClose={() => setSelectedEvent(null)}
-                userRole={userProfile?.role}
-                leaderDepartmentId={userProfile?.department_id}
-            />
-            {isScannerOpen && (
-                <QRScannerModal
-                    isOpen={isScannerOpen}
-                    onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
-                    onScanSuccess={handleAutoConfirmAttendance}
-                    scanningEventName={scanningEvent?.name}
-                    scanResult={scanResult}
+                <EventDetailsModal
+                    isOpen={!!selectedEvent}
+                    event={selectedEvent}
+                    onClose={() => setSelectedEvent(null)}
+                    userRole={userProfile?.role}
+                    leaderDepartmentId={userProfile?.department_id}
                 />
-            )}
-            <EventTimelineViewerModal
-                isOpen={!!viewingTimelineFor}
-                onClose={() => setViewingTimelineFor(null)}
-                event={viewingTimelineFor}
-            />
-        </div>
+                {isScannerOpen && (
+                    <QRScannerModal
+                        isOpen={isScannerOpen}
+                        onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
+                        onScanSuccess={handleAutoConfirmAttendance}
+                        scanningEventName={scanningEvent?.name}
+                        scanResult={scanResult}
+                    />
+                )}
+                <EventTimelineViewerModal
+                    isOpen={!!viewingTimelineFor}
+                    onClose={() => setViewingTimelineFor(null)}
+                    event={viewingTimelineFor}
+                />
+            </div>
+        </PullToRefresh>
     );
 };
 

@@ -12,6 +12,7 @@ import RequestSwapModal from './RequestSwapModal';
 import VolunteerStatCard from './VolunteerStatCard';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
 import ConfettiCelebration from './ConfettiCelebration';
+import PullToRefresh from './PullToRefresh';
 
 interface LiveEventTimerProps {
     event: VolunteerEvent;
@@ -242,141 +243,150 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
 
     const userName = getShortName(session?.user?.user_metadata?.name);
 
+    const handleRefresh = async () => {
+        await Promise.all([
+            invalidateEvents(),
+            refetchDashboard()
+        ]);
+    };
+
     return (
-        <div className="space-y-6">
-            {notification && (
-                <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                    {notification.message}
+        <PullToRefresh onRefresh={handleRefresh}>
+            <div className="space-y-6">
+                {notification && (
+                    <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                        {notification.message}
+                    </div>
+                )}
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                    <div className="flex items-center space-x-4">
+                        {(session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture) ? (
+                            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                                <img src={session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture} alt={userName} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                            </div>
+                        ) : (
+                            <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold border-2 border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+                                {userName.charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Olá, {userName}!</h1>
+                            <p className="text-slate-500 dark:text-slate-400 mt-1">Bem-vindo(a) ao seu painel de voluntário.</p>
+                        </div>
+                    </div>
+                    {activeEvent && <LiveEventTimer event={activeEvent} onShowDetails={handleLiveEventNavigate} />}
                 </div>
-            )}
-            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                <div className="flex items-center space-x-4">
-                    {(session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture) ? (
-                        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                            <img src={session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture} alt={userName} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
-                        </div>
-                    ) : (
-                        <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold border-2 border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-                            {userName.charAt(0).toUpperCase()}
-                        </div>
-                    )}
-                    <div>
-                        <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Olá, {userName}!</h1>
-                        <p className="text-slate-500 dark:text-slate-400 mt-1">Bem-vindo(a) ao seu painel de voluntário.</p>
+
+                {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{error}</div>}
+
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-x sm:divide-y-0 divide-slate-200 dark:divide-slate-700">
+                        {statCardsData.map(card => (
+                            <VolunteerStatCard
+                                key={card.key}
+                                title={card.title}
+                                value={stats[card.key as keyof typeof stats]}
+                                icon={card.icon}
+                                color={card.color}
+                                loading={loading}
+                            />
+                        ))}
                     </div>
                 </div>
-                {activeEvent && <LiveEventTimer event={activeEvent} onShowDetails={handleLiveEventNavigate} />}
-            </div>
 
-            {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{error}</div>}
+                {invitations.length > 0 && (
+                    <div className="space-y-3">
+                        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Convites Pendentes</h2>
+                        {invitations.map(inv => (
+                            <InvitationCard key={inv.id} invitation={inv} onRespond={handleInvitationResponse} />
+                        ))}
+                    </div>
+                )}
 
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-x sm:divide-y-0 divide-slate-200 dark:divide-slate-700">
-                    {statCardsData.map(card => (
-                        <VolunteerStatCard
-                            key={card.key}
-                            title={card.title}
-                            value={stats[card.key as keyof typeof stats]}
-                            icon={card.icon}
-                            color={card.color}
-                            loading={loading}
-                        />
-                    ))}
-                </div>
-            </div>
-
-            {invitations.length > 0 && (
-                <div className="space-y-3">
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Convites Pendentes</h2>
-                    {invitations.map(inv => (
-                        <InvitationCard key={inv.id} invitation={inv} onRespond={handleInvitationResponse} />
-                    ))}
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
-                    {(loading || todayEvents.length > 0) && (
-                        <EventList
-                            title="Minhas Escalas de Hoje"
-                            events={todayEvents}
-                            volunteerId={volunteerProfile?.id}
-                            onGenerateQrCode={handleGenerateQrCode}
-                            onRequestSwap={handleRequestSwap}
-                            onViewTimeline={setViewingTimelineFor}
-                            isToday
-                            loading={loading}
-                        />
-                    )}
-                    {(loading || upcomingEvents.length > 0) && (
-                        <EventList
-                            title="Próximas Escalas"
-                            events={upcomingEvents}
-                            volunteerId={volunteerProfile?.id}
-                            onGenerateQrCode={handleGenerateQrCode}
-                            onRequestSwap={handleRequestSwap}
-                            onViewTimeline={setViewingTimelineFor}
-                            isToday={false}
-                            loading={loading}
-                        />
-                    )}
-                    {!loading && todayEvents.length === 0 && upcomingEvents.length === 0 && (
-                        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm text-center">
-                            <h3 className="text-lg font-medium text-slate-800 dark:text-slate-100">Nenhuma escala encontrada</h3>
-                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Você não está escalado para nenhum evento futuro no momento.</p>
-                        </div>
-                    )}
-                </div>
-
-                <div className="lg:col-span-1">
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-                        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Meus Departamentos</h2>
-                        {loading ? (
-                            <div className="space-y-3 animate-pulse">
-                                <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
-                                <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-6">
+                        {(loading || todayEvents.length > 0) && (
+                            <EventList
+                                title="Minhas Escalas de Hoje"
+                                events={todayEvents}
+                                volunteerId={volunteerProfile?.id}
+                                onGenerateQrCode={handleGenerateQrCode}
+                                onRequestSwap={handleRequestSwap}
+                                onViewTimeline={setViewingTimelineFor}
+                                isToday
+                                loading={loading}
+                            />
+                        )}
+                        {(loading || upcomingEvents.length > 0) && (
+                            <EventList
+                                title="Próximas Escalas"
+                                events={upcomingEvents}
+                                volunteerId={volunteerProfile?.id}
+                                onGenerateQrCode={handleGenerateQrCode}
+                                onRequestSwap={handleRequestSwap}
+                                onViewTimeline={setViewingTimelineFor}
+                                isToday={false}
+                                loading={loading}
+                            />
+                        )}
+                        {!loading && todayEvents.length === 0 && upcomingEvents.length === 0 && (
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm text-center">
+                                <h3 className="text-lg font-medium text-slate-800 dark:text-slate-100">Nenhuma escala encontrada</h3>
+                                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Você não está escalado para nenhum evento futuro no momento.</p>
                             </div>
-                        ) : departmentNames.length > 0 ? (
-                            <ul className="space-y-3">
-                                {departmentNames.map(name => (
-                                    <li key={name} className="flex items-center space-x-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-                                        {getDepartmentIcon(name)}
-                                        <span className="font-semibold text-slate-700 dark:text-slate-300">{name}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Você ainda não faz parte de nenhum departamento.</p>
                         )}
                     </div>
-                </div>
-            </div>
 
-            <QRCodeDisplayModal
-                isOpen={isQrModalOpen}
-                onClose={() => setIsQrModalOpen(false)}
-                data={qrCodeData}
-                title={`QR Code para ${qrCodeEvent?.name}`}
-                attendanceConfirmed={qrCodeEvent?.present === true}
-            />
-            <RequestSwapModal
-                isOpen={isSwapModalOpen}
-                onClose={() => setIsSwapModalOpen(false)}
-                onSubmit={handleSubmitSwapRequest}
-                event={swapRequestEvent}
-                isSubmitting={isSubmittingSwap}
-            />
-            <EventTimelineViewerModal
-                isOpen={!!viewingTimelineFor}
-                onClose={() => setViewingTimelineFor(null)}
-                event={viewingTimelineFor}
-            />
-            <ConfettiCelebration
-                isOpen={showCelebration}
-                onClose={handleCloseCelebration}
-                volunteerName={celebrationVolunteerName}
-            />
-        </div>
+                    <div className="lg:col-span-1">
+                        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Meus Departamentos</h2>
+                            {loading ? (
+                                <div className="space-y-3 animate-pulse">
+                                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                                    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                                </div>
+                            ) : departmentNames.length > 0 ? (
+                                <ul className="space-y-3">
+                                    {departmentNames.map(name => (
+                                        <li key={name} className="flex items-center space-x-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                                            {getDepartmentIcon(name)}
+                                            <span className="font-semibold text-slate-700 dark:text-slate-300">{name}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-slate-500 dark:text-slate-400">Você ainda não faz parte de nenhum departamento.</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <QRCodeDisplayModal
+                    isOpen={isQrModalOpen}
+                    onClose={() => setIsQrModalOpen(false)}
+                    data={qrCodeData}
+                    title={`QR Code para ${qrCodeEvent?.name}`}
+                    attendanceConfirmed={qrCodeEvent?.present === true}
+                />
+                <RequestSwapModal
+                    isOpen={isSwapModalOpen}
+                    onClose={() => setIsSwapModalOpen(false)}
+                    onSubmit={handleSubmitSwapRequest}
+                    event={swapRequestEvent}
+                    isSubmitting={isSubmittingSwap}
+                />
+                <EventTimelineViewerModal
+                    isOpen={!!viewingTimelineFor}
+                    onClose={() => setViewingTimelineFor(null)}
+                    event={viewingTimelineFor}
+                />
+                <ConfettiCelebration
+                    isOpen={showCelebration}
+                    onClose={handleCloseCelebration}
+                    volunteerName={celebrationVolunteerName}
+                />
+            </div>
+        </PullToRefresh>
     );
 };
 

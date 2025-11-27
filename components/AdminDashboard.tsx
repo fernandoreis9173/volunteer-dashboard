@@ -11,6 +11,7 @@ import EventDetailsModal from './EventDetailsModal';
 import ActiveVolunteersList from './ActiveVolunteersList';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
 import QRScannerModal from './QRScannerModal';
+import PullToRefresh from './PullToRefresh';
 
 interface LiveEventTimerProps {
     event: Event;
@@ -87,7 +88,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
         startDate: last30DaysStr
     });
 
-    const { data: statsData, isLoading: statsLoading, error: statsError } = useAdminDashboardStats();
+    const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useAdminDashboardStats();
 
     const dashboardData = useMemo(() => {
         const allEvents = (eventsData as unknown as DashboardEvent[]) || [];
@@ -227,76 +228,85 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
         }
     }, [scanningEvent, scanResult, invalidateEvents]);
 
-    return (
-        <div className="space-y-8">
-            {notification && (
-                <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                    {notification.message}
-                </div>
-            )}
-            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-                    <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
-                </div>
-                <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
-                    {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
-                    {activeEvent && (
-                        <button
-                            onClick={() => handleMarkAttendance(activeEvent as DashboardEvent)}
-                            className="p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors flex flex-row items-center justify-center gap-3 w-full md:w-auto md:px-6"
-                            aria-label="Marcar Presença"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="h-7 w-7 md:h-6 md:w-6">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
-                            </svg>
-                            <span className="text-lg md:text-base font-semibold">Marcar Presença</span>
-                        </button>
-                    )}
-                </div>
-            </div>
+    const handleRefresh = async () => {
+        await Promise.all([
+            invalidateEvents(),
+            refetchStats()
+        ]);
+    };
 
-            {statsError && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{getErrorMessage(statsError)}</div>}
-            <StatsRow stats={dashboardData.stats} userRole="admin" />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
-                <div className="lg:col-span-2">
-                    {dashboardData.chartData ? <AnalysisChart data={dashboardData.chartData} /> : <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full animate-pulse"><div className="h-8 bg-slate-200 rounded w-1/2 mb-6"></div><div className="h-[300px] bg-slate-200 rounded"></div></div>}
+    return (
+        <PullToRefresh onRefresh={handleRefresh}>
+            <div className="space-y-8">
+                {notification && (
+                    <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                        {notification.message}
+                    </div>
+                )}
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
+                        <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
+                    </div>
+                    <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
+                        {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
+                        {activeEvent && (
+                            <button
+                                onClick={() => handleMarkAttendance(activeEvent as DashboardEvent)}
+                                className="p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors flex flex-row items-center justify-center gap-3 w-full md:w-auto md:px-6"
+                                aria-label="Marcar Presença"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="h-7 w-7 md:h-6 md:w-6">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
+                                </svg>
+                                <span className="text-lg md:text-base font-semibold">Marcar Presença</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
-                <div className="lg:col-span-1">
-                    <ActiveVolunteersList stats={dashboardData.stats} userRole={'admin'} />
+
+                {statsError && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{getErrorMessage(statsError)}</div>}
+                <StatsRow stats={dashboardData.stats} userRole="admin" />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+                    <div className="lg:col-span-2">
+                        {dashboardData.chartData ? <AnalysisChart data={dashboardData.chartData} /> : <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full animate-pulse"><div className="h-8 bg-slate-200 rounded w-1/2 mb-6"></div><div className="h-[300px] bg-slate-200 rounded"></div></div>}
+                    </div>
+                    <div className="lg:col-span-1">
+                        <ActiveVolunteersList stats={dashboardData.stats} userRole={'admin'} />
+                    </div>
                 </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
-                <div className="lg:col-span-2">
-                    <UpcomingShiftsList
-                        todaySchedules={dashboardData.todaySchedules}
-                        upcomingSchedules={dashboardData.upcomingSchedules}
-                        onViewDetails={setSelectedEvent}
-                        userRole={'admin'}
-                        onMarkAttendance={handleMarkAttendance}
-                        onViewTimeline={setViewingTimelineFor}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+                    <div className="lg:col-span-2">
+                        <UpcomingShiftsList
+                            todaySchedules={dashboardData.todaySchedules}
+                            upcomingSchedules={dashboardData.upcomingSchedules}
+                            onViewDetails={setSelectedEvent}
+                            userRole={'admin'}
+                            onMarkAttendance={handleMarkAttendance}
+                            onViewTimeline={setViewingTimelineFor}
+                        />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <ActivityFeed leaders={dashboardData.activeLeaders} />
+                    </div>
+                </div>
+                <EventDetailsModal isOpen={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+                {isScannerOpen && (
+                    <QRScannerModal
+                        isOpen={isScannerOpen}
+                        onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
+                        onScanSuccess={handleAutoConfirmAttendance}
+                        scanningEventName={scanningEvent?.name}
+                        scanResult={scanResult}
                     />
-                </div>
-                <div className="lg:col-span-1">
-                    <ActivityFeed leaders={dashboardData.activeLeaders} />
-                </div>
-            </div>
-            <EventDetailsModal isOpen={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} />
-            {isScannerOpen && (
-                <QRScannerModal
-                    isOpen={isScannerOpen}
-                    onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
-                    onScanSuccess={handleAutoConfirmAttendance}
-                    scanningEventName={scanningEvent?.name}
-                    scanResult={scanResult}
+                )}
+                <EventTimelineViewerModal
+                    isOpen={!!viewingTimelineFor}
+                    onClose={() => setViewingTimelineFor(null)}
+                    event={viewingTimelineFor}
                 />
-            )}
-            <EventTimelineViewerModal
-                isOpen={!!viewingTimelineFor}
-                onClose={() => setViewingTimelineFor(null)}
-                event={viewingTimelineFor}
-            />
-        </div>
+            </div>
+        </PullToRefresh>
     );
 };
 
