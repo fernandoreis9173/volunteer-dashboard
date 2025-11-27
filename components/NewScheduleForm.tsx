@@ -136,7 +136,7 @@ const VolunteerItem: React.FC<VolunteerItemProps> = ({ volunteer, onAction, acti
 
 
 const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSave, isSaving, saveError: initialSaveError, userRole, leaderDepartmentId, allDepartments }) => {
-    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
+    const [formData, setFormData] = useState({ name: '', date: '', start_time: '', end_time: '', local: '', location_iframe: '', status: 'Pendente', observations: '', color: '' });
     const [selectedVolunteers, setSelectedVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [allVolunteers, setAllVolunteers] = useState<ProcessedVolunteerOption[]>([]);
     const [volunteerSearch, setVolunteerSearch] = useState('');
@@ -146,12 +146,15 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const statusDropdownRef = useRef<HTMLDivElement>(null);
     const [selectedDepartments, setSelectedDepartments] = useState<Department[]>([]);
     const [saveError, setSaveError] = useState<string | null>(initialSaveError);
-
+    const [defaultMapCode, setDefaultMapCode] = useState<string | null>(null);
+    const [defaultMapName, setDefaultMapName] = useState<string>('Chama Church');
 
 
     const isEditing = !!initialData;
     const isSchedulingMode = isEditing && (userRole === 'leader' || userRole === 'lider' || userRole === 'líder');
     const isAdminMode = userRole === 'admin';
+
+    // ... (keep existing useMemo hooks)
 
     const { dateTime: eventStartDateTime } = useMemo(() => {
         if (!initialData) return { dateTime: null };
@@ -175,6 +178,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
         setSaveError(initialSaveError);
     }, [initialSaveError]);
 
+    // ... (keep handleClickOutside)
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
@@ -185,6 +189,8 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+
+    // ... (keep fetchData)
     useEffect(() => {
         const fetchData = async () => {
             if (!isSchedulingAllowed || !leaderDepartmentId) {
@@ -232,6 +238,43 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     }, [isSchedulingAllowed, initialData, leaderDepartmentId]);
 
     useEffect(() => {
+        const loadDefaultMap = async () => {
+            if (isAdminMode) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('default_map_iframe, default_location_data')
+                        .eq('id', user.id)
+                        .single();
+
+                    if (profile) {
+                        let mapCode = profile.default_map_iframe;
+                        let mapName = 'Chama Church';
+
+                        if (profile.default_location_data) {
+                            // @ts-ignore
+                            if (profile.default_location_data.iframe) mapCode = profile.default_location_data.iframe;
+                            // @ts-ignore
+                            if (profile.default_location_data.name) mapName = profile.default_location_data.name;
+                        }
+
+                        if (mapCode) {
+                            setDefaultMapCode(mapCode);
+                            setDefaultMapName(mapName);
+                            if (!isEditing) {
+                                setFormData(prev => ({ ...prev, location_iframe: mapCode, local: mapName }));
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        loadDefaultMap();
+    }, [isEditing, isAdminMode]);
+
+
+    useEffect(() => {
         if (initialData) {
             const { dateTime: localStart } = convertUTCToLocal(initialData.date, initialData.start_time);
             const { dateTime: localEnd } = convertUTCToLocal(initialData.date, initialData.end_time);
@@ -258,6 +301,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 start_time: localStartTime,
                 end_time: localEndTime,
                 local: initialData.local || '',
+                location_iframe: initialData.location_iframe || '',
                 status: initialData.status,
                 observations: initialData.observations || '',
                 color: initialData.color || '',
@@ -290,14 +334,39 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 setSelectedDepartments(initialSelectedDepts);
             }
         } else {
-            setFormData({ name: '', date: '', start_time: '', end_time: '', local: '', status: 'Pendente', observations: '', color: '' });
+            // Reset form data, but keep location_iframe if it was set by the default map effect
+            setFormData(prev => ({
+                name: '',
+                date: '',
+                start_time: '',
+                end_time: '',
+                local: '',
+                location_iframe: prev.location_iframe, // Keep the default if set
+                status: 'Pendente',
+                observations: '',
+                color: ''
+            }));
             setSelectedVolunteers([]);
             setSelectedDepartments([]);
         }
     }, [initialData, isSchedulingMode, leaderDepartmentId, isAdminMode, allDepartments]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+        setFormData(prev => {
+            const newData = { ...prev, [name]: value };
+
+            // Auto-select default map if local name matches default name
+            if (name === 'local') {
+                if (defaultMapCode && defaultMapName && value.trim().toLowerCase() === defaultMapName.toLowerCase()) {
+                    newData.location_iframe = defaultMapCode;
+                } else {
+                    // Clear map if name doesn't match (simulating a search result)
+                    newData.location_iframe = '';
+                }
+            }
+            return newData;
+        });
     };
 
     const handleTimeChange = (name: 'start_time' | 'end_time', value: string) => {
@@ -430,6 +499,11 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                         <p><strong>Data:</strong> {new Date(formData.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
                         <p><strong>Horário:</strong> {formData.start_time.substring(0, 5)} - {formData.end_time.substring(0, 5)}</p>
                         {formData.local && <p><strong>Local:</strong> {formData.local}</p>}
+                        {formData.location_iframe && (
+                            <div className="mt-2 w-full h-48 rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                                <div dangerouslySetInnerHTML={{ __html: formData.location_iframe }} className="w-full h-full" />
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <>
@@ -492,7 +566,15 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                                 />
                             </div>
                         </div>
-                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" /></div>
+                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Local</label><input type="text" name="local" value={formData.local} onChange={handleInputChange} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg" placeholder="Digite o nome do local..." /></div>
+                        {formData.location_iframe && (
+                            <div className="mt-2 w-full h-48 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 relative group">
+                                <div dangerouslySetInnerHTML={{ __html: formData.location_iframe }} className="w-full h-full" />
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                    <span className="text-white font-semibold text-sm">Pré-visualização do Mapa</span>
+                                </div>
+                            </div>
+                        )}
                         {isAdminMode && (
                             <div>
                                 <div className="flex justify-between items-center mb-1">
@@ -636,7 +718,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 title="Confirmar Alteração de Status"
                 message='Tem certeza que deseja alterar o status do evento para "Confirmado"? Esta ação pode afetar a escalação de voluntários.'
             />
-        </div>
+        </div >
     );
 };
 

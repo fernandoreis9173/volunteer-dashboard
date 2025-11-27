@@ -37,6 +37,7 @@ export interface Event {
   event_departments: EventDepartment[];
   event_volunteers: EventVolunteer[];
   local?: string;
+  location_iframe?: string;
   observations?: string;
   color?: string;
   cronograma_principal_id?: string | null;
@@ -52,6 +53,7 @@ export interface DashboardEvent {
   end_time: string;
   status: string;
   local?: string;
+  location_iframe?: string;
   observations?: string;
   event_departments: { department_id: number; departments: { id: number; name: string; leader?: string; } | null }[] | null;
   event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } | null }[] | null;
@@ -173,6 +175,7 @@ export interface VolunteerSchedule {
   end_time: string;
   status: string;
   local?: string;
+  location_iframe?: string;
   observations?: string;
   department_id: number;
   department_name: string;

@@ -180,6 +180,9 @@ const EventCard: React.FC<EventCardProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center gap-x-4 gap-y-1 text-sm text-slate-500 mt-1">
                     <span className="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0h18" /></svg>{localFullDate}</span>
                     <span className="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>{localStartTime} - {localEndTime}</span>
+                    {event.local && (
+                        <span className="flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>{event.local}</span>
+                    )}
                 </div>
             </div>
 
@@ -251,6 +254,35 @@ const EventCard: React.FC<EventCardProps> = ({
 
             {expanded && (
                 <div className="mt-4 pt-4 border-t border-slate-200">
+                    {event.location_iframe && (
+                        <>
+                            <style dangerouslySetInnerHTML={{
+                                __html: `
+                                .map-container-responsive iframe {
+                                    position: absolute !important;
+                                    top: 0 !important;
+                                    left: 0 !important;
+                                    width: 100% !important;
+                                    height: 100% !important;
+                                    border: 0 !important;
+                                }
+                            ` }} />
+                            <div className="mb-6">
+                                <h4 className="text-sm font-bold text-slate-600 uppercase mb-3">Localização</h4>
+                                <div className="map-container-responsive w-full h-64 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 relative">
+                                    <div
+                                        dangerouslySetInnerHTML={{
+                                            __html: event.location_iframe
+                                                .replace(/width="[^"]*"/gi, '')
+                                                .replace(/height="[^"]*"/gi, '')
+                                        }}
+                                        className="absolute inset-0"
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
                     <h4 className="text-sm font-bold text-slate-600 uppercase mb-3">Departamentos e Voluntários</h4>
                     <div className="space-y-4">
                         {departmentsToDisplay.length > 0 ? departmentsToDisplay.map(({ departments }) => {

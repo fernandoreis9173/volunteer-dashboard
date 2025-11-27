@@ -41,6 +41,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
     const [currentPassword, setCurrentPassword] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [defaultMapIframe, setDefaultMapIframe] = useState('');
+    const [defaultLocationName, setDefaultLocationName] = useState('');
 
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -121,6 +123,30 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId, leaders]);
 
+    useEffect(() => {
+        const fetchMap = async () => {
+            if (userId) {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('default_map_iframe, default_location_data')
+                    .eq('id', userId)
+                    .single();
+                if (data) {
+                    if (data.default_location_data) {
+                        // @ts-ignore
+                        setDefaultMapIframe(data.default_location_data.iframe || '');
+                        // @ts-ignore
+                        setDefaultLocationName(data.default_location_data.name || '');
+                    } else {
+                        // Fallback for migration
+                        setDefaultMapIframe(data.default_map_iframe || '');
+                        setDefaultLocationName('Chama Church'); // Default name for existing
+                    }
+                }
+            }
+        };
+        fetchMap();
+    }, [userId]);
 
 
     const showSuccess = (message: string) => {
@@ -142,7 +168,23 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
             });
             if (updateError) throw updateError;
 
-            // Step 2: Refresh UI and show success
+            // Step 2: Update profile map iframe and location data
+            const locationData = {
+                name: defaultLocationName,
+                iframe: defaultMapIframe
+            };
+
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({
+                    default_map_iframe: defaultMapIframe, // Keep syncing for now
+                    default_location_data: locationData
+                })
+                .eq('id', user.id);
+
+            if (profileError) throw profileError;
+
+            // Step 3: Refresh UI and show success
             onUpdate(); // Refreshes sidebar etc.
             setIsEditingProfile(false);
             showSuccess('Perfil atualizado com sucesso!');
@@ -285,6 +327,57 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                             </button>
                         )}
                     </div>
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-slate-200">
+                    <h3 className="text-xl font-bold text-slate-800 mb-4">Localização Padrão</h3>
+
+                    {isEditingProfile ? (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">Nome do Local</label>
+                                <input
+                                    type="text"
+                                    value={defaultLocationName}
+                                    onChange={e => setDefaultLocationName(e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Ex: Chama Church"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">Google Maps Iframe</label>
+                                <textarea
+                                    value={defaultMapIframe}
+                                    onChange={e => setDefaultMapIframe(e.target.value)}
+                                    rows={3}
+                                    className="w-full p-2 border border-slate-300 rounded-md font-mono text-xs focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder='<iframe src="https://www.google.com/maps/embed?..."></iframe>'
+                                />
+                                <p className="text-xs text-slate-500 mt-1">Cole aqui o código de incorporação do Google Maps para ser usado como padrão em novos eventos.</p>
+                            </div>
+                        </div>
+                    ) : (
+                        defaultMapIframe ? (
+                            <div className="space-y-2">
+                                {defaultLocationName && (
+                                    <p className="font-semibold text-slate-800">{defaultLocationName}</p>
+                                )}
+                                <div className="w-full h-64 rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                                    <div dangerouslySetInnerHTML={{ __html: defaultMapIframe }} className="w-full h-full" />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-slate-50 rounded-lg p-6 text-center border border-dashed border-slate-300">
+                                <p className="text-slate-500 mb-3 text-sm">Nenhuma localização padrão configurada.</p>
+                                <button
+                                    onClick={() => setIsEditingProfile(true)}
+                                    className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg text-sm hover:bg-slate-50 transition-colors"
+                                >
+                                    Adicionar Localização
+                                </button>
+                            </div>
+                        )
+                    )}
                 </div>
 
                 <div className="mt-8 pt-8 border-t border-slate-200">

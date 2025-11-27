@@ -87,6 +87,31 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
               <span>{schedule.local}</span>
             </div>
           )}
+          {schedule.location_iframe && (
+            <>
+              <style dangerouslySetInnerHTML={{
+                __html: `
+                    .map-container-responsive iframe {
+                        position: absolute !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                        border: 0 !important;
+                    }
+                ` }} />
+              <div className="map-container-responsive mt-2 w-full h-32 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 relative">
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: schedule.location_iframe
+                      .replace(/width="[^"]*"/gi, '')
+                      .replace(/height="[^"]*"/gi, '')
+                  }}
+                  className="absolute inset-0"
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 

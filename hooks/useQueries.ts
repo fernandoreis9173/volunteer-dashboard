@@ -481,7 +481,7 @@ export const useVolunteerDashboardData = (userId: string | undefined) => {
                         department_id,
                         departments(name),
                         events(
-                            id, name, date, start_time, end_time, status, local, observations,
+                            id, name, date, start_time, end_time, status, local, location_iframe, observations,
                             cronograma_principal_id, cronograma_kids_id
                         )
                     `)
@@ -560,6 +560,7 @@ export const useVolunteerDashboardData = (userId: string | undefined) => {
                         end_time: evt.end_time,
                         status: evt.status,
                         local: evt.local,
+                        location_iframe: evt.location_iframe,
                         observations: evt.observations,
                         department_id: item.department_id,
                         department_name: item.departments?.name || 'Departamento',

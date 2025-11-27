@@ -507,6 +507,15 @@ const EventCard: React.FC<{
                                 </button>
                             </div>
                         )}
+                        {event.local && (
+                            <div className="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                                </svg>
+                                <span>{event.local}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="flex-shrink-0 ml-4">
@@ -519,6 +528,31 @@ const EventCard: React.FC<{
                     )}
                 </div>
             </div>
+            {event.location_iframe && (
+                <>
+                    <style dangerouslySetInnerHTML={{
+                        __html: `
+                                    .map-container-responsive iframe {
+                                        position: absolute !important;
+                                        top: 0 !important;
+                                        left: 0 !important;
+                                        width: 100% !important;
+                                        height: 100% !important;
+                                        border: 0 !important;
+                                    }
+                                ` }} />
+                    <div className="map-container-responsive mt-3 w-full h-32 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 dark:bg-slate-700 dark:border-slate-600 relative">
+                        <div
+                            dangerouslySetInnerHTML={{
+                                __html: event.location_iframe
+                                    .replace(/width="[^"]*"/gi, '')
+                                    .replace(/height="[^"]*"/gi, '')
+                            }}
+                            className="absolute inset-0"
+                        />
+                    </div>
+                </>
+            )}
             {/* Show buttons container if event is not finished, or if it is today (to show the "Encerrado" state) */}
             {(isToday || !isFinished) && (
                 <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-3">

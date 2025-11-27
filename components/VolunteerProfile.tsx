@@ -38,6 +38,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     const [newPassword, setNewPassword] = useState('');
     const [confirmNewPassword, setConfirmNewPassword] = useState('');
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [defaultMapIframe, setDefaultMapIframe] = useState('');
 
     // FIX: Stabilize dependency by extracting the user ID. This prevents the fetch effect
     // from re-running on every session token refresh, which caused the page to loop/refresh.
@@ -68,6 +69,17 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                 departments: departments
             };
             setVolunteerData(transformedProfile as DetailedVolunteer);
+
+            // Fetch profile data (default map)
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('default_map_iframe')
+                .eq('id', userId)
+                .single();
+
+            if (profileData) {
+                setDefaultMapIframe(profileData.default_map_iframe || '');
+            }
 
             const departmentIds = departments.map((d: any) => d.id);
 
@@ -157,6 +169,16 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                 .eq('id', volunteerData.id);
 
             if (updateError) throw updateError;
+
+            // Update profile data (default map)
+            if (userId) {
+                const { error: profileUpdateError } = await supabase
+                    .from('profiles')
+                    .update({ default_map_iframe: defaultMapIframe })
+                    .eq('id', userId);
+
+                if (profileUpdateError) throw profileUpdateError;
+            }
 
             // FIX: Use the correct Supabase v2 API `updateUser` to update user metadata.
             await supabase.auth.updateUser({ data: { name: formData.name } });
@@ -284,6 +306,19 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                                 ))}
                             </div>
                         </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Localizador Padrão (Google Maps Iframe)</label>
+                            <textarea
+                                value={defaultMapIframe}
+                                onChange={e => setDefaultMapIframe(e.target.value)}
+                                rows={3}
+                                className="w-full mt-1 p-2 border rounded-md dark:bg-slate-900 dark:border-slate-600 dark:text-slate-300 font-mono text-xs"
+                                placeholder='<iframe src="https://www.google.com/maps/embed?..."></iframe>'
+                            />
+                            <p className="text-xs text-slate-500 mt-1">Cole aqui o código de incorporação do Google Maps para ser usado como padrão em novos eventos.</p>
+                        </div>
+
                         {error && <p className="text-red-500">{error}</p>}
                         <div className="flex justify-end gap-4">
                             <button onClick={() => setIsEditing(false)} disabled={isSaving} className="px-4 py-2 bg-slate-200 dark:bg-slate-600 dark:text-slate-200 rounded-lg">Cancelar</button>
@@ -297,6 +332,25 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                             <p><strong>Email:</strong> {volunteerData.email}</p>
                             <p><strong>Telefone:</strong> {volunteerData.phone || 'Não informado'}</p>
                             <p><strong>Disponibilidade:</strong> {availabilityList.map(item => item ? item.charAt(0).toUpperCase() + item.slice(1) : '').join(', ') || 'Nenhuma'}</p>
+                        </div>
+
+                        <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
+                            <h4 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Localização Padrão</h4>
+                            {defaultMapIframe ? (
+                                <div className="w-full h-64 rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                                    <div dangerouslySetInnerHTML={{ __html: defaultMapIframe }} className="w-full h-full" />
+                                </div>
+                            ) : (
+                                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-6 text-center border border-dashed border-slate-300 dark:border-slate-700">
+                                    <p className="text-slate-500 dark:text-slate-400 mb-3 text-sm">Nenhuma localização padrão configurada.</p>
+                                    <button
+                                        onClick={() => setIsEditing(true)}
+                                        className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-medium rounded-lg text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                    >
+                                        Adicionar Localização
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="pt-6 border-t border-slate-200 dark:border-slate-700">

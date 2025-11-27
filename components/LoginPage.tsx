@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AuthView } from '../types';
 
@@ -19,7 +19,19 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
     const [view, setView] = useState<'sign_in' | 'forgot_password'>('sign_in');
     const [rememberMe, setRememberMe] = useState(true);
 
-    const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    const handleEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        setEmail(e.target.value);
+    }, []);
+
+    const handlePasswordChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        setPassword(e.target.value);
+    }, []);
+
+    const handleRememberMeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        setRememberMe(e.target.checked);
+    }, []);
+
+    const handleLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
@@ -46,9 +58,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [email, password, rememberMe]);
 
-    const handleGoogleLogin = async () => {
+    const handleGoogleLogin = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -67,9 +79,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
             setError(error.message || 'Falha ao conectar com Google.');
             setLoading(false);
         }
-    };
+    }, []);
 
-    const handlePasswordReset = async (e: React.FormEvent<HTMLFormElement>) => {
+    const handlePasswordReset = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
@@ -85,12 +97,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [email]);
 
     return (
-        <div className="min-h-screen w-full flex bg-white font-sans">
+        <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
             {/* Left Side - Form */}
-            <div className="w-full lg:w-1/2 flex flex-col items-center px-6 pt-8 pb-32 lg:p-24 bg-white relative z-10 min-h-screen">
+            <div className="w-full lg:w-1/2 flex flex-col items-center px-6 pt-8 pb-8 lg:p-24 bg-white relative z-10 min-h-screen overflow-y-auto">
                 <div className="w-full max-w-md space-y-6 lg:space-y-8 my-auto">
                     {/* Header */}
                     <div className="text-left">
@@ -142,8 +154,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
                                 <label htmlFor="email-address" className="block text-sm font-medium text-slate-700 ml-1 mb-1">Email</label>
                                 <input
                                     id="email-address" name="email" type="email" autoComplete="email" required
-                                    className="appearance-none block w-full px-4 py-3 border border-slate-200 rounded-full placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                    placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                                    className="appearance-none block w-full px-4 py-3 border border-slate-200 rounded-full placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="seu@email.com" value={email} onChange={handleEmailChange}
                                 />
                             </div>
                             {view === 'sign_in' && (
@@ -151,8 +163,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
                                     <label htmlFor="password" className="block text-sm font-medium text-slate-700 ml-1 mb-1">Senha</label>
                                     <input
                                         id="password" name="password" type="password" autoComplete="current-password" required
-                                        className="appearance-none block w-full px-4 py-3 border border-slate-200 rounded-full placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                        placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                                        className="appearance-none block w-full px-4 py-3 border border-slate-200 rounded-full placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="••••••••" value={password} onChange={handlePasswordChange}
                                     />
                                 </div>
                             )}
@@ -170,7 +182,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
                                         type="checkbox"
                                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
                                         checked={rememberMe}
-                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                        onChange={handleRememberMeChange}
                                     />
                                     <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-600">Lembrar de mim</label>
                                 </div>
@@ -202,8 +214,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
             {/* Right Side - Visuals */}
             <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-blue-600 to-indigo-700 relative overflow-hidden flex-col justify-center items-center p-12 text-white">
                 {/* Abstract Background Shapes */}
-                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-white opacity-10 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-400 opacity-20 rounded-full blur-3xl"></div>
+                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-white opacity-5 rounded-full"></div>
+                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-400 opacity-10 rounded-full"></div>
 
                 {/* Geometric Shapes mimicking 'stairs' */}
                 <div className="absolute top-1/4 left-0 w-full h-full opacity-10 pointer-events-none">
@@ -214,14 +226,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
                 {/* Floating Cards Container */}
                 <div className="relative w-full max-w-lg aspect-square mb-12 flex items-center justify-center">
                     {/* Central Graphic */}
-                    <div className="relative z-10 w-64 h-64 bg-white/10 backdrop-blur-md rounded-full border border-white/20 flex items-center justify-center shadow-2xl animate-pulse">
-                        <div className="w-48 h-48 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center">
+                    <div className="relative z-10 w-64 h-64 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 flex items-center justify-center shadow-2xl">
+                        <div className="w-48 h-48 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
                             <img src={LogoMobileIcon} className="h-24 w-24" alt="Logo" />
                         </div>
                     </div>
 
                     {/* Card 1: Volunteers */}
-                    <div className="absolute top-10 right-0 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 transform hover:scale-105 transition-transform duration-300">
+                    <div className="absolute top-10 right-0 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4">
                         <div className="bg-blue-100 p-3 rounded-xl">
                             <img src={VolunteerIcon} className="h-6 w-6 text-blue-600" alt="Voluntários" />
                         </div>
@@ -232,7 +244,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
                     </div>
 
                     {/* Card 2: Schedules */}
-                    <div className="absolute bottom-20 left-0 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 transform hover:scale-105 transition-transform duration-300">
+                    <div className="absolute bottom-20 left-0 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4">
                         <div className="bg-green-100 p-3 rounded-xl">
                             <img src={CalendarIcon} className="h-6 w-6 text-green-600" alt="Escalas" />
                         </div>
@@ -243,7 +255,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
                     </div>
 
                     {/* Card 3: Ranking/Points */}
-                    <div className="absolute bottom-0 right-10 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 transform hover:scale-105 transition-transform duration-300">
+                    <div className="absolute bottom-0 right-10 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4">
                         <div className="bg-yellow-100 p-3 rounded-xl">
                             <img src={RankingIcon} className="h-6 w-6 text-yellow-600" alt="Engajamento" />
                         </div>
