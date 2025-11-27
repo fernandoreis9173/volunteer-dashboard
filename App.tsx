@@ -41,6 +41,7 @@ import { supabase } from './lib/supabaseClient';
 // FIX: Restored Supabase v2 types to ensure type safety.
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
+import { useTodaysEvents } from './hooks/useQueries';
 
 // FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
 const areApiKeysConfigured =
@@ -135,9 +136,6 @@ const App: React.FC = () => {
     const hasLoginRedirected = useRef(false);
     const [theme, setTheme] = useState(getInitialTheme());
     const [adminSubPage, setAdminSubPage] = useState<'users' | 'notifications'>('users');
-
-    // State to cache today's events locally to avoid frequent DB hits
-    const [todaysEvents, setTodaysEvents] = useState<AppEvent[]>([]);
 
     // VAPID key is now hardcoded for production
     const VAPID_PUBLIC_KEY = 'BLENBc_aqRf1ndkS5ssPQTsZEkMeoOZvtKVYfe2fubKnz_Sh4CdrlzZwn--W37YrloW4841Xg-97v_xoX-xQmQk';
@@ -387,72 +385,17 @@ const App: React.FC = () => {
     const userDepartmentId = userProfile?.department_id;
     const userVolunteerId = userProfile?.volunteer_id;
 
-    // REFACTORED: Fetch DB Data - Only runs on mount
-    const fetchTodaysEvents = useCallback(async () => {
-        if (!userId || !userRole) {
-            // Only clear if we are definitely logged out or role missing
-            if (!userId) setTodaysEvents([]);
-            return;
-        }
+    // REFACTORED: Use React Query for Today's Events to ensure sync with other components
+    const { data: todaysEventsData = [] } = useTodaysEvents(
+        userId || '',
+        userRole || '',
+        userDepartmentId,
+        userVolunteerId
+    );
 
-        try {
-            let allEventsData: any[] | null = null;
-            let fetchError: any = null;
-
-            // Performance optimization: Only fetch events for TODAY
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const todayStr = `${year}-${month}-${day}`;
-
-            if (userRole === 'admin') {
-                // Admin: Direct filtered query instead of full history RPC
-                const { data, error } = await supabase
-                    .from('events')
-                    .select('*, event_departments(*, departments(*)), event_volunteers(*, volunteers(*))')
-                    .eq('date', todayStr)
-                    .eq('status', 'Confirmado');
-                allEventsData = data;
-                fetchError = error;
-            } else if ((userRole === 'leader' || userRole === 'lider') && userDepartmentId) {
-                // Leader: Direct filtered query (department + today)
-                const { data, error } = await supabase
-                    .from('events')
-                    .select('*, event_departments!inner(*, departments(*)), event_volunteers(*, volunteers(*))')
-                    .eq('date', todayStr)
-                    .eq('status', 'Confirmado')
-                    .eq('event_departments.department_id', userDepartmentId);
-                allEventsData = data;
-                fetchError = error;
-            } else if (userRole === 'volunteer' && userVolunteerId) {
-                // Volunteer: Direct query filtered by volunteer ID + today
-                const { data, error } = await supabase
-                    .from('events')
-                    .select('*, event_departments(*, departments(*)), event_volunteers!inner(*, volunteers(*))')
-                    .eq('event_volunteers.volunteer_id', userVolunteerId)
-                    .eq('date', todayStr)
-                    .eq('status', 'Confirmado');
-                allEventsData = data;
-                fetchError = error;
-            } else {
-                // If profile is loaded but no ID (e.g. pending), clear events
-                setTodaysEvents([]);
-                return;
-            }
-
-            if (fetchError) throw fetchError;
-
-            // Map raw data to AppEvent type
-            const eventsList: AppEvent[] = (allEventsData || []).map(item => item as unknown as AppEvent);
-            setTodaysEvents(eventsList);
-
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            console.error("Error fetching today's events:", errorMessage);
-            // Don't clear existing events on error to prevent flickering
-        }
-    }, [userId, userRole, userDepartmentId, userVolunteerId]);
+    const todaysEvents = useMemo(() => {
+        return (todaysEventsData as unknown as AppEvent[]) || [];
+    }, [todaysEventsData]);
 
     // REFACTORED: Check Local Logic - Runs every minute using cached data (No DB hits)
     const checkActiveEventLocally = useCallback(() => {
@@ -480,11 +423,11 @@ const App: React.FC = () => {
         setActiveEvent(liveEvent || null);
     }, [todaysEvents]);
 
-    // Effect 1: Initial Fetch (Realtime disabled for performance)
-    useEffect(() => {
-        if (!userId) return;
-        fetchTodaysEvents();
-    }, [userId, fetchTodaysEvents]);
+    // Effect 1: Removed manual fetch effect as useTodaysEvents handles it
+    // useEffect(() => {
+    //    if (!userId) return;
+    //    fetchTodaysEvents();
+    // }, [userId, fetchTodaysEvents]);
 
     // Effect 2: Check local time against cached data frequently (e.g., every 1 minute)
     // This is cheap CPU calculation, does NOT hit the database.

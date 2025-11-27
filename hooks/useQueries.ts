@@ -137,7 +137,7 @@ export const useTodaysEvents = (userId: string, userRole: string, departmentId?:
                 .eq('date', today)
                 .eq('status', 'Confirmado');
 
-            if (userRole === 'leader' && departmentId) {
+            if ((userRole === 'leader' || userRole === 'lider') && departmentId) {
                 query = query
                     .select('*, event_departments!inner(*, departments(*)), event_volunteers(*, volunteers(*))')
                     .eq('event_departments.department_id', departmentId);

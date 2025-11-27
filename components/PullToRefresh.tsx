@@ -11,35 +11,63 @@ const PullToRefresh: React.FC<PullToRefreshProps> = ({ onRefresh, children }) =>
     const [refreshing, setRefreshing] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     const [pullDistance, setPullDistance] = useState(0);
+    const isDragging = useRef(false);
 
     const THRESHOLD = 80; // Distance to pull to trigger refresh
     const MAX_PULL = 120; // Maximum distance visual pull
 
-    const handleTouchStart = (e: React.TouchEvent) => {
-        if (window.scrollY === 0) {
-            setStartY(e.touches[0].clientY);
+    // Helper to find the nearest scrollable parent
+    const getScrollParent = (node: HTMLElement | null): HTMLElement | Window => {
+        if (!node) return window;
+
+        const overflowY = window.getComputedStyle(node).overflowY;
+        const isScrollable = overflowY !== 'visible' && overflowY !== 'hidden';
+
+        if (isScrollable && node.scrollHeight > node.clientHeight) {
+            return node;
+        }
+
+        return getScrollParent(node.parentElement);
+    };
+
+    const getScrollTop = () => {
+        if (!contentRef.current) return 0;
+        const scrollParent = getScrollParent(contentRef.current);
+        if (scrollParent === window) {
+            return window.scrollY;
+        }
+        return (scrollParent as HTMLElement).scrollTop;
+    };
+
+    const handleStart = (clientY: number) => {
+        if (getScrollTop() <= 0) {
+            setStartY(clientY);
+            isDragging.current = true;
         }
     };
 
-    const handleTouchMove = (e: React.TouchEvent) => {
-        const touchY = e.touches[0].clientY;
-        const diff = touchY - startY;
+    const handleMove = (clientY: number) => {
+        if (!isDragging.current) return;
 
-        if (window.scrollY === 0 && diff > 0 && !refreshing) {
-            // Prevent default only if we are pulling down at the top
-            // Note: e.preventDefault() might not work in passive listeners (React default)
-            // but we can control the visual state.
+        const diff = clientY - startY;
 
+        // Only allow pulling if we are at the top and pulling down
+        if (getScrollTop() <= 0 && diff > 0 && !refreshing) {
             // Logarithmic resistance
             const resistance = diff * 0.5;
             const limitedPull = Math.min(resistance, MAX_PULL);
 
             setPullDistance(limitedPull);
-            setCurrentY(touchY);
+            setCurrentY(clientY);
+        } else {
+            // If we scrolled down or are pushing up, stop dragging logic
+            isDragging.current = false;
+            setPullDistance(0);
         }
     };
 
-    const handleTouchEnd = async () => {
+    const handleEnd = async () => {
+        isDragging.current = false;
         if (pullDistance > THRESHOLD && !refreshing) {
             setRefreshing(true);
             setPullDistance(60); // Snap to loading position
@@ -58,19 +86,48 @@ const PullToRefresh: React.FC<PullToRefreshProps> = ({ onRefresh, children }) =>
         setCurrentY(0);
     };
 
+    // Touch Handlers
+    const handleTouchStart = (e: React.TouchEvent) => handleStart(e.touches[0].clientY);
+    const handleTouchMove = (e: React.TouchEvent) => handleMove(e.touches[0].clientY);
+    const handleTouchEnd = () => handleEnd();
+
+    // Mouse Handlers (for desktop testing)
+    const handleMouseDown = (e: React.MouseEvent) => handleStart(e.clientY);
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (isDragging.current) {
+            // Prevent default drag behavior (text selection etc)
+            // e.preventDefault(); 
+            // Note: preventing default here might block text selection if not careful, 
+            // but for pull-to-refresh simulation it's often needed. 
+            // However, we only prevent if we are actually "pulling".
+            if (getScrollTop() <= 0 && (e.clientY - startY) > 0) {
+                // e.preventDefault(); // Optional, can cause issues with other interactions
+            }
+            handleMove(e.clientY);
+        }
+    };
+    const handleMouseUp = () => handleEnd();
+    const handleMouseLeave = () => {
+        if (isDragging.current) handleEnd();
+    };
+
     return (
         <div
             ref={contentRef}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
-            className="min-h-screen relative"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            className="min-h-full relative" // Changed from min-h-screen to min-h-full to fit container
         >
             {/* Spinner Container */}
             <div
-                className="fixed top-0 left-0 w-full flex justify-center items-center pointer-events-none z-50 transition-transform duration-200"
+                className="fixed top-20 left-0 w-full flex justify-center items-center pointer-events-none z-50 transition-transform duration-200"
                 style={{
-                    transform: `translateY(${pullDistance > 0 ? Math.min(pullDistance, 100) + 60 : -50}px)`,
+                    transform: `translateY(${pullDistance > 0 ? Math.min(pullDistance, 100) : -50}px)`,
                     opacity: pullDistance > 0 ? 1 : 0
                 }}
             >

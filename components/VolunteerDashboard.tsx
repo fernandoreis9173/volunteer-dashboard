@@ -244,10 +244,12 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
     const userName = getShortName(session?.user?.user_metadata?.name);
 
     const handleRefresh = async () => {
+        console.log('Refreshing dashboard...');
         await Promise.all([
             invalidateEvents(),
             refetchDashboard()
         ]);
+        console.log('Dashboard refreshed.');
     };
 
     return (
