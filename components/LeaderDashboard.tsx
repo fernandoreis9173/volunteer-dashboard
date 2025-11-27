@@ -302,36 +302,20 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
 
     const handleViewDetails = (event: DashboardEvent) => {
         setSelectedEvent(event);
-    };
-
-    const isLeader = userProfile?.role === 'leader' || userProfile?.role === 'lider';
-    const isAdmin = userProfile?.role === 'admin';
-
-    const handleRefresh = async () => {
-        await Promise.all([
-            invalidateEvents(),
-            fetchVolunteersAndDept()
-        ]);
-    };
-
-    return (
-        <PullToRefresh onRefresh={handleRefresh}>
-            <div className="space-y-8">
-                {notification && (
-                    <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                        {notification.message}
-                    </div>
+        <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+            {notification.message}
+        </div>
                 )}
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-slate-800">Dashboard {departmentName && <span className="text-blue-600">- {departmentName}</span>}</h1>
-                        <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
-                    </div>
+<div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+    <div>
+        <h1 className="text-3xl font-bold text-slate-800">Dashboard {departmentName && <span className="text-blue-600">- {departmentName}</span>}</h1>
+        <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
+    </div>
 
-                    {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
-                </div>
+    {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
+</div>
 
-                {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{error}</div>}
+{ error && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{error}</div> }
 
                 <StatsRow stats={dashboardData.stats} userRole={userProfile?.role} />
 
@@ -382,22 +366,24 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
                     userRole={userProfile?.role}
                     leaderDepartmentId={userProfile?.department_id}
                 />
-                {isScannerOpen && (
-                    <QRScannerModal
-                        isOpen={isScannerOpen}
-                        onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
-                        onScanSuccess={handleAutoConfirmAttendance}
-                        scanningEventName={scanningEvent?.name}
-                        scanResult={scanResult}
-                    />
-                )}
-                <EventTimelineViewerModal
-                    isOpen={!!viewingTimelineFor}
-                    onClose={() => setViewingTimelineFor(null)}
-                    event={viewingTimelineFor}
-                />
-            </div>
-        </PullToRefresh>
+{
+    isScannerOpen && (
+        <QRScannerModal
+            isOpen={isScannerOpen}
+            onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
+            onScanSuccess={handleAutoConfirmAttendance}
+            scanningEventName={scanningEvent?.name}
+            scanResult={scanResult}
+        />
+    )
+}
+<EventTimelineViewerModal
+    isOpen={!!viewingTimelineFor}
+    onClose={() => setViewingTimelineFor(null)}
+    event={viewingTimelineFor}
+/>
+            </div >
+        </PullToRefresh >
     );
 };
 
