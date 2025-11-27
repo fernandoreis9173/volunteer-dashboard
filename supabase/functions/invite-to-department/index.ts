@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     const { error: insertError } = await supabaseAdmin.from('invitations').insert({
       volunteer_id: volunteerId,
       department_id: departmentId,
-      leader_id: user.id,
+      user_id: user.id,
       status: 'pendente',
     });
     if (insertError) throw insertError;

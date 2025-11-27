@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabaseClient';
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
 import { useInvalidateQueries, useVolunteerDashboardData } from '../hooks/useQueries';
-import LiveEventDetailsModal from './LiveEventDetailsModal';
 import QRCodeDisplayModal from './QRCodeDisplayModal';
 import RequestSwapModal from './RequestSwapModal';
 import VolunteerStatCard from './VolunteerStatCard';
@@ -82,6 +81,21 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
     const { invalidateEvents } = useInvalidateQueries();
     const userId = session?.user?.id;
 
+    // State declarations moved to top
+    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+    const [qrCodeData, setQrCodeData] = useState<object | null>(null);
+    const [qrCodeEvent, setQrCodeEvent] = useState<VolunteerSchedule | null>(null);
+
+    const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
+    const [swapRequestEvent, setSwapRequestEvent] = useState<VolunteerSchedule | null>(null);
+    const [isSubmittingSwap, setIsSubmittingSwap] = useState(false);
+    const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const [viewingTimelineFor, setViewingTimelineFor] = useState<VolunteerSchedule | null>(null);
+
+    // Estados para celebração
+    const [showCelebration, setShowCelebration] = useState(false);
+    const [celebrationVolunteerName, setCelebrationVolunteerName] = useState<string>('');
+
     const showNotification = useCallback((message: string, type: 'success' | 'error') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 5000);
@@ -104,22 +118,6 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
         { key: 'totalScheduled', title: 'Total Escalado', icon: <ClipboardListIcon />, color: 'yellow' },
         { key: 'eventsToday', title: 'Eventos Hoje', icon: <CalendarIcon />, color: 'purple' }
     ];
-
-    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-    const [qrCodeData, setQrCodeData] = useState<object | null>(null);
-    const [qrCodeEvent, setQrCodeEvent] = useState<VolunteerSchedule | null>(null);
-
-    const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
-    const [swapRequestEvent, setSwapRequestEvent] = useState<VolunteerSchedule | null>(null);
-    const [isSubmittingSwap, setIsSubmittingSwap] = useState(false);
-    const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
-    const [viewingTimelineFor, setViewingTimelineFor] = useState<VolunteerSchedule | null>(null);
-
-    // Estados para celebração
-    const [showCelebration, setShowCelebration] = useState(false);
-    const [celebrationVolunteerName, setCelebrationVolunteerName] = useState<string>('');
-
-    // Fetch Dashboard Data Logic Removed - Handled by React Query
 
     const handleInvitationResponse = async (invitationId: number, response: 'aceito' | 'recusado') => {
         try {

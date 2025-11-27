@@ -246,52 +246,92 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
 
     const handleViewDetails = (event: DashboardEvent) => {
         setSelectedEvent(event);
-        onViewDetails = { handleViewDetails }
-        userRole = { userProfile?.role ?? null
-    }
-    leaderDepartmentId = { userProfile?.department_id }
-    onMarkAttendance = { handleMarkAttendance }
-    onViewTimeline = { setViewingTimelineFor }
-        />
-                    </div >
-    <div className="lg:col-span-1 space-y-8">
-        {isLeader && userProfile && (
-            <AttendanceFlashCards
-                schedules={dashboardData.todaySchedules}
-                userProfile={userProfile}
-                departmentVolunteers={departmentVolunteers}
-            />
-        )}
-        {isAdmin && <ActivityFeed leaders={dashboardData.activeLeaders} />}
-    </div>
-                </div >
+    };
 
-    <EventDetailsModal
-        isOpen={!!selectedEvent}
-        event={selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-        userRole={userProfile?.role}
-        leaderDepartmentId={userProfile?.department_id}
-    />
-{
-    isScannerOpen && (
-        <QRScannerModal
-            isOpen={isScannerOpen}
-            onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
-            onScanSuccess={handleAutoConfirmAttendance}
-            scanningEventName={scanningEvent?.name}
-            scanResult={scanResult}
-        />
-    )
-}
-<EventTimelineViewerModal
-    isOpen={!!viewingTimelineFor}
-    onClose={() => setViewingTimelineFor(null)}
-    event={viewingTimelineFor}
-/>
-            </div >
-        </PullToRefresh >
+    const isLeader = userProfile?.role === 'leader' || userProfile?.role === 'lider';
+    const isAdmin = userProfile?.role === 'admin';
+
+    return (
+        <PullToRefresh onRefresh={invalidateAll}>
+            <div className="space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-800">
+                            Dashboard {departmentName && <span className="text-blue-600">- {departmentName}</span>}
+                        </h1>
+                        <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
+                    </div>
+                    {activeEvent && (
+                        <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />
+                    )}
+                </div>
+
+                <StatsRow stats={dashboardData.stats} userRole={userProfile?.role} />
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2">
+                        <AnalysisChart data={dashboardData.chartData} />
+                    </div>
+                    <div className="lg:col-span-1">
+                        <ActiveVolunteersList
+                            volunteers={departmentVolunteers}
+                            stats={dashboardData.stats}
+                            userRole={userProfile?.role}
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2">
+                        <UpcomingShiftsList
+                            todaySchedules={dashboardData.todaySchedules}
+                            upcomingSchedules={dashboardData.upcomingSchedules}
+                            onViewDetails={handleViewDetails}
+                            userRole={userProfile?.role ?? null}
+                            leaderDepartmentId={userProfile?.department_id}
+                            onMarkAttendance={handleMarkAttendance}
+                            onViewTimeline={setViewingTimelineFor}
+                        />
+                    </div>
+                    <div className="lg:col-span-1 space-y-6">
+                        {isLeader && userProfile && (
+                            <AttendanceFlashCards
+                                schedules={dashboardData.todaySchedules}
+                                userProfile={userProfile}
+                                departmentVolunteers={departmentVolunteers}
+                            />
+                        )}
+                        {isAdmin && <ActivityFeed leaders={dashboardData.activeLeaders} />}
+                    </div>
+                </div>
+
+                <EventDetailsModal
+                    isOpen={!!selectedEvent}
+                    event={selectedEvent}
+                    onClose={() => setSelectedEvent(null)}
+                    userRole={userProfile?.role}
+                    leaderDepartmentId={userProfile?.department_id}
+                />
+
+                {isScannerOpen && (
+                    <QRScannerModal
+                        isOpen={isScannerOpen}
+                        onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
+                        onScanSuccess={handleAutoConfirmAttendance}
+                        scanningEventName={scanningEvent?.name}
+                        scanResult={scanResult}
+                    />
+                )}
+
+                <EventTimelineViewerModal
+                    isOpen={!!viewingTimelineFor}
+                    onClose={() => setViewingTimelineFor(null)}
+                    event={viewingTimelineFor}
+                />
+            </div>
+        </PullToRefresh>
     );
+
 };
 
 export default LeaderDashboard;
