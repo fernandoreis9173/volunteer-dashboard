@@ -85,10 +85,39 @@ export const useEvents = (options: UseEventsOptions = {}) => {
 
             query = query.order('date', { ascending: true });
 
-            const { data, error } = await query;
+            const { data: events, error } = await query;
 
             if (error) throw error;
-            return data;
+
+            // Enrich with avatars
+            const userIds = new Set<string>();
+            events?.forEach((event: any) => {
+                event.event_volunteers?.forEach((ev: any) => {
+                    if (ev.volunteers?.user_id) {
+                        userIds.add(ev.volunteers.user_id);
+                    }
+                });
+            });
+
+            if (userIds.size > 0) {
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('id, avatar_url')
+                    .in('id', Array.from(userIds));
+
+                const avatarMap = new Map();
+                profiles?.forEach((p: any) => avatarMap.set(p.id, p.avatar_url));
+
+                events?.forEach((event: any) => {
+                    event.event_volunteers?.forEach((ev: any) => {
+                        if (ev.volunteers?.user_id) {
+                            ev.volunteers.avatar_url = avatarMap.get(ev.volunteers.user_id);
+                        }
+                    });
+                });
+            }
+
+            return events;
         },
         staleTime: 10 * 60 * 1000, // 10 minutos (otimizado para scale)
         gcTime: 30 * 60 * 1000, // Garbage collection após 30 minutos
@@ -344,6 +373,11 @@ export const useInvalidateQueries = () => {
         invalidateEvents: () => queryClient.invalidateQueries({ queryKey: ['events'] }),
         invalidateDepartments: () => queryClient.invalidateQueries({ queryKey: ['departments'] }),
         invalidateVolunteers: () => queryClient.invalidateQueries({ queryKey: ['volunteers'] }),
+        invalidateVolunteersPage: () => queryClient.invalidateQueries({ queryKey: ['volunteers_page'] }),
+        invalidateDepartmentsPage: () => queryClient.invalidateQueries({ queryKey: ['departments_page'] }),
+        invalidateRanking: () => queryClient.invalidateQueries({ queryKey: ['ranking_data'] }),
+        invalidateTimelineTemplates: () => queryClient.invalidateQueries({ queryKey: ['timeline_templates'] }),
+        invalidateFrequencyPage: () => queryClient.invalidateQueries({ queryKey: ['frequency_events'] }),
         invalidateNotifications: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
         invalidateAll: () => queryClient.invalidateQueries(),
     };
@@ -354,7 +388,7 @@ export const useInvalidateQueries = () => {
 // ============================================
 
 // Função auxiliar para fetch de usuários (compartilhada)
-const fetchAdminUsers = async () => {
+export const fetchAdminUsers = async () => {
     const { data, error: fetchError } = await supabase.functions.invoke('list-users');
     if (fetchError) throw fetchError;
     if (data && data.error) throw new Error(data.error);
@@ -387,7 +421,36 @@ export const useLeaders = () => {
     });
 };
 
-export const useVolunteerDashboardData = (userId: string | undefined, leaders: User[]) => {
+export const useAdminDashboardStats = () => {
+    return useQuery({
+        queryKey: ['admin', 'dashboard_stats'],
+        queryFn: async () => {
+            const [
+                activeVolunteersCountRes,
+                departmentsCountRes,
+                activeLeadersRes,
+            ] = await Promise.all([
+                supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
+                supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
+                supabase.functions.invoke('list-users', { body: { context: 'dashboard' } }),
+            ]);
+
+            if (activeVolunteersCountRes.error) throw activeVolunteersCountRes.error;
+            if (departmentsCountRes.error) throw departmentsCountRes.error;
+            if (activeLeadersRes.error) throw activeLeadersRes.error;
+
+            return {
+                activeVolunteers: activeVolunteersCountRes.count ?? 0,
+                departments: departmentsCountRes.count ?? 0,
+                activeLeaders: activeLeadersRes.data?.users || [],
+            };
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutos
+        refetchOnWindowFocus: false,
+    });
+};
+
+export const useVolunteerDashboardData = (userId: string | undefined) => {
     return useQuery({
         queryKey: ['volunteer', 'dashboard', userId],
         queryFn: async () => {
@@ -410,7 +473,7 @@ export const useVolunteerDashboardData = (userId: string | undefined, leaders: U
             today.setHours(0, 0, 0, 0);
             const todayStr = today.toISOString().split('T')[0];
 
-            const [scheduleRes, rawInvitationsRes, totalPresencesRes, totalScheduledRes] = await Promise.all([
+            const [scheduleRes, rawInvitationsRes, totalPresencesRes, totalScheduledRes, leadersRes] = await Promise.all([
                 supabase
                     .from('event_volunteers')
                     .select(`
@@ -442,15 +505,20 @@ export const useVolunteerDashboardData = (userId: string | undefined, leaders: U
                     .select('events!inner(id)', { count: 'exact', head: true })
                     .eq('volunteer_id', volunteerId)
                     .eq('events.status', 'Confirmado'),
+
+                // Fetch leaders internally
+                fetchAdminUsers(),
             ]);
 
             if (scheduleRes.error) throw scheduleRes.error;
             if (rawInvitationsRes.error) throw rawInvitationsRes.error;
 
+            const leaders = leadersRes || [];
+
             // Process Invitations
             const rawInvitations = rawInvitationsRes.data || [];
             const leadersMap = new Map<string, string | null>();
-            leaders.forEach(l => leadersMap.set(l.id, l.user_metadata?.name || null));
+            leaders.forEach((l: any) => leadersMap.set(l.id, l.user_metadata?.name || null));
 
             const invitations: Invitation[] = rawInvitations.map((inv: any) => ({
                 id: inv.id,
@@ -474,7 +542,7 @@ export const useVolunteerDashboardData = (userId: string | undefined, leaders: U
 
             const deptLeaderMap = new Map<number, string>();
             (deptLeaders || []).forEach((dl: any) => {
-                const leaderUser = leaders.find(u => u.id === dl.user_id);
+                const leaderUser = leaders.find((u: any) => u.id === dl.user_id);
                 if (leaderUser) {
                     deptLeaderMap.set(dl.department_id, leaderUser.user_metadata?.name || 'Líder');
                 }
@@ -520,7 +588,210 @@ export const useVolunteerDashboardData = (userId: string | undefined, leaders: U
                 stats
             };
         },
-        enabled: !!userId && leaders.length > 0,
+        enabled: !!userId,
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+};
+
+export const useVolunteersPageData = (userRole: string | null, leaderDepartmentId: number | null) => {
+    return useQuery({
+        queryKey: ['volunteers_page', userRole, leaderDepartmentId],
+        queryFn: async () => {
+            const isLeader = userRole === 'leader' || userRole === 'lider';
+
+            // 1. Build query for volunteers
+            let query = supabase
+                .from('volunteers')
+                .select(`
+                    id,
+                    user_id,
+                    name,
+                    email,
+                    phone,
+                    initials,
+                    status,
+                    skills,
+                    availability,
+                    created_at,
+                    volunteer_departments (
+                        departments ( id, name )
+                    )
+                `);
+
+            if (isLeader) {
+                query = query.eq('status', 'Ativo');
+            }
+
+            // 2. Execute parallel fetches
+            const [volunteersRes, profilesRes, invitesRes, deptNameRes] = await Promise.all([
+                query.order('created_at', { ascending: false }),
+                supabase.from('profiles').select('id, avatar_url, role'),
+                (isLeader && leaderDepartmentId)
+                    ? supabase.from('invitations').select('volunteer_id').eq('department_id', leaderDepartmentId).eq('status', 'pendente')
+                    : Promise.resolve({ data: [], error: null }),
+                (isLeader && leaderDepartmentId)
+                    ? supabase.from('departments').select('name').eq('id', leaderDepartmentId).single()
+                    : Promise.resolve({ data: null, error: null })
+            ]);
+
+            if (volunteersRes.error) throw volunteersRes.error;
+            if (profilesRes.error) throw profilesRes.error;
+            if (invitesRes.error) throw invitesRes.error;
+
+            // 3. Process Data
+            const avatarMap = new Map<string, string>();
+            const roleMap = new Map<string, string>();
+
+            (profilesRes.data || []).forEach((profile: any) => {
+                if (profile.avatar_url) avatarMap.set(profile.id, profile.avatar_url);
+                if (profile.role) roleMap.set(profile.id, profile.role);
+            });
+
+            const masterVolunteers = (volunteersRes.data || [])
+                .map((volunteer: any) => {
+                    const approvedDepartments = (volunteer.volunteer_departments || [])
+                        .filter((relation: any) => relation.departments)
+                        .flatMap((relation: any) => relation.departments);
+
+                    return {
+                        ...volunteer,
+                        departments: approvedDepartments,
+                        volunteer_departments: volunteer.volunteer_departments,
+                        avatar_url: volunteer.user_id ? avatarMap.get(volunteer.user_id) : undefined
+                    };
+                })
+                .filter((volunteer: any) => {
+                    if (!volunteer.user_id) return true;
+                    const userRole = roleMap.get(volunteer.user_id);
+                    return userRole === 'volunteer';
+                }) as DetailedVolunteer[];
+
+            const pendingInvites = new Set((invitesRes.data || []).map((i: any) => i.volunteer_id));
+            const leaderDepartmentName = deptNameRes.data?.name || null;
+
+            return {
+                masterVolunteers,
+                pendingInvites,
+                leaderDepartmentName
+            };
+        },
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+};
+
+export const useRankingData = () => {
+    return useQuery({
+        queryKey: ['ranking_data'],
+        queryFn: async () => {
+            const [volunteersRes, attendanceRes, departmentsRes] = await Promise.all([
+                supabase.from('volunteers').select('id, user_id, name, initials, volunteer_departments(departments(id, name))').eq('status', 'Ativo'),
+                supabase.from('event_volunteers').select('volunteer_id, present, events(date)'),
+                supabase.from('departments').select('id, name').order('name')
+            ]);
+
+            if (volunteersRes.error) throw volunteersRes.error;
+            if (attendanceRes.error) throw attendanceRes.error;
+            if (departmentsRes.error) throw departmentsRes.error;
+
+            const volunteers = volunteersRes.data || [];
+            const userIds = volunteers.map((v: any) => v.user_id).filter(Boolean);
+
+            let avatarMap = new Map<string, string>();
+            if (userIds.length > 0) {
+                const { data: profiles, error: profilesError } = await supabase
+                    .from('profiles')
+                    .select('id, avatar_url')
+                    .in('id', userIds);
+
+                if (profilesError) {
+                    console.error("Error fetching avatars for ranking:", profilesError);
+                } else if (profiles) {
+                    profiles.forEach((p: any) => {
+                        if (p.avatar_url) avatarMap.set(p.id, p.avatar_url);
+                    });
+                }
+            }
+
+            const enrichedVolunteers = volunteers.map((v: any) => ({
+                ...v,
+                avatar_url: v.user_id ? avatarMap.get(v.user_id) : undefined
+            }));
+
+            return {
+                volunteers: enrichedVolunteers,
+                attendance: attendanceRes.data || [],
+                departments: departmentsRes.data || []
+            };
+        },
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+};
+
+export const useDepartmentsPageData = () => {
+    return useQuery({
+        queryKey: ['departments_page'],
+        queryFn: async () => {
+            // Step 1: Fetch all departments
+            const { data: departmentsData, error: departmentsError } = await supabase
+                .from('departments')
+                .select('*')
+                .order('name', { ascending: true });
+
+            if (departmentsError) throw departmentsError;
+
+            // Step 2: Fetch all leader relationships
+            const { data: leadersData, error: leadersError } = await supabase
+                .from('department_leaders')
+                .select('department_id, user_id');
+
+            if (leadersError) throw leadersError;
+
+            return {
+                departments: departmentsData || [],
+                departmentLeaders: leadersData || []
+            };
+        },
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+};
+
+export const useTimelineTemplates = () => {
+    return useQuery({
+        queryKey: ['timeline_templates'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('cronograma_modelos')
+                .select('*, cronograma_itens(*)')
+                .order('nome_modelo', { ascending: true });
+
+            if (error) throw error;
+            return data || [];
+        },
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: false,
+    });
+};
+
+export const useFrequencyPageData = () => {
+    return useQuery({
+        queryKey: ['frequency_events'],
+        queryFn: async () => {
+            const startOfYear = `${new Date().getFullYear()}-01-01`;
+
+            const { data, error } = await supabase
+                .from('events')
+                .select('*, event_departments(department_id, departments(id, name)), event_volunteers(volunteer_id, department_id, present, volunteers(id, name))')
+                .eq('status', 'Confirmado')
+                .gte('date', startOfYear)
+                .order('date', { ascending: false });
+
+            if (error) throw error;
+            return (data as any[]) || [];
+        },
         staleTime: 5 * 60 * 1000,
         refetchOnWindowFocus: false,
     });

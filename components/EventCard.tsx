@@ -12,7 +12,7 @@ const EventCountdownTimer: React.FC<{ date: string; startTime: string; endTime: 
         if (endDateTime < startDateTime) {
             endDateTime.setDate(endDateTime.getDate() + 1);
         }
-        
+
         const now = new Date();
         const difference = endDateTime.getTime() - now.getTime();
 
@@ -42,11 +42,11 @@ const EventCountdownTimer: React.FC<{ date: string; startTime: string; endTime: 
     if (countdown.isOver) {
         return (
             <div className="flex items-center space-x-2">
-                 <span className="flex h-3 w-3 relative">
+                <span className="flex h-3 w-3 relative">
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-slate-400"></span>
                 </span>
                 <span className="font-mono text-sm font-semibold text-slate-600">
-                   Evento encerrado
+                    Evento encerrado
                 </span>
             </div>
         )
@@ -61,7 +61,7 @@ const EventCountdownTimer: React.FC<{ date: string; startTime: string; endTime: 
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
             </span>
             <span className="font-mono text-sm font-semibold text-red-700">
-               Termina em: {pad(countdown.timeLeft.hours)}:{pad(countdown.timeLeft.minutes)}:{pad(countdown.timeLeft.seconds)}
+                Termina em: {pad(countdown.timeLeft.hours)}:{pad(countdown.timeLeft.minutes)}:{pad(countdown.timeLeft.seconds)}
             </span>
         </div>
     );
@@ -85,31 +85,31 @@ interface EventCardProps {
     isFilteredByMyDepartment?: boolean;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ 
-    event, 
-    userRole, 
-    leaderDepartmentId, 
-    onEdit, 
-    onDelete, 
-    onAddDepartment, 
+const EventCard: React.FC<EventCardProps> = ({
+    event,
+    userRole,
+    leaderDepartmentId,
+    onEdit,
+    onDelete,
+    onAddDepartment,
     onMarkAttendance,
     onGenerateQrCode,
     onRequestSwap,
     onViewTimeline,
-    isHighlighted = false, 
-    isFilteredByMyDepartment = false 
+    isHighlighted = false,
+    isFilteredByMyDepartment = false
 }) => {
     const [expanded, setExpanded] = useState(false);
     const [expandedDepartments, setExpandedDepartments] = useState<Set<number>>(new Set());
     const [now, setNow] = useState(new Date());
-    
+
     const isLeader = userRole === 'leader' || userRole === 'lider';
     const isAdmin = userRole === 'admin';
     const isDepartmentInvolved = isLeader && leaderDepartmentId ? event.event_departments.some(ed => ed.department_id === leaderDepartmentId) : false;
-    
+
     // Refresh 'now' every 10 seconds to ensure buttons update automatically when event starts/ends
     useEffect(() => {
-        const interval = setInterval(() => setNow(new Date()), 10000); 
+        const interval = setInterval(() => setNow(new Date()), 10000);
         return () => clearInterval(interval);
     }, []);
 
@@ -150,7 +150,7 @@ const EventCard: React.FC<EventCardProps> = ({
     };
 
     return (
-        <div 
+        <div
             className={`p-5 rounded-xl shadow-sm border transition-all duration-300 border-l-4 relative ${isHighlighted ? 'ring-2 ring-offset-2 ring-blue-500' : ''} ${isDepartmentInvolved ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200'}`}
             style={{ borderLeftColor: event.color || '#e2e8f0' }}
         >
@@ -161,8 +161,8 @@ const EventCard: React.FC<EventCardProps> = ({
                 </button>
                 {isAdmin && (
                     <>
-                    <button onClick={() => onEdit(event)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg></button>
-                    <button onClick={() => onDelete(event.id!)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-md hover:bg-red-50"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.067-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
+                        <button onClick={() => onEdit(event)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg></button>
+                        <button onClick={() => onDelete(event.id!)} className="p-1.5 text-slate-400 hover:text-red-600 rounded-md hover:bg-red-50"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.067-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg></button>
                     </>
                 )}
             </div>
@@ -208,11 +208,11 @@ const EventCard: React.FC<EventCardProps> = ({
                             )
                         )}
                         {isLeader && canLeaderSchedule && isDepartmentInvolved && (
-                             <button onClick={() => onEdit(event)} className="text-center px-4 py-2 text-sm bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 shadow-sm">
+                            <button onClick={() => onEdit(event)} className="text-center px-4 py-2 text-sm bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 shadow-sm">
                                 Escalar Voluntários
                             </button>
                         )}
-                         {isLeader && canLeaderSchedule && !isDepartmentInvolved && (
+                        {isLeader && canLeaderSchedule && !isDepartmentInvolved && (
                             <button onClick={() => onAddDepartment(event)} className="text-center px-4 py-2 text-sm bg-indigo-500 text-white font-semibold rounded-lg hover:bg-indigo-600 shadow-sm">
                                 Adicionar meu Departamento
                             </button>
@@ -250,76 +250,80 @@ const EventCard: React.FC<EventCardProps> = ({
             </div>
 
             {expanded && (
-            <div className="mt-4 pt-4 border-t border-slate-200">
-                <h4 className="text-sm font-bold text-slate-600 uppercase mb-3">Departamentos e Voluntários</h4>
-                <div className="space-y-4">
-                    {departmentsToDisplay.length > 0 ? departmentsToDisplay.map(({ departments }) => {
-                        if (!departments) return null;
-                        const volunteersForDept = (event.event_volunteers || []).filter(ev => ev.department_id === departments.id);
-                        const presentCount = volunteersForDept.filter(v => v.present).length;
-                        const hasScheduled = volunteersForDept.length > 0;
-                        const isLeadersDept = isLeader && leaderDepartmentId === departments.id;
+                <div className="mt-4 pt-4 border-t border-slate-200">
+                    <h4 className="text-sm font-bold text-slate-600 uppercase mb-3">Departamentos e Voluntários</h4>
+                    <div className="space-y-4">
+                        {departmentsToDisplay.length > 0 ? departmentsToDisplay.map(({ departments }) => {
+                            if (!departments) return null;
+                            const volunteersForDept = (event.event_volunteers || []).filter(ev => ev.department_id === departments.id);
+                            const presentCount = volunteersForDept.filter(v => v.present).length;
+                            const hasScheduled = volunteersForDept.length > 0;
+                            const isLeadersDept = isLeader && leaderDepartmentId === departments.id;
 
-                        const MAX_VISIBLE_VOLUNTEERS = 3;
-                        const isLongList = volunteersForDept.length > MAX_VISIBLE_VOLUNTEERS;
-                        const isDeptExpanded = expandedDepartments.has(departments.id);
-                        const visibleVolunteers = isLongList && !isDeptExpanded
-                            ? volunteersForDept.slice(0, MAX_VISIBLE_VOLUNTEERS)
-                            : volunteersForDept;
+                            const MAX_VISIBLE_VOLUNTEERS = 3;
+                            const isLongList = volunteersForDept.length > MAX_VISIBLE_VOLUNTEERS;
+                            const isDeptExpanded = expandedDepartments.has(departments.id);
+                            const visibleVolunteers = isLongList && !isDeptExpanded
+                                ? volunteersForDept.slice(0, MAX_VISIBLE_VOLUNTEERS)
+                                : volunteersForDept;
 
-                        return (
-                        <div key={departments.id} className={`p-4 rounded-lg ${isLeadersDept ? 'bg-blue-50' : 'bg-slate-50/70'}`}>
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className="flex items-center space-x-3">
-                                        <p className={`font-bold text-lg ${isLeadersDept ? 'text-blue-800' : 'text-slate-800'}`}>{departments.name}</p>
-                                        {isLeadersDept && (
-                                            <span className="text-xs font-semibold px-2 py-1 rounded-md bg-blue-600 text-white">Seu Departamento</span>
-                                        )}
+                            return (
+                                <div key={departments.id} className={`p-4 rounded-lg ${isLeadersDept ? 'bg-blue-50' : 'bg-slate-50/70'}`}>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="flex items-center space-x-3">
+                                                <p className={`font-bold text-lg ${isLeadersDept ? 'text-blue-800' : 'text-slate-800'}`}>{departments.name}</p>
+                                                {isLeadersDept && (
+                                                    <span className="text-xs font-semibold px-2 py-1 rounded-md bg-blue-600 text-white">Seu Departamento</span>
+                                                )}
+                                            </div>
+                                            {departments.leader && (
+                                                <p className="text-xs text-slate-500 font-medium mt-1">Líder: {departments.leader}</p>
+                                            )}
+                                        </div>
+                                        <span className={`flex items-center space-x-1.5 text-sm font-semibold ${hasScheduled ? 'text-green-600' : 'text-amber-600'}`}>
+                                            {hasScheduled ? <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0 1 18 0Z" /></svg>}
+                                            <span>{hasScheduled ? `Presentes: ${presentCount}/${volunteersForDept.length}` : 'Pendente'}</span>
+                                        </span>
                                     </div>
-                                    {departments.leader && (
-                                        <p className="text-xs text-slate-500 font-medium mt-1">Líder: {departments.leader}</p>
+                                    {hasScheduled && (
+                                        <div className="mt-3">
+                                            <div className="flex flex-wrap gap-2">
+                                                {visibleVolunteers.map(v => {
+                                                    if (!v.volunteers) return null;
+                                                    const volunteerName = v.volunteers.name || '';
+                                                    return (
+                                                        <div key={v.volunteer_id} className={`flex items-center space-x-2 pl-1 pr-3 py-1 rounded-full text-sm font-semibold border ${v.present ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                                                            <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ${v.present ? 'bg-green-500' : 'bg-slate-500'} overflow-hidden`}>
+                                                                {v.volunteers.avatar_url ? (
+                                                                    <img src={v.volunteers.avatar_url} alt={volunteerName} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    v.volunteers.initials
+                                                                )}
+                                                            </div>
+                                                            <span>{volunteerName}</span>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                            {isLongList && (
+                                                <button
+                                                    onClick={() => toggleDepartmentExpansion(departments.id)}
+                                                    className="text-sm font-semibold text-blue-600 hover:text-blue-800 mt-2"
+                                                >
+                                                    {isDeptExpanded
+                                                        ? 'Ver menos'
+                                                        : `+ ${volunteersForDept.length - MAX_VISIBLE_VOLUNTEERS} voluntário(s)`
+                                                    }
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                                <span className={`flex items-center space-x-1.5 text-sm font-semibold ${hasScheduled ? 'text-green-600' : 'text-amber-600'}`}>
-                                    {hasScheduled ? <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0 1 18 0Z" /></svg>}
-                                    <span>{hasScheduled ? `Presentes: ${presentCount}/${volunteersForDept.length}` : 'Pendente'}</span>
-                                </span>
-                            </div>
-                            {hasScheduled && (
-                                <div className="mt-3">
-                                    <div className="flex flex-wrap gap-2">
-                                        {visibleVolunteers.map(v => {
-                                            if (!v.volunteers) return null;
-                                            const volunteerName = v.volunteers.name || '';
-                                            return (
-                                                <div key={v.volunteer_id} className={`flex items-center space-x-2 pl-1 pr-3 py-1 rounded-full text-sm font-semibold border ${v.present ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                                                    <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ${v.present ? 'bg-green-500' : 'bg-slate-500'}`}>
-                                                        {v.volunteers.initials}
-                                                    </div>
-                                                    <span>{volunteerName}</span>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                    {isLongList && (
-                                        <button 
-                                            onClick={() => toggleDepartmentExpansion(departments.id)}
-                                            className="text-sm font-semibold text-blue-600 hover:text-blue-800 mt-2"
-                                        >
-                                            {isDeptExpanded
-                                                ? 'Ver menos'
-                                                : `+ ${volunteersForDept.length - MAX_VISIBLE_VOLUNTEERS} voluntário(s)`
-                                            }
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                        )
-                    }) : <p className="text-sm text-slate-500">Nenhum departamento para exibir com os filtros atuais.</p>}
+                            )
+                        }) : <p className="text-sm text-slate-500">Nenhum departamento para exibir com os filtros atuais.</p>}
+                    </div>
                 </div>
-            </div>
             )}
         </div>
     );

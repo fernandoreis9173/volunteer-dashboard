@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 // FIX: Use 'type' import for User to resolve potential module resolution issues with Supabase v2.
 import { type User } from '@supabase/supabase-js';
 import { getErrorMessage } from '../lib/utils';
+import { useDepartmentsPageData, useInvalidateQueries } from '../hooks/useQueries';
 import Pagination from './Pagination';
 
 interface DepartmentsPageProps {
@@ -19,10 +20,18 @@ interface DepartmentsPageProps {
 const ITEMS_PER_PAGE = 9;
 
 const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepartmentId, leaders, onLeadersChange }) => {
+  const { invalidateDepartmentsPage } = useInvalidateQueries();
+  const { data: pageData, isLoading, error: pageError } = useDepartmentsPageData();
+
+  const masterDepartments = pageData?.departments || [];
+  const departmentLeaders = pageData?.departmentLeaders || [];
+  const loading = isLoading;
+  const error = pageError ? getErrorMessage(pageError) : null;
+
   const [isFormVisible, setIsFormVisible] = useState(false);
-  const [masterDepartments, setMasterDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // const [masterDepartments, setMasterDepartments] = useState<Department[]>([]); // Replaced by hook
+  // const [loading, setLoading] = useState(true); // Replaced by hook
+  // const [error, setError] = useState<string | null>(null); // Replaced by hook
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
@@ -31,7 +40,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [departmentToDeleteId, setDepartmentToDeleteId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [leaderAssignments, setLeaderAssignments] = useState<Map<string, number>>(new Map());
+  // const [leaderAssignments, setLeaderAssignments] = useState<Map<string, number>>(new Map()); // Derived from data
 
   const isLeader = userRole === 'leader' || userRole === 'lider';
 
@@ -46,65 +55,27 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
     };
   }, [inputValue]);
 
-  const fetchDepartments = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Step 1: Fetch all departments
-      const { data: departmentsData, error: departmentsError } = await supabase
-        .from('departments')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (departmentsError) throw departmentsError;
-
-      // Step 2: Fetch all leader relationships
-      const { data: leadersData, error: leadersError } = await supabase
-        .from('department_leaders')
-        .select('department_id, user_id');
-
-      if (leadersError) throw leadersError;
-
-      // Step 3: Join them in the client AND build assignments map simultaneously
-      const leadersByDept = new Map<number, { id: string; name: string }[]>();
-      const assignmentsMap = new Map<string, number>();
-
-      (leadersData || []).forEach(rel => {
-        // Build list for cards
-        if (!leadersByDept.has(rel.department_id)) {
-          leadersByDept.set(rel.department_id, []);
-        }
-        leadersByDept.get(rel.department_id)!.push({ id: rel.user_id, name: '' }); // Name is enriched later
-
-        // Build map for form validation (Optimization: done here to avoid extra fetch)
-        assignmentsMap.set(rel.user_id, rel.department_id);
-      });
-
-      const depts = (departmentsData || []).map((d: any) => ({
-        ...d,
-        leaders: leadersByDept.get(d.id) || []
-      }));
-
-      setMasterDepartments(depts as Department[]);
-      setLeaderAssignments(assignmentsMap);
-
-    } catch (fetchError) {
-      const errorMessage = getErrorMessage(fetchError);
-      console.error('Error fetching departments:', errorMessage);
-      setError(`Não foi possível carregar os departamentos: ${errorMessage}`);
-      setMasterDepartments([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchDepartments();
-  }, [fetchDepartments]);
+  const leaderAssignments = useMemo(() => {
+    const assignmentsMap = new Map<string, number>();
+    (departmentLeaders || []).forEach(rel => {
+      assignmentsMap.set(rel.user_id, rel.department_id);
+    });
+    return assignmentsMap;
+  }, [departmentLeaders]);
 
   const enrichedDepartments = useMemo(() => {
+    // Build list for cards
+    const leadersByDept = new Map<number, { id: string; name: string }[]>();
+    (departmentLeaders || []).forEach(rel => {
+      if (!leadersByDept.has(rel.department_id)) {
+        leadersByDept.set(rel.department_id, []);
+      }
+      leadersByDept.get(rel.department_id)!.push({ id: rel.user_id, name: '' });
+    });
+
     return masterDepartments.map(dept => {
-      const deptLeaders = dept.leaders.map(leaderInfo => {
+      const deptLeadersRaw = leadersByDept.get(dept.id) || [];
+      const deptLeaders = deptLeadersRaw.map(leaderInfo => {
         const leaderUser = leaders.find(l => l.id === leaderInfo.id);
         return {
           id: leaderInfo.id,
@@ -120,7 +91,9 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
         leader_id: deptLeaders[0]?.id || null
       };
     });
-  }, [masterDepartments, leaders]);
+  }, [masterDepartments, departmentLeaders, leaders]);
+
+
 
   const filteredDepartments = useMemo(() => {
     let departments = [...enrichedDepartments];
@@ -182,7 +155,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
     if (deleteError) {
       alert(`Falha ao excluir departamento: ${getErrorMessage(deleteError)}`);
     } else {
-      await fetchDepartments();
+      invalidateDepartmentsPage();
     }
     handleCancelDelete();
   };
@@ -221,7 +194,7 @@ const DepartmentsPage: React.FC<DepartmentsPageProps> = ({ userRole, leaderDepar
         throw new Error(`O departamento foi salvo, mas a atribuição de líderes falhou. Erro: ${getErrorMessage(leaderUpdateError)}`);
       }
 
-      await fetchDepartments(); // Refetch all department data
+      invalidateDepartmentsPage(); // Refetch all department data
       onLeadersChange(); // Trigger refetch of global leader list in App.tsx
       hideForm();
 

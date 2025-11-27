@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient';
 // FIX: Import the 'User' type from the central 'types.ts' module to resolve the export error.
 import { EnrichedUser, User, Department } from '../types';
-import { useAdminUsers } from '../hooks/useQueries';
+import { useAdminUsers, useActiveDepartments } from '../hooks/useQueries';
 import EditUserModal from './EditUserModal';
 import ConfirmationModal from './ConfirmationModal';
 import DemoteToVolunteerModal from './DemoteToVolunteerModal';
@@ -38,7 +38,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const [userToDemote, setUserToDemote] = useState<{ id: string; name: string; email: string } | null>(null);
     const [isDemoting, setIsDemoting] = useState(false);
     const [demoteError, setDemoteError] = useState<string | null>(null);
-    const [departments, setDepartments] = useState<Department[]>([]);
+    // const [departments, setDepartments] = useState<Department[]>([]); // Replaced by hook
 
     // States for make leader modal
     const [isMakeLeaderModalOpen, setIsMakeLeaderModalOpen] = useState(false);
@@ -59,19 +59,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onDataChange }) => {
     const listError = listErrorObject ? getErrorMessage(listErrorObject) : null;
 
     // Fetch departments for demote modal
-    useEffect(() => {
-        const fetchDepartments = async () => {
-            const { data, error } = await supabase
-                .from('departments')
-                .select('id, name')
-                .eq('status', 'Ativo')
-                .order('name');
-            if (data && !error) {
-                setDepartments(data);
-            }
-        };
-        fetchDepartments();
-    }, []);
+    const { data: departments = [] } = useActiveDepartments();
 
     // Fetch Logic for User Management - REMOVED (Handled by useAdminUsers)
     /*

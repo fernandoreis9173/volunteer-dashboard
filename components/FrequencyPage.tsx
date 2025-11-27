@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage, convertUTCToLocal } from '../lib/utils';
+import { useFrequencyPageData } from '../hooks/useQueries';
 import CustomDatePicker from './CustomDatePicker';
 import Pagination from './Pagination';
 import jsPDF from 'jspdf';
@@ -22,18 +23,18 @@ const VolunteerStatusBadge: React.FC<{ present: boolean | null }> = ({ present }
 
 
 const FrequencyPage: React.FC = () => {
-    const [masterEvents, setMasterEvents] = useState<Event[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { data: masterEvents = [], isLoading, error: queryError } = useFrequencyPageData();
+    const loading = isLoading;
+    const error = queryError ? getErrorMessage(queryError) : null;
 
     const [dateFilters, setDateFilters] = useState<{ start: string; end: string }>({ start: '', end: '' });
     const [attendanceFilter, setAttendanceFilter] = useState<string>('all');
-    
+
     const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
     const [currentPage, setCurrentPage] = useState(1);
     const [isAttendanceDropdownOpen, setIsAttendanceDropdownOpen] = useState(false);
     const attendanceDropdownRef = useRef<HTMLDivElement>(null);
-    
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (attendanceDropdownRef.current && !attendanceDropdownRef.current.contains(event.target as Node)) {
@@ -44,45 +45,14 @@ const FrequencyPage: React.FC = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const fetchEvents = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            // Optimized: Fetch only confirmed events from the start of the current year.
-            const startOfYear = `${new Date().getFullYear()}-01-01`;
-            
-            // Use direct query instead of RPC
-            const { data, error: fetchError } = await supabase
-                .from('events')
-                .select('*, event_departments(department_id, departments(id, name)), event_volunteers(volunteer_id, department_id, present, volunteers(id, name))')
-                .eq('status', 'Confirmado')
-                .gte('date', startOfYear) // Optimization
-                .order('date', { ascending: false });
-    
-            if (fetchError) throw fetchError;
-            
-            const eventsData = (data as Event[]) || [];
-            setMasterEvents(eventsData);
 
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            console.error('Error fetching events for frequency page:', errorMessage);
-            setError(`Falha ao carregar eventos: ${errorMessage}`);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchEvents();
-    }, [fetchEvents]);
 
     const filteredEvents = useMemo(() => {
         let events = [...masterEvents];
-        
+
         // This page is now only for confirmed events (already filtered by query, but good for safety)
         events = events.filter(event => event.status === 'Confirmado');
-        
+
         // If no date filters are set, default to showing the entire current year.
         if (!dateFilters.start && !dateFilters.end) {
             const now = new Date();
@@ -97,7 +67,7 @@ const FrequencyPage: React.FC = () => {
             if (dateFilters.start) events = events.filter(event => event.date >= dateFilters.start);
             if (dateFilters.end) events = events.filter(event => event.date <= dateFilters.end);
         }
-        
+
         // Ensure ascending chronological order (Jan -> Dec)
         events.sort((a, b) => {
             const dateComparison = a.date.localeCompare(b.date);
@@ -111,14 +81,14 @@ const FrequencyPage: React.FC = () => {
     const paginatedEvents = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
         return filteredEvents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-      }, [currentPage, filteredEvents]);
-    
-      const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
+    }, [currentPage, filteredEvents]);
+
+    const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
 
     useEffect(() => {
         setCurrentPage(1);
     }, [dateFilters, attendanceFilter]);
-    
+
     const handleSetToday = () => {
         const today = new Date();
         const year = today.getFullYear();
@@ -144,7 +114,7 @@ const FrequencyPage: React.FC = () => {
             return newSet;
         });
     };
-    
+
     const handleExportPDF = () => {
         const doc = new jsPDF();
         const today = new Date().toLocaleDateString('pt-BR');
@@ -176,18 +146,18 @@ const FrequencyPage: React.FC = () => {
         doc.setTextColor(100);
         let filterText = 'Filtros aplicados: ';
         if (dateFilters.start && dateFilters.end) {
-            filterText += `Período de ${new Date(dateFilters.start+'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(dateFilters.end+'T00:00:00').toLocaleDateString('pt-BR')}. `;
+            filterText += `Período de ${new Date(dateFilters.start + 'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(dateFilters.end + 'T00:00:00').toLocaleDateString('pt-BR')}. `;
         } else if (dateFilters.start) {
-            filterText += `A partir de ${new Date(dateFilters.start+'T00:00:00').toLocaleDateString('pt-BR')}. `;
+            filterText += `A partir de ${new Date(dateFilters.start + 'T00:00:00').toLocaleDateString('pt-BR')}. `;
         } else if (dateFilters.end) {
-            filterText += `Até ${new Date(dateFilters.end+'T00:00:00').toLocaleDateString('pt-BR')}. `;
+            filterText += `Até ${new Date(dateFilters.end + 'T00:00:00').toLocaleDateString('pt-BR')}. `;
         }
 
         if (attendanceFilter !== 'all') {
             const statusLabel = attendanceFilter === 'present' ? 'Presentes' : 'Ausentes';
             filterText += `Status: ${statusLabel}.`;
         }
-        
+
         if (filterText !== 'Filtros aplicados: ') {
             doc.text(filterText, 14, y);
             y += 8;
@@ -223,7 +193,7 @@ const FrequencyPage: React.FC = () => {
         doc.setTextColor(40);
         doc.text('Resumo do Período', 14, y);
         y += 8;
-        
+
         autoTable(doc, {
             startY: y,
             body: [
@@ -241,7 +211,7 @@ const FrequencyPage: React.FC = () => {
             didDrawPage: () => pageHeader(doc)
         });
         y = (doc as any).lastAutoTable.finalY + 10;
-        
+
         doc.setDrawColor(226, 232, 240);
         doc.line(14, y - 5, doc.internal.pageSize.width - 14, y - 5);
         y += 5;
@@ -254,10 +224,10 @@ const FrequencyPage: React.FC = () => {
                 endDateTime.setDate(endDateTime.getDate() + 1);
             }
             const hasEventEnded = endDateTime ? new Date() > endDateTime : false;
-            
+
             const totalVolunteers = (event.event_volunteers || []).length;
             const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
-            
+
             const eventBlockHeight = 25;
             if (y + eventBlockHeight > 280) {
                 doc.addPage();
@@ -290,12 +260,12 @@ const FrequencyPage: React.FC = () => {
                     if (attendanceFilter === 'present') {
                         volunteersForDept = volunteersForDept.filter(v => v.present === true);
                     } else if (attendanceFilter === 'absent') {
-                         volunteersForDept = volunteersForDept.filter(v => hasEventEnded && (v.present === false || v.present === null));
+                        volunteersForDept = volunteersForDept.filter(v => hasEventEnded && (v.present === false || v.present === null));
                     }
                 }
-                
+
                 if (volunteersForDept.length > 0) {
-                     volunteersForDept.forEach(v => {
+                    volunteersForDept.forEach(v => {
                         let statusText;
                         if (v.present === true) {
                             statusText = 'Presente';
@@ -315,7 +285,7 @@ const FrequencyPage: React.FC = () => {
                     });
                 }
             });
-            
+
             if (tableBody.length > 0) {
                 autoTable(doc, {
                     startY: y,
@@ -329,11 +299,11 @@ const FrequencyPage: React.FC = () => {
                 });
                 y = (doc as any).lastAutoTable.finalY + 15;
             } else {
-                 doc.setFontSize(10);
-                 doc.setFont('helvetica', 'italic');
-                 doc.setTextColor(150);
-                 doc.text('Nenhum voluntário para exibir com os filtros atuais.', 14, y);
-                 y += 15;
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'italic');
+                doc.setTextColor(150);
+                doc.text('Nenhum voluntário para exibir com os filtros atuais.', 14, y);
+                y += 15;
             }
         });
 
@@ -363,10 +333,10 @@ const FrequencyPage: React.FC = () => {
                         endDateTime.setDate(endDateTime.getDate() + 1);
                     }
                     const hasEventEnded = endDateTime ? new Date() > endDateTime : false;
-                    
+
                     const totalVolunteers = (event.event_volunteers || []).length;
                     const presentVolunteers = (event.event_volunteers || []).filter(v => v.present === true).length;
-                    
+
                     return (
                         <div key={event.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div className="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50" onClick={() => toggleEventExpansion(event.id!)}>
@@ -377,7 +347,7 @@ const FrequencyPage: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-4 ml-4 flex-shrink-0">
-                                     <div className="text-right">
+                                    <div className="text-right">
                                         <p className="font-semibold text-slate-700">Presença</p>
                                         <p className="text-lg font-bold text-blue-600">{presentVolunteers}/{totalVolunteers}</p>
                                     </div>
@@ -388,16 +358,16 @@ const FrequencyPage: React.FC = () => {
                                 <div className="bg-slate-50/70 border-t border-slate-200 px-4 py-4 space-y-4">
                                     {(event.event_departments || []).length > 0 ? (event.event_departments || []).map(({ departments }) => {
                                         if (!departments) return null;
-                                        
+
                                         let volunteersForDept = (event.event_volunteers || []).filter(ev => ev.department_id === departments.id);
                                         const totalInDept = volunteersForDept.length;
                                         const presentInDept = volunteersForDept.filter(v => v.present === true).length;
-                                        
+
                                         if (attendanceFilter !== 'all') {
                                             if (attendanceFilter === 'present') {
                                                 volunteersForDept = volunteersForDept.filter(v => v.present === true);
                                             } else if (attendanceFilter === 'absent') {
-                                                 volunteersForDept = volunteersForDept.filter(v => hasEventEnded && (v.present === false || v.present === null));
+                                                volunteersForDept = volunteersForDept.filter(v => hasEventEnded && (v.present === false || v.present === null));
                                             }
                                         }
 
@@ -434,7 +404,7 @@ const FrequencyPage: React.FC = () => {
             </div>
         )
     };
-    
+
     const attendanceFilterOptions = [
         { value: 'all', label: 'Toda a Frequência' },
         { value: 'present', label: 'Confirmados (Presente)' },
@@ -449,7 +419,7 @@ const FrequencyPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-slate-800">Relatório de Frequência</h1>
                     <p className="text-slate-500 mt-1">Monitore a presença dos voluntários nos eventos confirmados.</p>
                 </div>
-                <button 
+                <button
                     onClick={handleExportPDF}
                     className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm w-full md:w-auto justify-center"
                 >
@@ -460,8 +430,8 @@ const FrequencyPage: React.FC = () => {
 
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    <CustomDatePicker name="start" value={dateFilters.start} onChange={(val) => setDateFilters(p => ({...p, start: val}))} />
-                    <CustomDatePicker name="end" value={dateFilters.end} onChange={(val) => setDateFilters(p => ({...p, end: val}))} />
+                    <CustomDatePicker name="start" value={dateFilters.start} onChange={(val) => setDateFilters(p => ({ ...p, start: val }))} />
+                    <CustomDatePicker name="end" value={dateFilters.end} onChange={(val) => setDateFilters(p => ({ ...p, end: val }))} />
                     <div className="relative" ref={attendanceDropdownRef}>
                         <button
                             type="button"

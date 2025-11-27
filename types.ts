@@ -18,7 +18,7 @@ export interface EventVolunteer {
   department_id: number;
   present: boolean | null;
   // FIX: Changed `departments` to `string[]` to match the data from `volunteers` table. Added status.
-  volunteers?: { id: number; name: string; email: string; initials: string; departments: string[]; status?: string; };
+  volunteers?: { id: number; name: string; email: string; initials: string; departments: string[]; status?: string; avatar_url?: string; };
 }
 
 export interface EventDepartment {

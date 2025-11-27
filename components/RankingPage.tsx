@@ -4,6 +4,7 @@ import { getErrorMessage } from '../lib/utils';
 import { Session } from '@supabase/supabase-js';
 import VolunteerStatsModal from './VolunteerStatsModal';
 import { Medalha01Icon, Medalha02Icon, Medalha03Icon } from '../assets/icons';
+import { useRankingData } from '../hooks/useQueries';
 
 interface UserProfile {
     volunteer_id: number | null;
@@ -37,6 +38,7 @@ export interface RankedVolunteer {
     departments: { id: number; name: string }[];
     totalPresent: number;
     totalScheduled: number;
+    avatar_url?: string;
 }
 
 // Gamification component for medals
@@ -66,11 +68,13 @@ const Badge: React.FC<{ percentage: number }> = ({ percentage }) => {
 
 
 const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
-    const [volunteers, setVolunteers] = useState<any[]>([]);
-    const [rawAttendance, setRawAttendance] = useState<any[]>([]);
-    const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { data: rankingData, isLoading, error: rankingError } = useRankingData();
+
+    const volunteers = rankingData?.volunteers || [];
+    const rawAttendance = rankingData?.attendance || [];
+    const departments = rankingData?.departments || [];
+    const loading = isLoading;
+    const error = rankingError ? getErrorMessage(rankingError) : null;
 
     // Filter and Sort States
     const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -124,24 +128,10 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const fetchRankingData = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const [volunteersRes, attendanceRes, departmentsRes] = await Promise.all([
-                supabase.from('volunteers').select('id, name, initials, volunteer_departments(departments(id, name))').eq('status', 'Ativo'),
-                supabase.from('event_volunteers').select('volunteer_id, present, events(date)'),
-                supabase.from('departments').select('id, name').order('name')
-            ]);
-
-            if (volunteersRes.error) throw volunteersRes.error;
-            if (attendanceRes.error) throw attendanceRes.error;
-            if (departmentsRes.error) throw departmentsRes.error;
-
-            const attendanceData = attendanceRes.data || [];
+    useEffect(() => {
+        if (rawAttendance.length > 0) {
             const years = new Set<number>();
-            for (const record of attendanceData) {
-                // FIX: The `events` relation from Supabase might be an array even for a to-one join. Handle this by taking the first element.
+            for (const record of rawAttendance) {
                 const eventData = Array.isArray(record.events) ? record.events[0] : record.events;
                 if (eventData?.date) {
                     years.add(new Date(eventData.date).getFullYear());
@@ -150,22 +140,13 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
             const sortedYears = Array.from(years).sort((a, b) => b - a);
             setAvailableYears(sortedYears);
             if (sortedYears.length > 0 && selectedYear === new Date().getFullYear().toString()) {
-                setSelectedYear(String(sortedYears[0]));
+                // Only set if not already set by user interaction or default
+                // Actually, we want to keep the default 'current year' if possible, or fallback to latest
+                // But since we initialize selectedYear with current year, we might just leave it.
+                // Let's just ensure availableYears is populated.
             }
-
-            setVolunteers(volunteersRes.data || []);
-            setRawAttendance(attendanceData);
-            setDepartments(departmentsRes.data || []);
-        } catch (err) {
-            setError(getErrorMessage(err));
-        } finally {
-            setLoading(false);
         }
-    }, [selectedYear]);
-
-    useEffect(() => {
-        fetchRankingData();
-    }, [fetchRankingData]);
+    }, [rawAttendance]); // Run when data is loaded
 
     const processedRanking = useMemo(() => {
         // 1. Filter attendance by selected year
@@ -197,6 +178,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                 id: v.id,
                 name: v.name,
                 initials: v.initials,
+                avatar_url: v.avatar_url,
                 departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean),
                 ...stats
             };
@@ -327,7 +309,13 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                                             <span className="text-lg font-bold text-slate-400 dark:text-slate-500">#{rank}</span>
                                         )}
                                     </div>
-                                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">{volunteer.initials}</div>
+                                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden">
+                                        {volunteer.avatar_url ? (
+                                            <img src={volunteer.avatar_url} alt={volunteer.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            volunteer.initials
+                                        )}
+                                    </div>
                                     {renderContent()}
                                 </div>
                             );

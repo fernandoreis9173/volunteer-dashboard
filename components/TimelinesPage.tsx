@@ -5,38 +5,20 @@ import { TimelineTemplate } from '../types';
 import TimelineEditorForm from './TimelineEditorForm';
 import ConfirmationModal from './ConfirmationModal';
 import BulkAssociateTimelineModal from './BulkAssociateTimelineModal';
+import { useTimelineTemplates, useInvalidateQueries } from '../hooks/useQueries';
 
 const TimelinesPage: React.FC = () => {
-    const [templates, setTemplates] = useState<TimelineTemplate[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { data: templates = [], isLoading, error: queryError } = useTimelineTemplates();
+    const { invalidateTimelineTemplates } = useInvalidateQueries();
+
+    const loading = isLoading;
+    const error = queryError ? getErrorMessage(queryError) : null;
+
     const [isFormVisible, setIsFormVisible] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<TimelineTemplate | null>(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [templateToDelete, setTemplateToDelete] = useState<TimelineTemplate | null>(null);
     const [isBulkAssociateModalOpen, setIsBulkAssociateModalOpen] = useState(false);
-
-    const fetchTemplates = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const { data, error } = await supabase
-                .from('cronograma_modelos')
-                .select('*, cronograma_itens(*)')
-                .order('nome_modelo', { ascending: true });
-
-            if (error) throw error;
-            setTemplates(data || []);
-        } catch (err) {
-            setError(getErrorMessage(err));
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchTemplates();
-    }, [fetchTemplates]);
 
     const handleNewTemplate = () => {
         setEditingTemplate(null);
@@ -49,7 +31,7 @@ const TimelinesPage: React.FC = () => {
     };
 
     const handleSaveTemplate = async () => {
-        await fetchTemplates();
+        invalidateTimelineTemplates();
         setIsFormVisible(false);
         setEditingTemplate(null);
     };
@@ -73,7 +55,9 @@ const TimelinesPage: React.FC = () => {
             const { error: templateError } = await supabase.from('cronograma_modelos').delete().eq('id', templateToDelete.id);
             if (templateError) throw templateError;
 
-            await fetchTemplates();
+            if (templateError) throw templateError;
+
+            invalidateTimelineTemplates();
         } catch (err) {
             alert(`Erro ao excluir modelo: ${getErrorMessage(err)}`);
         } finally {

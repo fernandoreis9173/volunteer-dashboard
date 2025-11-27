@@ -5,6 +5,7 @@ import ConfirmationModal from './ConfirmationModal';
 import { DetailedVolunteer, Department, Event } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
+import { useVolunteersPageData, useActiveDepartments, useInvalidateQueries } from '../hooks/useQueries';
 import Pagination from './Pagination';
 import QRScannerModal from './QRScannerModal';
 import PromoteToLeaderModal from './PromoteToLeaderModal';
@@ -21,10 +22,19 @@ interface VolunteersPageProps {
 const ITEMS_PER_PAGE = 6;
 
 const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOpen, userRole, leaderDepartmentId, activeEvent, onDataChange }) => {
-  const [masterVolunteers, setMasterVolunteers] = useState<DetailedVolunteer[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { invalidateVolunteersPage } = useInvalidateQueries();
+
+  // React Query Hooks
+  const { data: volunteersData, isLoading: volunteersLoading, error: volunteersError } = useVolunteersPageData(userRole, leaderDepartmentId);
+  const { data: departmentsData = [] } = useActiveDepartments();
+
+  const masterVolunteers = volunteersData?.masterVolunteers || [];
+  const pendingInvites = volunteersData?.pendingInvites || new Set();
+  const leaderDepartmentName = volunteersData?.leaderDepartmentName || null;
+  const departments = departmentsData as Department[];
+  const loading = volunteersLoading;
+  const error = volunteersError ? getErrorMessage(volunteersError) : null;
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [editingVolunteer, setEditingVolunteer] = useState<DetailedVolunteer | null>(null);
@@ -37,12 +47,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [volunteerToInvite, setVolunteerToInvite] = useState<DetailedVolunteer | null>(null);
   const [isInviting, setIsInviting] = useState(false);
-  const [pendingInvites, setPendingInvites] = useState<Set<number>>(new Set());
 
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
   const [volunteerToRemove, setVolunteerToRemove] = useState<DetailedVolunteer | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
-  const [leaderDepartmentName, setLeaderDepartmentName] = useState<string | null>(null);
   const [isSendingInviteModalOpen, setIsSendingInviteModalOpen] = useState(false);
 
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -68,137 +76,10 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
     };
   }, [inputValue]);
 
-  useEffect(() => {
-    if (isLeader && leaderDepartmentId) {
-      const fetchDeptName = async () => {
-        const { data, error } = await supabase.from('departments').select('name').eq('id', leaderDepartmentId).single();
-        if (data) setLeaderDepartmentName(data.name);
-        else console.error("Could not fetch leader department name", error);
-      };
-      fetchDeptName();
-    }
-  }, [isLeader, leaderDepartmentId]);
 
 
-  const fetchVolunteers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Build query for volunteers
-      let query = supabase
-        .from('volunteers')
-        .select(`
-                id,
-                user_id,
-                name,
-                email,
-                phone,
-                initials,
-                status,
-                skills,
-                availability,
-                created_at,
-                volunteer_departments (
-                    departments ( id, name )
-                )
-            `);
 
-      // FIX: Leaders should only see active volunteers
-      // Admins can see all volunteers (active and inactive) for management
-      if (isLeader) {
-        query = query.eq('status', 'Ativo');
-      }
 
-      const { data: rawVolunteers, error: fetchError } = await query.order('created_at', { ascending: false });
-
-      if (fetchError) throw fetchError;
-
-      // FIX: Fetch profiles to get avatar_url AND role
-      // Filter out users who are no longer volunteers (promoted to leader/admin)
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, avatar_url, role');
-
-      const avatarMap = new Map<string, string>();
-      const roleMap = new Map<string, string>();
-
-      if (profilesData && !profilesError) {
-        profilesData.forEach((profile: any) => {
-          if (profile.avatar_url) {
-            avatarMap.set(profile.id, profile.avatar_url);
-          }
-          if (profile.role) {
-            roleMap.set(profile.id, profile.role);
-          }
-        });
-      }
-
-      // Manually process the data to ensure the logic is clear.
-      const transformedData = (rawVolunteers || [])
-        .map(volunteer => {
-          // All relations in volunteer_departments are now considered approved.
-          const approvedDepartments = (volunteer.volunteer_departments || [])
-            .filter(relation => relation.departments)
-            .flatMap(relation => relation.departments);
-
-          // Create the final volunteer object for the state.
-          return {
-            ...volunteer,
-            departments: approvedDepartments, // This array will ONLY contain approved departments.
-            volunteer_departments: volunteer.volunteer_departments,
-            avatar_url: volunteer.user_id ? avatarMap.get(volunteer.user_id) : undefined
-          };
-        })
-        // FIX: Filter out users who were promoted to leader/admin
-        // Only show users with role 'volunteer' in the Volunteers page
-        .filter(volunteer => {
-          if (!volunteer.user_id) return true; // Keep volunteers without user_id (shouldn't happen)
-          const userRole = roleMap.get(volunteer.user_id);
-          return userRole === 'volunteer'; // Only show actual volunteers
-        });
-
-      setMasterVolunteers(transformedData as unknown as DetailedVolunteer[]);
-
-      // Also fetch pending invites for the leader's department
-      if (isLeader && leaderDepartmentId) {
-        const { data: invitesData, error: invitesError } = await supabase
-          .from('invitations')
-          .select('volunteer_id')
-          .eq('department_id', leaderDepartmentId)
-          .eq('status', 'pendente');
-
-        if (invitesError) throw invitesError;
-
-        setPendingInvites(new Set(invitesData.map(i => i.volunteer_id)));
-      }
-
-    } catch (error: any) {
-      const errorMessage = getErrorMessage(error);
-      console.error('Error fetching volunteers:', errorMessage);
-      setError(`Falha ao carregar voluntários: ${errorMessage}`);
-      setMasterVolunteers([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [isLeader, leaderDepartmentId]);
-
-  const fetchActiveDepartments = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('departments')
-      .select('id, name')
-      .eq('status', 'Ativo')
-      .order('name', { ascending: true });
-    if (error) {
-      console.error('Error fetching active departments:', getErrorMessage(error));
-    } else {
-      setDepartments(data as Department[] || []);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchVolunteers();
-    fetchActiveDepartments();
-  }, [fetchVolunteers, fetchActiveDepartments]);
 
   const filteredVolunteers = useMemo(() => {
     let volunteers = masterVolunteers;
@@ -283,6 +164,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       const volunteerName = volunteer?.name || 'Voluntário';
       showNotification(`Presença de ${volunteerName} confirmada com sucesso!`, 'success');
       onDataChange();
+      invalidateVolunteersPage();
 
     } catch (err: any) {
       if (err.context && typeof err.context.json === 'function') {
@@ -322,7 +204,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       });
       if (error) throw error;
       showNotification(`Convite enviado para ${volunteerToInvite.name}!`, 'success');
-      setPendingInvites(prev => new Set(prev).add(volunteerToInvite.id!));
+      invalidateVolunteersPage();
     } catch (err: any) {
       showNotification(`Erro ao convidar: ${getErrorMessage(err)}`, 'error');
     } finally {
@@ -356,7 +238,7 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
         'success'
       );
       hideForm();
-      await fetchVolunteers();
+      invalidateVolunteersPage();
       onDataChange();
     } catch (err) {
       setSaveError(`Falha ao salvar: ${getErrorMessage(err)}`);
@@ -386,7 +268,8 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       });
       if (error) throw error;
       showNotification(`${volunteerToRemove.name} removido do departamento!`, 'success');
-      await fetchVolunteers(); // Refetch to update the UI
+      showNotification(`${volunteerToRemove.name} removido do departamento!`, 'success');
+      invalidateVolunteersPage();
     } catch (err: any) {
       showNotification(`Erro ao remover: ${getErrorMessage(err)} `, 'error');
     } finally {
@@ -414,7 +297,8 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       if (error) throw error;
 
       showNotification(`Voluntário ${actionType === 'disable' ? 'desativado' : 'reativado'} com sucesso!`, 'success');
-      await fetchVolunteers(); // Refetch to update UI
+      showNotification(`Voluntário ${actionType === 'disable' ? 'desativado' : 'reativado'} com sucesso!`, 'success');
+      invalidateVolunteersPage();
 
     } catch (err: any) {
       showNotification(`Erro ao ${actionType === 'disable' ? 'desativar' : 'reativar'} voluntário: ${getErrorMessage(err)} `, 'error');
@@ -441,7 +325,8 @@ const VolunteersPage: React.FC<VolunteersPageProps> = ({ isFormOpen, setIsFormOp
       });
       if (error) throw error;
       showNotification(`${volunteerToPromote.name} foi promovido a líder com sucesso!`, 'success');
-      await fetchVolunteers();
+      showNotification(`${volunteerToPromote.name} foi promovido a líder com sucesso!`, 'success');
+      invalidateVolunteersPage();
       setIsPromoteModalOpen(false);
       setVolunteerToPromote(null);
     } catch (err) {

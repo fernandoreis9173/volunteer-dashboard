@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { EnrichedUser, DashboardData, DashboardEvent, ChartDataPoint, Page, Event } from '../types';
 import { getErrorMessage } from '../lib/utils';
-import { useEvents, useInvalidateQueries } from '../hooks/useQueries';
+import { useEvents, useInvalidateQueries, useAdminDashboardStats } from '../hooks/useQueries';
 import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
 import { AnalysisChart } from './TrafficChart';
@@ -66,8 +66,6 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate }) => {
     const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
-    const [otherDashboardData, setOtherDashboardData] = useState<Partial<DashboardData>>({});
-    const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [viewingTimelineFor, setViewingTimelineFor] = useState<DashboardEvent | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
@@ -89,45 +87,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
         startDate: last30DaysStr
     });
 
-    const fetchNonEventData = useCallback(async () => {
-        setOtherDashboardData(prev => ({ ...prev }));
-        setDashboardError(null);
-
-        try {
-            const [
-                activeVolunteersCountRes,
-                departmentsCountRes,
-                activeLeadersRes,
-            ] = await Promise.all([
-                supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                supabase.functions.invoke('list-users', { body: { context: 'dashboard' } }),
-            ]);
-
-            if (activeVolunteersCountRes.error) throw activeVolunteersCountRes.error;
-            if (departmentsCountRes.error) throw departmentsCountRes.error;
-            if (activeLeadersRes.error) throw activeLeadersRes.error;
-
-            setOtherDashboardData({
-                stats: {
-                    activeVolunteers: { value: String(activeVolunteersCountRes.count ?? 0), change: 0 },
-                    departments: { value: String(departmentsCountRes.count ?? 0), change: 0 },
-                    schedulesToday: { value: '0', change: 0 }, // Will be updated with event data
-                    upcomingSchedules: { value: '0', change: 0 }, // Will be updated with event data
-                },
-                activeLeaders: activeLeadersRes.data?.users || [],
-            });
-
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            console.error("Error fetching admin dashboard data:", errorMessage);
-            setDashboardError(`Falha ao carregar dados do dashboard: ${errorMessage}`);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchNonEventData();
-    }, [fetchNonEventData]);
+    const { data: statsData, isLoading: statsLoading, error: statsError } = useAdminDashboardStats();
 
     const dashboardData = useMemo(() => {
         const allEvents = (eventsData as unknown as DashboardEvent[]) || [];
@@ -169,20 +129,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
         });
 
         return {
-            ...otherDashboardData,
             stats: {
-                ...otherDashboardData.stats,
+                activeVolunteers: { value: String(statsData?.activeVolunteers ?? 0), change: 0 },
+                departments: { value: String(statsData?.departments ?? 0), change: 0 },
                 schedulesToday: { value: String(todaySchedules.length), change: 0 },
                 upcomingSchedules: { value: String(upcomingSchedules.length), change: 0 },
-                activeVolunteers: otherDashboardData.stats?.activeVolunteers || { value: '0', change: 0 },
-                departments: otherDashboardData.stats?.departments || { value: '0', change: 0 },
             },
+            activeLeaders: statsData?.activeLeaders || [],
             todaySchedules,
             upcomingSchedules: upcomingSchedules.slice(0, 10),
             chartData,
         } as DashboardData;
 
-    }, [eventsData, otherDashboardData, todayStr, last30DaysStr]);
+    }, [eventsData, statsData, todayStr, last30DaysStr]);
 
     const showNotification = useCallback((message: string, type: 'success' | 'error') => {
         setNotification({ message, type });
@@ -297,7 +256,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                 </div>
             </div>
 
-            {dashboardError && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{dashboardError}</div>}
+            {statsError && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{getErrorMessage(statsError)}</div>}
             <StatsRow stats={dashboardData.stats} userRole="admin" />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
                 <div className="lg:col-span-2">

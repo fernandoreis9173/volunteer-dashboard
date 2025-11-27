@@ -85,7 +85,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
         setTimeout(() => setNotification(null), 5000);
     }, []);
 
-    const { data: dashboardData, isLoading: loading, error: dashboardError, refetch: refetchDashboard } = useVolunteerDashboardData(userId, leaders);
+    const { data: dashboardData, isLoading: loading, error: dashboardError, refetch: refetchDashboard } = useVolunteerDashboardData(userId);
     const error = dashboardError ? getErrorMessage(dashboardError) : null;
 
     const volunteerProfile = dashboardData?.volunteerProfile || null;
