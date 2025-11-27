@@ -22,9 +22,6 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
             return { present: 0, absent: 0, total: 0 };
         }
 
-        // Get IDs of volunteers who BELONG to this department
-        const departmentVolunteerIds = new Set(departmentVolunteers.map(v => v.id));
-
         let present = 0;
         let absent = 0;
         let total = 0;
@@ -35,8 +32,10 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
             const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
 
             (event.event_volunteers || []).forEach(ev => {
-                // Count volunteers who BELONG to this department, regardless of which department they were assigned to
-                if (departmentVolunteerIds.has(ev.volunteer_id)) {
+                // FIX: Count volunteers who were scheduled FOR this department in this event
+                // This ensures that volunteers from other departments (who might be helping out) are counted correctly if scheduled for this department,
+                // AND volunteers from this department who are helping elsewhere are NOT counted here.
+                if (ev.department_id === userProfile.department_id) {
                     total++;
                     if (ev.present) {
                         present++;
@@ -49,7 +48,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
         });
 
         return { present, absent, total };
-    }, [schedules, userProfile, departmentVolunteers]);
+    }, [schedules, userProfile]);
 
     const { present, absent, total } = attendanceData;
     const percentage = total > 0 ? Math.round((present / total) * 100) : 0;

@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
     if (department_id === undefined || department_id === null) {
       throw new Error('O ID do departamento é obrigatório.');
     }
-    
+
     if (!Array.isArray(leader_ids)) {
       throw new Error('A lista de IDs de líderes (leader_ids) é obrigatória e deve ser um array.');
     }
@@ -34,8 +34,8 @@ Deno.serve(async (req: Request) => {
     if (leader_ids.length > 0) {
       const { data: conflictingLeaders, error: conflictCheckError } = await supabaseAdmin
         .from('department_leaders')
-        .select('leader_id, leader:profiles(name)')
-        .in('leader_id', leader_ids)
+        .select('user_id, leader:profiles(name)')
+        .in('user_id', leader_ids)
         .neq('department_id', department_id);
 
       if (conflictCheckError) {
@@ -50,7 +50,7 @@ Deno.serve(async (req: Request) => {
 
 
     // --- Sync Leaders: Delete all existing, then insert all new ---
-    
+
     // 1. Delete all current leaders for this department
     const { error: deleteError } = await supabaseAdmin
       .from('department_leaders')
@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
     if (leader_ids.length > 0) {
       const newLeaderAssignments = leader_ids.map(leaderId => ({
         department_id: department_id,
-        leader_id: leaderId,
+        user_id: leaderId,
       }));
 
       const { error: insertError } = await supabaseAdmin

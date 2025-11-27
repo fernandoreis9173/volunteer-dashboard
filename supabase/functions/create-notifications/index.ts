@@ -189,7 +189,7 @@ Deno.serve(async (req: any) => {
                     // FIX: Query the correct table `department_leaders` to find leaders by `department_id`.
                     const { data: leadersData, error: leaderError } = await supabaseAdmin
                         .from('department_leaders')
-                        .select('leader_id')
+                        .select('user_id')
                         .in('department_id', allDepartmentIds);
 
                     if (leaderError) throw leaderError;
@@ -199,7 +199,7 @@ Deno.serve(async (req: any) => {
                     if (leaders.length > 0) {
                         // FIX: Use `leader_id` from the correct query result.
                         const newNotifications = leaders.map(l => ({
-                            user_id: l.leader_id,
+                            user_id: l.user_id,
                             message: `O evento "${event.name}", do qual seu departamento participa, foi alterado. Verifique as mudanças.`,
                             type: 'event_update',
                             related_event_id: event.id,

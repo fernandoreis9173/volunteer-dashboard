@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
       throw new Error('A configuração do Supabase está ausente.');
     }
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-    
+
     const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
       global: { headers: { Authorization: req.headers.get('Authorization')! } }
     });
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     const { data: leaderDept, error: deptError } = await supabaseAdmin
       .from('department_leaders')
       .select('department_id')
-      .eq('leader_id', user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (deptError || !leaderDept || !leaderDept.department_id) {
@@ -44,32 +44,32 @@ Deno.serve(async (req) => {
     // 3. Get the volunteer ID and their data
     const { volunteerId } = await req.json();
     if (!volunteerId) throw new Error('O ID do voluntário é obrigatório.');
-    
+
     const { data: volunteer, error: volunteerError } = await supabaseAdmin
       .from('volunteers')
       .select('id, user_id, name')
       .eq('id', volunteerId)
       .single();
-    
+
     if (volunteerError) throw volunteerError;
     if (!volunteer) throw new Error('Voluntário não encontrado.');
 
     // 4. Check for existing pending invitation to avoid duplicates
     const { data: existingInvitation, error: checkError } = await supabaseAdmin
-        .from('invitations')
-        .select('id')
-        .match({
-            volunteer_id: volunteerId,
-            department_id: departmentId,
-            status: 'pendente'
-        })
-        .maybeSingle();
+      .from('invitations')
+      .select('id')
+      .match({
+        volunteer_id: volunteerId,
+        department_id: departmentId,
+        status: 'pendente'
+      })
+      .maybeSingle();
 
     if (checkError) throw checkError;
     if (existingInvitation) {
-        throw new Error(`Um convite para ${volunteer.name} para este departamento já está pendente.`);
+      throw new Error(`Um convite para ${volunteer.name} para este departamento já está pendente.`);
     }
-    
+
     // 5. Create the invitation
     const { error: insertError } = await supabaseAdmin.from('invitations').insert({
       volunteer_id: volunteerId,
@@ -81,16 +81,16 @@ Deno.serve(async (req) => {
 
     // 6. Create and send notification to the volunteer
     if (volunteer.user_id) {
-        const { data: department, error: deptNameError } = await supabaseAdmin
-            .from('departments')
-            .select('name')
-            .eq('id', departmentId)
-            .single();
+      const { data: department, error: deptNameError } = await supabaseAdmin
+        .from('departments')
+        .select('name')
+        .eq('id', departmentId)
+        .single();
 
       const leaderName = user.user_metadata?.name || 'Um líder';
       const departmentName = department?.name || 'um departamento';
       const notificationMessage = `${leaderName} convidou você para se juntar ao departamento "${departmentName}".`;
-      
+
       await supabaseAdmin.from('notifications').insert({
         user_id: volunteer.user_id,
         message: notificationMessage,

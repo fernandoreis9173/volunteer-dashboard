@@ -18,10 +18,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     if (!supabaseUrl || !serviceRoleKey) {
-        throw new Error('Supabase configuration is missing.');
+      throw new Error('Supabase configuration is missing.');
     }
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-    
+
     // Auth client to get current user to determine their role and department
     const userClient = createClient(
       supabaseUrl,
@@ -39,13 +39,13 @@ Deno.serve(async (req) => {
       const { data: leaderDept } = await supabaseAdmin
         .from('department_leaders')
         .select('department_id')
-        .eq('leader_id', user.id)
+        .eq('user_id', user.id)
         .single();
       if (leaderDept) {
         leaderDepartmentId = leaderDept.department_id;
       }
     }
-    
+
     const baseSelect = `
         id, name, date, start_time, end_time, local, status, observations, color,
         event_departments(
@@ -60,19 +60,19 @@ Deno.serve(async (req) => {
 
     let query;
     if (isLeader && leaderDepartmentId) {
-        query = supabaseAdmin
-            .from('events')
-            .select(baseSelect.replace('event_departments(', 'event_departments!inner('))
-            .eq('event_departments.department_id', leaderDepartmentId);
+      query = supabaseAdmin
+        .from('events')
+        .select(baseSelect.replace('event_departments(', 'event_departments!inner('))
+        .eq('event_departments.department_id', leaderDepartmentId);
     } else { // Admin
-        query = supabaseAdmin
-            .from('events')
-            .select(baseSelect);
+      query = supabaseAdmin
+        .from('events')
+        .select(baseSelect);
     }
-    
+
     const { data: eventsData, error: fetchError } = await query
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true });
+      .order('date', { ascending: true })
+      .order('start_time', { ascending: true });
 
     if (fetchError) throw fetchError;
     if (!eventsData) {
@@ -89,30 +89,30 @@ Deno.serve(async (req) => {
     const leaderMap = new Map(leaders.map(l => [l.id, l.user_metadata?.name]));
 
     const { data: deptLeadersRes, error: deptLeadersError } = await supabaseAdmin
-        .from('department_leaders')
-        .select('department_id, leader_id');
+      .from('department_leaders')
+      .select('department_id, user_id');
     if (deptLeadersError) throw deptLeadersError;
-    
+
     const enrichedEvents = eventsData.map(event => {
-        const enrichedDepts = (event.event_departments as any[]).map((ed: any) => {
-            const leadersForDept = (deptLeadersRes || [])
-                ?.filter(dl => dl.department_id === ed.department_id)
-                .map(dl => leaderMap.get(dl.leader_id))
-                .filter(Boolean);
-            
-            return { 
-                ...ed, 
-                departments: { 
-                    ...ed.departments, 
-                    leader: leadersForDept?.join(', ') || 'N/A' 
-                }
-            };
-        });
+      const enrichedDepts = (event.event_departments as any[]).map((ed: any) => {
+        const leadersForDept = (deptLeadersRes || [])
+          ?.filter(dl => dl.department_id === ed.department_id)
+          .map(dl => leaderMap.get(dl.user_id))
+          .filter(Boolean);
 
         return {
-            ...event,
-            event_departments: enrichedDepts,
+          ...ed,
+          departments: {
+            ...ed.departments,
+            leader: leadersForDept?.join(', ') || 'N/A'
+          }
         };
+      });
+
+      return {
+        ...event,
+        event_departments: enrichedDepts,
+      };
     });
 
     return new Response(JSON.stringify({ events: enrichedEvents }), {

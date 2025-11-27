@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
-Deno.serve(async (req)=>{
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
       headers: corsHeaders
@@ -52,11 +52,11 @@ Deno.serve(async (req)=>{
     });
     if (insertError) throw insertError;
     // 5. Find the leader and notify them
-    const { data: leaderRel, error: leaderError } = await supabaseAdmin.from('department_leaders').select('leader_id').eq('department_id', departmentId).limit(1).maybeSingle();
+    const { data: leaderRel, error: leaderError } = await supabaseAdmin.from('department_leaders').select('user_id').eq('department_id', departmentId).limit(1).maybeSingle();
     if (leaderError) {
       console.warn(`Error fetching leader for department ${departmentId}:`, leaderError.message);
     }
-    const leaderId = leaderRel?.leader_id;
+    const leaderId = leaderRel?.user_id;
     if (leaderId) {
       const { data: eventData } = await supabaseAdmin.from('events').select('name').eq('id', eventId).single();
       const eventName = eventData?.name || 'um evento';

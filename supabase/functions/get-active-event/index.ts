@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     if (!supabaseUrl || !serviceRoleKey) {
-        throw new Error('Supabase configuration is missing.');
+      throw new Error('Supabase configuration is missing.');
     }
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
@@ -58,10 +58,10 @@ Deno.serve(async (req) => {
 
     if (eventError) throw eventError;
     if (!eventData) {
-        return new Response(JSON.stringify({ activeEvent: null }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200,
-        });
+      return new Response(JSON.stringify({ activeEvent: null }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
     }
 
     // Enrich event with leader names
@@ -69,36 +69,36 @@ Deno.serve(async (req) => {
     if (authError) throw authError;
 
     const leaders = (authData?.users || []).filter(user => {
-        const role = user.user_metadata?.role;
-        return (role === 'leader' || role === 'lider' || role === 'admin');
+      const role = user.user_metadata?.role;
+      return (role === 'leader' || role === 'lider' || role === 'admin');
     });
 
-    const { data: deptLeaders, error: deptLeadersError } = await supabaseAdmin.from('department_leaders').select('department_id, leader_id');
+    const { data: deptLeaders, error: deptLeadersError } = await supabaseAdmin.from('department_leaders').select('department_id, user_id');
     if (deptLeadersError) throw deptLeadersError;
-    
+
     const leaderMap = new Map(leaders.map(l => [l.id, l.user_metadata?.name]));
 
     const enrichedEventDepartments = (eventData.event_departments as any[]).map((ed: any) => {
-        if (ed.departments?.id) {
-            const leadersForDept = (deptLeaders || [])
-                .filter(dl => dl.department_id === ed.departments.id)
-                .map(dl => leaderMap.get(dl.leader_id))
-                .filter(Boolean);
+      if (ed.departments?.id) {
+        const leadersForDept = (deptLeaders || [])
+          .filter(dl => dl.department_id === ed.departments.id)
+          .map(dl => leaderMap.get(dl.user_id))
+          .filter(Boolean);
 
-            return {
-                ...ed,
-                departments: {
-                    ...ed.departments,
-                    leader: leadersForDept.join(', ') || 'N/A'
-                }
-            };
-        }
-        return ed;
+        return {
+          ...ed,
+          departments: {
+            ...ed.departments,
+            leader: leadersForDept.join(', ') || 'N/A'
+          }
+        };
+      }
+      return ed;
     });
 
     const enrichedEventData = {
-        ...eventData,
-        event_departments: enrichedEventDepartments
+      ...eventData,
+      event_departments: enrichedEventDepartments
     };
 
     return new Response(JSON.stringify({ activeEvent: enrichedEventData }), {
