@@ -208,6 +208,10 @@ const App: React.FC = () => {
 
             if (profileError && profileError.code !== 'PGRST116') { // Ignore "row not found" error
                 console.error("Error fetching profile for LGPD check:", getErrorMessage(profileError));
+                // CRITICAL FIX: If fetch fails (e.g. network error), DO NOT proceed.
+                // Proceeding would default lgpd_accepted to false, causing the screen to reappear.
+                // By returning here, we keep the previous state (if any) or stay in loading state.
+                return;
             }
 
             const lgpdAccepted = profileData?.lgpd_accepted ?? false;
