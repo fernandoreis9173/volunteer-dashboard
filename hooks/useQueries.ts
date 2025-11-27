@@ -236,6 +236,7 @@ export const useUnreadNotificationsCount = (userId: string) => {
         },
         staleTime: 2 * 60 * 1000,
         refetchOnWindowFocus: false,
+        enabled: !!userId, // Only run when userId is available
     });
 };
 
