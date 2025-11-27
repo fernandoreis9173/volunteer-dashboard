@@ -12,17 +12,17 @@ interface UserProfile {
 }
 
 const MedalIcon: React.FC<{ rank: number }> = ({ rank }) => {
-    const icons = {
+    const Icons = {
         1: Medalha01Icon,
         2: Medalha02Icon,
         3: Medalha03Icon,
     };
 
-    const iconSrc = icons[rank as keyof typeof icons];
+    const IconComponent = Icons[rank as keyof typeof Icons];
 
-    if (!iconSrc) return null;
+    if (!IconComponent) return null;
 
-    return <img src={iconSrc} alt={`Medalha ${rank}`} className="h-8 w-8" />;
+    return <IconComponent className="h-8 w-8" aria-label={`Medalha ${rank}`} />;
 };
 
 

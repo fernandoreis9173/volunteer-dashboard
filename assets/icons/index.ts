@@ -8,25 +8,25 @@ import AdminIcon from './admin.svg';
 import AddEventIcon from './add-event.svg';
 import NewEmployeeIcon from './new-employee.svg';
 import DepartamentsIcon from './departaments.svg';
- import FrequenciaIcon from './frequancia.svg';
- import CalendarIcon from './calendar.svg';
- import NewVolunteersIcon from './newVolunteers.svg';
- import AddEventsIcon from './addEvents.svg';
+import FrequenciaIcon from './frequancia.svg';
+import CalendarIcon from './calendar.svg';
+import NewVolunteersIcon from './newVolunteers.svg';
+import AddEventsIcon from './addEvents.svg';
 import NotificationIcon from './notification.svg';
 import HistoryIcon from './history.svg';
- import InstallAppIcon from './installAPP.svg';
- import LogoNovaIcon from './logonova.svg';
- import ProfileIcon from './profile.svg';
- import LogoutIcon from './logout.svg';
- import NextEventIcon from './nextEvent.svg';
+import InstallAppIcon from './installAPP.svg';
+import LogoNovaIcon from './logonova.svg';
+import ProfileIcon from './profile.svg';
+import LogoutIcon from './logout.svg';
+import NextEventIcon from './nextEvent.svg';
 import LogoMobileIcon from './logomobile.svg';
- import CronogramasIcon from './iconcronogramas.svg';
+import CronogramasIcon from './iconcronogramas.svg';
 import EditIcon from './editicon.svg';
 import RankingIcon from './rankingicon.svg';
-import Medalha01Icon from './Medalha01Icon.svg';
-import Medalha02Icon from './Medalha02Icon.svg';
-import Medalha03Icon from './Medalha03Icon.svg';
- 
+import Medalha01Icon from './Medalha01Icon.svg?react';
+import Medalha02Icon from './Medalha02Icon.svg?react';
+import Medalha03Icon from './Medalha03Icon.svg?react';
+
 
 // Mapeamento de ícones por nome
 export const icons = {
@@ -47,17 +47,17 @@ export const icons = {
   frequencia: FrequenciaIcon, // Alias pt-BR
   calendar: CalendarIcon,
   calendario: CalendarIcon, // Alias pt-BR
-   'add-events': AddEventsIcon,
-   notification: NotificationIcon,
-   notifications: NotificationIcon,
-   history: HistoryIcon,
-   'install-app': InstallAppIcon,
-   installapp: InstallAppIcon,
-   logo: LogoNovaIcon,
-   logonova: LogoNovaIcon,
-   profile: ProfileIcon,
-   'my-profile': ProfileIcon,
-   perfil: ProfileIcon,
+  'add-events': AddEventsIcon,
+  notification: NotificationIcon,
+  notifications: NotificationIcon,
+  history: HistoryIcon,
+  'install-app': InstallAppIcon,
+  installapp: InstallAppIcon,
+  logo: LogoNovaIcon,
+  logonova: LogoNovaIcon,
+  profile: ProfileIcon,
+  'my-profile': ProfileIcon,
+  perfil: ProfileIcon,
   logout: LogoutIcon,
   signout: LogoutIcon,
   sair: LogoutIcon,
@@ -93,8 +93,8 @@ export {
   NotificationIcon,
   HistoryIcon,
   InstallAppIcon,
-   LogoNovaIcon,
-   ProfileIcon,
+  LogoNovaIcon,
+  ProfileIcon,
   LogoutIcon,
   NextEventIcon,
   LogoMobileIcon,
