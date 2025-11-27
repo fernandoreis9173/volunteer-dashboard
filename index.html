@@ -1,64 +1,94 @@
 <!DOCTYPE html>
 <html lang="pt-BR" class="h-full w-full overflow-hidden">
-  <head>
-    <meta charset="UTF-8" />
-    <!-- Cache Control: Force fresh content -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Volunteer Dashboard</title>
 
-    <!-- Progressive Web App (PWA) Config -->
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#2563EB" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Volunteers" />
-    
-    <!-- Camera Permissions for PWA -->
-    <meta http-equiv="Permissions-Policy" content="camera=(self)" />
-    <meta http-equiv="Feature-Policy" content="camera 'self'" />
+<head>
+  <meta charset="UTF-8" />
+  <!-- Cache Control: Force fresh content -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Volunteer Dashboard</title>
 
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
-      rel="stylesheet"
-    />
+  <!-- Progressive Web App (PWA) Config -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#2563EB" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Volunteers" />
 
-    <!-- TailwindCSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              primary: '#2563EB',
-            },
-            fontFamily: {
-              display: ['Poppins', 'sans-serif'],
-            },
-            borderRadius: {
-              DEFAULT: '0.75rem', // 12px
-            },
+  <!-- Camera Permissions for PWA -->
+  <meta http-equiv="Permissions-Policy" content="camera=(self)" />
+  <meta http-equiv="Feature-Policy" content="camera 'self'" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+
+  <!-- TailwindCSS -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+
+  <!-- Fix passive event listeners and suppress logs BEFORE any other code runs -->
+  <script>
+    // Suppress Supabase debug logs
+    (function () {
+      const originalLog = console.log;
+      console.log = function (...args) {
+        if (args.length > 0 && typeof args[0] === 'string' && args[0].includes('Search endpoint requested')) {
+          return;
+        }
+        originalLog.apply(console, args);
+      };
+    })();
+
+    // Fix passive event listener warnings
+    (function () {
+      if (typeof EventTarget !== "undefined") {
+        const originalAddEventListener = EventTarget.prototype.addEventListener;
+        EventTarget.prototype.addEventListener = function (type, listener, options) {
+          const passiveEvents = ['touchstart', 'touchmove', 'wheel', 'mousewheel'];
+          if (passiveEvents.includes(type)) {
+            if (typeof options === 'object' && options !== null) {
+              if (options.passive === undefined) {
+                options.passive = true;
+              }
+            } else {
+              options = { passive: true, capture: typeof options === 'boolean' ? options : false };
+            }
+          }
+          return originalAddEventListener.call(this, type, listener, options);
+        };
+      }
+    })();
+  </script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2563EB',
+          },
+          fontFamily: {
+            display: ['Poppins', 'sans-serif'],
+          },
+          borderRadius: {
+            DEFAULT: '0.75rem', // 12px
           },
         },
-      };
-    </script>
+      },
+    };
+  </script>
 
-    <!-- Import Map (corrigido e padronizado) -->
-    <script type="importmap">
+  <!-- Import Map (corrigido e padronizado) -->
+  <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
@@ -86,8 +116,10 @@
 </script>
 </head>
 
-  <body class="h-full w-full overflow-hidden bg-slate-50 antialiased font-display text-gray-800 dark:bg-slate-900 dark:text-slate-300">
-    <div id="root" class="h-full w-full"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+<body
+  class="h-full w-full overflow-hidden bg-slate-50 antialiased font-display text-gray-800 dark:bg-slate-900 dark:text-slate-300">
+  <div id="root" class="h-full w-full"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
 </html>
