@@ -41,7 +41,7 @@ import { supabase } from './lib/supabaseClient';
 // FIX: Restored Supabase v2 types to ensure type safety.
 import { type Session, type User } from '@supabase/supabase-js';
 import { getErrorMessage, convertUTCToLocal } from './lib/utils';
-import { useTodaysEvents } from './hooks/useQueries';
+import { useTodaysEvents, useUnreadNotificationsCount } from './hooks/useQueries';
 
 // FIX: Cast `import.meta` to `any` to access Vite environment variables without TypeScript errors.
 const areApiKeysConfigured =
@@ -122,7 +122,6 @@ const App: React.FC = () => {
     const [authView, setAuthView] = useState<AuthView>(getInitialAuthView());
     const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
     const [notifications, setNotifications] = useState<ToastNotification[]>([]);
-    const [unreadCount, setUnreadCount] = useState(0);
     const [pushPermissionStatus, setPushPermissionStatus] = useState<string | null>(null);
     const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
     // FIX: Use the `AppEvent` alias for the application's event state.
@@ -142,6 +141,9 @@ const App: React.FC = () => {
 
     // Optimization: Derive userId to stabilize dependencies and prevent re-fetches on token refresh
     const userId = session?.user?.id;
+
+    // Use optimized hook for instant notification count loading
+    const { data: unreadCount = 0 } = useUnreadNotificationsCount(userId || '');
 
     const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream, []);
     const isStandalone = useMemo(() => ('standalone' in window.navigator && (window.navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches, []);
@@ -269,13 +271,6 @@ const App: React.FC = () => {
                 };
             }
             setUserProfile(profile);
-
-            const { count } = await supabase
-                .from('notifications')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', currentSession.user.id)
-                .eq('is_read', false);
-            setUnreadCount(count ?? 0);
         } catch (err) {
             console.error("Error fetching core user data:", getErrorMessage(err));
             setUserProfile(null);
@@ -302,16 +297,10 @@ const App: React.FC = () => {
         // A navegação para o dashboard será bloqueada pela verificação da LGPD
     }, [refetchUserData]);
 
-    const refetchNotificationCount = useCallback(async () => {
-        if (session) {
-            const { count } = await supabase
-                .from('notifications')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', session.user.id)
-                .eq('is_read', false);
-            setUnreadCount(count ?? 0);
-        }
-    }, [session]);
+    const refetchNotificationCount = useCallback(() => {
+        // Invalidate the notifications cache to trigger a refetch
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    }, []);
 
     // --- PWA Installation Logic ---
     useEffect(() => {

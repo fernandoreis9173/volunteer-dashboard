@@ -798,3 +798,161 @@ export const useFrequencyPageData = () => {
     });
 };
 
+export const useLeaderDashboardData = (departmentId: number | null) => {
+    return useQuery({
+        queryKey: ['leader', 'dashboard', departmentId],
+        queryFn: async () => {
+            if (!departmentId) throw new Error("Department ID is required");
+
+            const currentYear = new Date().getFullYear();
+            const startOfYear = `${currentYear}-01-01`;
+
+            // Parallel fetching for maximum speed
+            const [deptRes, volDeptRes, eventsRes] = await Promise.all([
+                // 1. Department Name
+                supabase
+                    .from('departments')
+                    .select('name')
+                    .eq('id', departmentId)
+                    .single(),
+
+                // 2. Department Volunteers
+                supabase.from('volunteer_departments')
+                    .select('*, volunteers!inner(*, volunteer_departments(departments(id, name)))')
+                    .eq('department_id', departmentId)
+                    .eq('volunteers.status', 'Ativo'),
+
+                // 3. Events (optimized query)
+                supabase
+                    .from('events')
+                    .select('*, event_departments!inner(*, departments(*)), event_volunteers(*, volunteers(*))')
+                    .eq('event_departments.department_id', departmentId)
+                    .gte('date', startOfYear)
+                    .order('date', { ascending: false }) // Most recent first
+            ]);
+
+            if (deptRes.error) throw deptRes.error;
+            if (volDeptRes.error) throw volDeptRes.error;
+            if (eventsRes.error) throw eventsRes.error;
+
+            // Process Department Name
+            const departmentName = deptRes.data.name;
+
+            // Process Volunteers
+            const leaderVolunteers = (volDeptRes.data || []).map((vd: any) => vd.volunteers).filter(Boolean);
+            const departmentVolunteers = (leaderVolunteers || []).map((v: any) => ({
+                ...v,
+                departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean)
+            })) as DetailedVolunteer[];
+
+            // Process Events
+            // Fetch avatars for event volunteers
+            const events = eventsRes.data || [];
+            const userIds = new Set<string>();
+            events.forEach((event: any) => {
+                event.event_volunteers?.forEach((ev: any) => {
+                    if (ev.volunteers?.user_id) {
+                        userIds.add(ev.volunteers.user_id);
+                    }
+                });
+            });
+
+            if (userIds.size > 0) {
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('id, avatar_url')
+                    .in('id', Array.from(userIds));
+
+                const avatarMap = new Map();
+                profiles?.forEach((p: any) => avatarMap.set(p.id, p.avatar_url));
+
+                events.forEach((event: any) => {
+                    event.event_volunteers?.forEach((ev: any) => {
+                        if (ev.volunteers?.user_id) {
+                            ev.volunteers.avatar_url = avatarMap.get(ev.volunteers.user_id);
+                        }
+                    });
+                });
+            }
+
+            // Calculate Stats & Chart Data
+            const today = new Date();
+            const todayStr = today.toLocaleDateString('en-CA');
+            const next7Days = new Date(today);
+            next7Days.setDate(today.getDate() + 7);
+            const next7DaysStr = next7Days.toLocaleDateString('en-CA');
+            const last30Days = new Date(today);
+            last30Days.setDate(today.getDate() - 29);
+            const last30DaysStr = last30Days.toLocaleDateString('en-CA');
+
+            // Sort events for display (newest first is default from query, but we need specific sorts)
+            const allDepartmentEvents = [...events].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            const todaySchedules = allDepartmentEvents.filter(e => e.date === todayStr);
+            // Upcoming: future dates, closest first
+            const upcomingSchedules = allDepartmentEvents
+                .filter(e => e.date > todayStr && e.date <= next7DaysStr)
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                .slice(0, 10);
+
+            const chartEvents = allDepartmentEvents.filter(e => e.date >= last30DaysStr && e.date <= todayStr);
+            const annualEvents = allDepartmentEvents.filter(e => e.date >= startOfYear);
+
+            const departmentVolunteerIds = new Set(departmentVolunteers.map(v => v.id));
+
+            const annualAttendanceCount = annualEvents.reduce((count, event) => {
+                return count + (event.event_volunteers || []).filter((v: any) => departmentVolunteerIds.has(v.volunteer_id) && v.present).length;
+            }, 0);
+
+            const stats = {
+                activeVolunteers: { value: String(departmentVolunteers.length), change: 0 },
+                departments: { value: '1', change: 0 },
+                schedulesToday: { value: String(todaySchedules.length), change: 0 },
+                upcomingSchedules: { value: String(allDepartmentEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr).length), change: 0 },
+                annualAttendance: { value: String(annualAttendanceCount), change: 0 },
+            };
+
+            // Chart Data
+            const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
+            for (const event of chartEvents) {
+                const date = event.date;
+                if (!chartDataMap.has(date)) {
+                    chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
+                }
+                const entry = chartDataMap.get(date)!;
+                const scheduledInDept = (event.event_volunteers || []).filter((v: any) => Number(v.department_id) === Number(departmentId)).length;
+                entry.scheduledVolunteers += scheduledInDept;
+                entry.involvedDepartments.add(departmentId);
+                entry.eventNames.push(event.name);
+            }
+
+            const chartData = [];
+            for (let i = 0; i < 30; i++) {
+                const day = new Date(last30Days);
+                day.setDate(last30Days.getDate() + i);
+                const dateStr = day.toISOString().split('T')[0];
+                const dataForDay = chartDataMap.get(dateStr);
+                chartData.push({
+                    date: dateStr,
+                    scheduledVolunteers: dataForDay?.scheduledVolunteers || 0,
+                    involvedDepartments: dataForDay?.involvedDepartments.size || 0,
+                    eventNames: dataForDay?.eventNames || [],
+                });
+            }
+
+            return {
+                departmentName,
+                departmentVolunteers,
+                stats,
+                todaySchedules,
+                upcomingSchedules,
+                chartData,
+                activeLeaders: [], // Leaders don't see active leaders feed usually, or it's separate
+                allEvents: allDepartmentEvents
+            };
+        },
+        enabled: !!departmentId,
+        staleTime: 5 * 60 * 1000, // 5 minutes cache
+        refetchOnWindowFocus: false,
+    });
+};

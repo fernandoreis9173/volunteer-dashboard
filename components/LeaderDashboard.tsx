@@ -8,7 +8,7 @@ import { AnalysisChart } from './TrafficChart';
 import ActivityFeed from './ActivityFeed';
 import { supabase } from '../lib/supabaseClient';
 import { getErrorMessage } from '../lib/utils';
-import { useEvents, useInvalidateQueries } from '../hooks/useQueries';
+import { useInvalidateQueries, useLeaderDashboardData } from '../hooks/useQueries';
 import QRScannerModal from './QRScannerModal';
 import AttendanceFlashCards from './AttendanceFlashCards';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
@@ -65,8 +65,6 @@ interface LeaderDashboardProps {
 
 const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEvent, onNavigate }) => {
     const [selectedEvent, setSelectedEvent] = useState<DashboardEvent | null>(null);
-    const [departmentVolunteers, setDepartmentVolunteers] = useState<DetailedVolunteer[]>([]);
-    const [departmentName, setDepartmentName] = useState<string>('');
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [scanningEvent, setScanningEvent] = useState<DashboardEvent | null>(null);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -75,125 +73,31 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
 
     const { invalidateEvents, invalidateAll } = useInvalidateQueries();
 
-    const currentYear = new Date().getFullYear();
-    const startOfYear = `${currentYear}-01-01`;
+    // Use the new optimized hook for instant loading
+    const { data: dashboardData, isLoading } = useLeaderDashboardData(userProfile?.department_id || null);
 
-    const { data: eventsData = [], isLoading: eventsLoading } = useEvents({
-        departmentId: userProfile?.department_id || undefined,
-        startDate: startOfYear
-    });
+    // Default empty data structure while loading
+    const defaultData = {
+        departmentName: '',
+        departmentVolunteers: [],
+        stats: undefined,
+        todaySchedules: [],
+        upcomingSchedules: [],
+        chartData: [],
+        activeLeaders: [],
+        allEvents: []
+    };
 
-    const allDepartmentEvents = useMemo(() => {
-        return (eventsData as unknown as DashboardEvent[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [eventsData]);
-
-    const fetchVolunteersAndDept = useCallback(async () => {
-        if (!userProfile?.department_id) return;
-
-        try {
-            const [volunteerDepartmentsRes, departmentRes] = await Promise.all([
-                supabase.from('volunteer_departments')
-                    .select('*, volunteers!inner(*, volunteer_departments(departments(id, name)))')
-                    .eq('department_id', userProfile.department_id)
-                    .eq('volunteers.status', 'Ativo'),
-                supabase
-                    .from('departments')
-                    .select('name')
-                    .eq('id', userProfile.department_id)
-                    .single()
-            ]);
-
-            if (volunteerDepartmentsRes.error) throw volunteerDepartmentsRes.error;
-            if (departmentRes.error) throw departmentRes.error;
-
-            if (departmentRes.data) {
-                setDepartmentName(departmentRes.data.name);
-            }
-
-            const leaderVolunteers = (volunteerDepartmentsRes.data || []).map((vd: any) => vd.volunteers).filter(Boolean);
-            const transformedVols = (leaderVolunteers || []).map((v: any) => ({ ...v, departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean) }));
-            setDepartmentVolunteers(transformedVols);
-
-        } catch (err) {
-            console.error("Failed to fetch volunteers/dept:", getErrorMessage(err));
-        }
-    }, [userProfile?.department_id]);
-
-    useEffect(() => {
-        fetchVolunteersAndDept();
-    }, [fetchVolunteersAndDept]);
-
-    const dashboardData = useMemo(() => {
-        if (!userProfile?.department_id) {
-            return { stats: undefined, todaySchedules: [], upcomingSchedules: [], chartData: [], activeLeaders: [] };
-        }
-
-        const today = new Date();
-        const todayStr = today.toLocaleDateString('en-CA');
-        const next7Days = new Date(today);
-        next7Days.setDate(today.getDate() + 7);
-        const next7DaysStr = next7Days.toLocaleDateString('en-CA');
-        const last30Days = new Date(today);
-        last30Days.setDate(today.getDate() - 29);
-        const last30DaysStr = last30Days.toLocaleDateString('en-CA');
-        const startOfYear = `${today.getFullYear()}-01-01`;
-
-        const todaySchedules = allDepartmentEvents.filter(e => e.date === todayStr);
-        const upcomingSchedules = allDepartmentEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr).slice(0, 10);
-        const chartEvents = allDepartmentEvents.filter(e => e.date >= last30DaysStr && e.date <= todayStr);
-        const annualEvents = allDepartmentEvents.filter(e => e.date >= startOfYear);
-
-        const departmentVolunteerIds = new Set(departmentVolunteers.map(v => v.id));
-
-        const annualAttendanceCount = annualEvents.reduce((count, event) => {
-            return count + (event.event_volunteers || []).filter(v => departmentVolunteerIds.has(v.volunteer_id) && v.present).length;
-        }, 0);
-
-        const newStats: any = {
-            activeVolunteers: { value: String(departmentVolunteers.length), change: 0 },
-            departments: { value: '1', change: 0 },
-            schedulesToday: { value: String(todaySchedules.length), change: 0 },
-            upcomingSchedules: { value: String(allDepartmentEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr).length), change: 0 },
-            annualAttendance: { value: String(annualAttendanceCount), change: 0 },
-        };
-
-        const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
-        for (const event of chartEvents) {
-            const date = event.date;
-            if (!chartDataMap.has(date)) {
-                chartDataMap.set(date, { scheduledVolunteers: 0, involvedDepartments: new Set(), eventNames: [] });
-            }
-            const entry = chartDataMap.get(date)!;
-            const scheduledInDept = (event.event_volunteers || []).filter(v => Number(v.department_id) === Number(userProfile.department_id)).length;
-            entry.scheduledVolunteers += scheduledInDept;
-            if (userProfile.department_id) {
-                entry.involvedDepartments.add(userProfile.department_id);
-            }
-            entry.eventNames.push(event.name);
-        }
-
-        const newChartData: ChartDataPoint[] = [];
-        for (let i = 0; i < 30; i++) {
-            const day = new Date(last30Days);
-            day.setDate(last30Days.getDate() + i);
-            const dateStr = day.toISOString().split('T')[0];
-            const dataForDay = chartDataMap.get(dateStr);
-            newChartData.push({
-                date: dateStr,
-                scheduledVolunteers: dataForDay?.scheduledVolunteers || 0,
-                involvedDepartments: dataForDay?.involvedDepartments.size || 0,
-                eventNames: dataForDay?.eventNames || [],
-            });
-        }
-
-        return {
-            stats: newStats,
-            todaySchedules,
-            upcomingSchedules,
-            chartData: newChartData,
-            activeLeaders: [],
-        };
-    }, [allDepartmentEvents, departmentVolunteers, userProfile?.department_id]);
+    const {
+        departmentName,
+        departmentVolunteers,
+        stats,
+        todaySchedules,
+        upcomingSchedules,
+        chartData,
+        activeLeaders,
+        allEvents: allDepartmentEvents
+    } = dashboardData || defaultData;
 
     const showNotification = useCallback((message: string, type: 'success' | 'error') => {
         setNotification({ message, type });
@@ -266,16 +170,16 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
                     )}
                 </div>
 
-                <StatsRow stats={dashboardData.stats} userRole={userProfile?.role} />
+                <StatsRow stats={stats} userRole={userProfile?.role} />
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2">
-                        <AnalysisChart data={dashboardData.chartData} />
+                        <AnalysisChart data={chartData} />
                     </div>
                     <div className="lg:col-span-1">
                         <ActiveVolunteersList
                             volunteers={departmentVolunteers}
-                            stats={dashboardData.stats}
+                            stats={stats}
                             userRole={userProfile?.role}
                         />
                     </div>
@@ -284,8 +188,8 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2">
                         <UpcomingShiftsList
-                            todaySchedules={dashboardData.todaySchedules}
-                            upcomingSchedules={dashboardData.upcomingSchedules}
+                            todaySchedules={todaySchedules}
+                            upcomingSchedules={upcomingSchedules}
                             onViewDetails={handleViewDetails}
                             userRole={userProfile?.role ?? null}
                             leaderDepartmentId={userProfile?.department_id}
@@ -296,12 +200,12 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
                     <div className="lg:col-span-1 space-y-6">
                         {isLeader && userProfile && (
                             <AttendanceFlashCards
-                                schedules={dashboardData.todaySchedules}
+                                schedules={todaySchedules}
                                 userProfile={userProfile}
                                 departmentVolunteers={departmentVolunteers}
                             />
                         )}
-                        {isAdmin && <ActivityFeed leaders={dashboardData.activeLeaders} />}
+                        {isAdmin && <ActivityFeed leaders={activeLeaders} />}
                     </div>
                 </div>
 
