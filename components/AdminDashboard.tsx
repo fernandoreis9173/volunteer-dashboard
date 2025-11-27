@@ -73,7 +73,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [scanResult, setScanResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-    const { invalidateEvents } = useInvalidateQueries();
+    const { invalidateEvents, invalidateAll } = useInvalidateQueries();
 
     // React Query for Events
     const today = new Date();
@@ -222,35 +222,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
 
             // Limpa o erro após 4s
             setTimeout(() => {
-                console.log('[AdminDashboard] 🧹 Limpando resultado de erro');
-                <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                    {notification.message}
-                </div>
-                )
+                setScanResult(null);
+            }, 4000);
         }
-        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-            <div>
-                <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
-                <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
-            </div>
-            <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
-                {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
-                {activeEvent && (
-                    <button
-                        onClick={() => handleMarkAttendance(activeEvent as DashboardEvent)}
-                        className="p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors flex flex-row items-center justify-center gap-3 w-full md:w-auto md:px-6"
-                        aria-label="Marcar Presença"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="h-7 w-7 md:h-6 md:w-6">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
-                        </svg>
-                        <span className="text-lg md:text-base font-semibold">Marcar Presença</span>
-                    </button>
-                )}
-            </div>
-        </div>
+    }, [scanningEvent, scanResult, invalidateEvents]);
 
-        { statsError && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{getErrorMessage(statsError)}</div> }
+    const handleRefresh = async () => {
+        await Promise.all([
+            invalidateAll(),
+            refetchStats()
+        ]);
+    };
+
+    return (
+        <PullToRefresh onRefresh={handleRefresh}>
+            <div className="space-y-8">
+                {notification && (
+                    <div className={`fixed top-20 right-4 z-[9999] p-4 rounded-lg shadow-lg text-white ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+                        {notification.message}
+                    </div>
+                )}
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
+                        <p className="text-slate-500 mt-1">Visão geral do sistema de voluntários.</p>
+                    </div>
+                    <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
+                        {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
+                        {
+                            activeEvent && (
+                                <button
+                                    onClick={() => handleMarkAttendance(activeEvent as DashboardEvent)}
+                                    className="p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors flex flex-row items-center justify-center gap-3 w-full md:w-auto md:px-6"
+                                    aria-label="Marcar Presença"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="h-7 w-7 md:h-6 md:w-6">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V6a2 2 0 0 1 2-2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 16v2a2 2 0 0 0 2 2h2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 8V6a2 2 0 0 0-2-2h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 16v2a2 2 0 0 1-2 2h-2" />
+                                    </svg>
+                                    <span className="text-lg md:text-base font-semibold">Marcar Presença</span>
+                                </button>
+                            )
+                        }
+                    </div>
+                </div>
+
+                {statsError && <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">{getErrorMessage(statsError)}</div>}
                 <StatsRow stats={dashboardData.stats} userRole="admin" />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
                     <div className="lg:col-span-2">
@@ -276,24 +292,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                     </div>
                 </div>
                 <EventDetailsModal isOpen={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} />
-        {
-            isScannerOpen && (
-                <QRScannerModal
-                    isOpen={isScannerOpen}
-                    onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
-                    onScanSuccess={handleAutoConfirmAttendance}
-                    scanningEventName={scanningEvent?.name}
-                    scanResult={scanResult}
+                {
+                    isScannerOpen && (
+                        <QRScannerModal
+                            isOpen={isScannerOpen}
+                            onClose={() => { setIsScannerOpen(false); setScanningEvent(null); setScanResult(null); }}
+                            onScanSuccess={handleAutoConfirmAttendance}
+                            scanningEventName={scanningEvent?.name}
+                            scanResult={scanResult}
+                        />
+                    )
+                }
+                <EventTimelineViewerModal
+                    isOpen={!!viewingTimelineFor}
+                    onClose={() => setViewingTimelineFor(null)}
+                    event={viewingTimelineFor}
                 />
-            )
-        }
-        <EventTimelineViewerModal
-            isOpen={!!viewingTimelineFor}
-            onClose={() => setViewingTimelineFor(null)}
-            event={viewingTimelineFor}
-        />
-            </div >
-        </PullToRefresh >
+            </div>
+        </PullToRefresh>
     );
 };
 

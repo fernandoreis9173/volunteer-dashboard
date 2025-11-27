@@ -13,6 +13,7 @@ import VolunteerStatCard from './VolunteerStatCard';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
 import ConfettiCelebration from './ConfettiCelebration';
 import PullToRefresh from './PullToRefresh';
+import { CalendarIcon, ClockIcon, CheckCircleIcon, ClipboardListIcon } from '@heroicons/react/outline';
 
 interface LiveEventTimerProps {
     event: VolunteerEvent;
@@ -94,6 +95,15 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
     const upcomingEvents = dashboardData?.upcomingEvents || [];
     const invitations = dashboardData?.invitations || [];
     const stats = dashboardData?.stats || { upcoming: 0, attended: 0, totalScheduled: 0, eventsToday: 0 };
+
+    const userName = session?.user?.user_metadata?.name || 'Voluntário';
+
+    const statCardsData = [
+        { key: 'upcoming', title: 'Próximos Eventos', icon: <CalendarIcon />, color: 'blue' },
+        { key: 'attended', title: 'Presenças Confirmadas', icon: <CheckCircleIcon />, color: 'green' },
+        { key: 'totalScheduled', title: 'Total Escalado', icon: <ClipboardListIcon />, color: 'yellow' },
+        { key: 'eventsToday', title: 'Eventos Hoje', icon: <CalendarIcon />, color: 'purple' }
+    ];
 
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [qrCodeData, setQrCodeData] = useState<object | null>(null);
@@ -233,6 +243,13 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
             setSwapRequestEvent(null);
         }
     };
+    const handleRefresh = async () => {
+        await Promise.all([
+            invalidateEvents(),
+            refetchDashboard()
+        ]);
+    };
+
     return (
         <PullToRefresh onRefresh={handleRefresh}>
             <div className="space-y-6">
