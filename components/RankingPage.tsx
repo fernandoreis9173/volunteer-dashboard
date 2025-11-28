@@ -187,14 +187,35 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
         }
 
         // 3. Combine volunteer data with calculated scores
+        // Helper to map department IDs to objects
+        const deptsMap = new Map(departments.map(d => [d.id, d]));
+
         let rankedVolunteers: RankedVolunteer[] = volunteers.map((v: any) => {
             const stats = attendanceByVolunteer.get(v.id) || { totalPresent: 0, totalScheduled: 0, totalAbsences: 0 };
+
+            // Get explicit departments
+            const myDepts = v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean);
+            const myDeptIds = new Set(myDepts.map((d: any) => d.id));
+
+            // Workaround: Infer departments from attendance history if RLS hides volunteer_departments
+            // We check all attendance records for this volunteer
+            const volunteerAttendance = rawAttendance.filter((r: any) => r.volunteer_id === v.id);
+            volunteerAttendance.forEach((r: any) => {
+                if (r.department_id && !myDeptIds.has(r.department_id)) {
+                    const d = deptsMap.get(r.department_id);
+                    if (d) {
+                        myDepts.push(d);
+                        myDeptIds.add(r.department_id);
+                    }
+                }
+            });
+
             return {
                 id: v.id,
                 name: v.name,
                 initials: v.initials,
                 avatar_url: v.avatar_url,
-                departments: v.volunteer_departments.map((vd: any) => vd.departments).filter(Boolean),
+                departments: myDepts,
                 ...stats
             };
         });
@@ -243,10 +264,22 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
             if (userProfile.department_id) {
                 options = options.filter(d => d.value === String(userProfile.department_id));
             }
+        } else if (userProfile?.role === 'volunteer' && userProfile.volunteer_id) {
+            const currentVolunteer = volunteers.find((v: any) => v.id === userProfile.volunteer_id);
+            if (currentVolunteer?.volunteer_departments) {
+                const myDeptIds = currentVolunteer.volunteer_departments
+                    .map((vd: any) => vd.departments?.id)
+                    .filter(Boolean)
+                    .map(String);
+
+                if (myDeptIds.length > 0) {
+                    options = options.filter(d => myDeptIds.includes(d.value));
+                }
+            }
         }
 
         return [allOption, ...options];
-    }, [departments, userProfile]);
+    }, [departments, userProfile, volunteers]);
 
     const yearOptions = [{ value: 'all', label: 'Todos os Anos' }, ...availableYears.map(y => ({ value: String(y), label: String(y) }))];
     const sortOptions = [

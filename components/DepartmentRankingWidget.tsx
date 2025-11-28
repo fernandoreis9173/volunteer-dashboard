@@ -15,9 +15,17 @@ const DepartmentRankingWidget: React.FC<DepartmentRankingWidgetProps> = ({ depar
         const { volunteers, attendance } = rankingData;
 
         // Filter volunteers belonging to the department
-        const deptVolunteers = volunteers.filter((v: any) =>
-            v.volunteer_departments.some((vd: any) => vd.departments?.id === departmentId)
-        );
+        const deptVolunteers = volunteers.filter((v: any) => {
+            // Check explicit membership
+            const explicitMatch = v.volunteer_departments.some((vd: any) => vd.departments?.id === departmentId);
+            if (explicitMatch) return true;
+
+            // Check inferred membership from attendance
+            const hasAttendance = attendance.some((r: any) =>
+                r.volunteer_id === v.id && r.department_id === departmentId
+            );
+            return hasAttendance;
+        });
 
         // Calculate stats
         const statsMap = new Map<number, { present: number; scheduled: number }>();

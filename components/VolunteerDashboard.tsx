@@ -330,6 +330,7 @@ const VolunteerDashboard: React.FC<VolunteerDashboardProps> = ({ session, active
                                 onViewTimeline={setViewingTimelineFor}
                                 isToday={false}
                                 loading={loading}
+                                layout="horizontal"
                             />
                         )}
                         {!loading && todayEvents.length === 0 && upcomingEvents.length === 0 && (
@@ -424,7 +425,8 @@ const EventList: React.FC<{
     onViewTimeline: (event: VolunteerSchedule) => void;
     isToday: boolean;
     loading: boolean;
-}> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline, isToday, loading }) => {
+    layout?: 'vertical' | 'horizontal';
+}> = ({ title, events, volunteerId, onGenerateQrCode, onRequestSwap, onViewTimeline, isToday, loading, layout = 'vertical' }) => {
 
     if (loading) {
         return (
@@ -441,17 +443,18 @@ const EventList: React.FC<{
     return (
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">{title}</h2>
-            <div className="space-y-4">
+            <div className={layout === 'horizontal' ? "flex overflow-x-auto gap-4 pb-4 snap-x" : "space-y-4"}>
                 {events.map(event => (
-                    <EventCard
-                        key={`${event.id}-${event.department_id}`}
-                        event={event}
-                        isToday={isToday}
-                        volunteerId={volunteerId}
-                        onGenerateQrCode={onGenerateQrCode}
-                        onRequestSwap={onRequestSwap}
-                        onViewTimeline={onViewTimeline}
-                    />
+                    <div key={`${event.id}-${event.department_id}`} className={layout === 'horizontal' ? "min-w-[85%] sm:min-w-[380px] flex-shrink-0 snap-center" : ""}>
+                        <EventCard
+                            event={event}
+                            isToday={isToday}
+                            volunteerId={volunteerId}
+                            onGenerateQrCode={onGenerateQrCode}
+                            onRequestSwap={onRequestSwap}
+                            onViewTimeline={onViewTimeline}
+                        />
+                    </div>
                 ))}
             </div>
         </div>
