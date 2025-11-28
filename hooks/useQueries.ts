@@ -430,20 +430,41 @@ export const useAdminDashboardStats = () => {
                 activeVolunteersCountRes,
                 departmentsCountRes,
                 activeLeadersRes,
+                departmentLeadersRes,
             ] = await Promise.all([
                 supabase.from('volunteers').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
                 supabase.from('departments').select('*', { count: 'exact', head: true }).eq('status', 'Ativo'),
-                supabase.functions.invoke('list-users', { body: { context: 'dashboard' } }),
+                supabase.functions.invoke('list-users'),
+                supabase.from('department_leaders').select('department_id, user_id'),
             ]);
 
             if (activeVolunteersCountRes.error) throw activeVolunteersCountRes.error;
             if (departmentsCountRes.error) throw departmentsCountRes.error;
             if (activeLeadersRes.error) throw activeLeadersRes.error;
 
+            const activeLeaders = activeLeadersRes.data?.users || [];
+
+            // Map department_id to leader name(s) using activeLeaders list
+            const departmentLeaderNames: Record<string, string> = {};
+            if (departmentLeadersRes.data) {
+                departmentLeadersRes.data.forEach((rel: any) => {
+                    const leaderUser = activeLeaders.find((u: any) => u.id === rel.user_id);
+                    // Fallback to email if name is missing, or just ignore if user not found
+                    const name = leaderUser?.user_metadata?.name || leaderUser?.email;
+
+                    if (name) {
+                        const deptId = String(rel.department_id);
+                        const current = departmentLeaderNames[deptId];
+                        departmentLeaderNames[deptId] = current ? `${current}, ${name}` : name;
+                    }
+                });
+            }
+
             return {
                 activeVolunteers: activeVolunteersCountRes.count ?? 0,
                 departments: departmentsCountRes.count ?? 0,
-                activeLeaders: activeLeadersRes.data?.users || [],
+                activeLeaders: activeLeaders,
+                departmentLeadersMap: departmentLeaderNames,
             };
         },
         staleTime: 5 * 60 * 1000, // 5 minutos
@@ -689,7 +710,7 @@ export const useRankingData = () => {
         queryFn: async () => {
             const [volunteersRes, attendanceRes, departmentsRes] = await Promise.all([
                 supabase.from('volunteers').select('id, user_id, name, initials, volunteer_departments(departments(id, name))').eq('status', 'Ativo'),
-                supabase.from('event_volunteers').select('volunteer_id, present, events(date)'),
+                supabase.from('event_volunteers').select('volunteer_id, present, department_id, events(date)'),
                 supabase.from('departments').select('id, name').order('name')
             ]);
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
-import ActiveVolunteersList from './ActiveVolunteersList';
+import DepartmentRankingWidget from './DepartmentRankingWidget';
 import type { DashboardEvent, ChartDataPoint, Event, Page, DashboardData, DetailedVolunteer } from '../types';
 import EventDetailsModal from './EventDetailsModal';
 import { AnalysisChart } from './TrafficChart';
@@ -177,11 +177,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ userProfile, activeEv
                         <AnalysisChart data={chartData} />
                     </div>
                     <div className="lg:col-span-1">
-                        <ActiveVolunteersList
-                            volunteers={departmentVolunteers}
-                            stats={stats}
-                            userRole={userProfile?.role}
-                        />
+                        <DepartmentRankingWidget departmentId={userProfile?.department_id} />
                     </div>
                 </div>
 

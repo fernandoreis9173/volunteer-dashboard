@@ -56,7 +56,7 @@ export interface DashboardEvent {
   location_iframe?: string;
   observations?: string;
   event_departments: { department_id: number; departments: { id: number; name: string; leader?: string; } | null }[] | null;
-  event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string } | null }[] | null;
+  event_volunteers: { department_id: number; volunteer_id: number; present: boolean | null; volunteers: { name: string; initials?: string; avatar_url?: string; } | null }[] | null;
   cronograma_principal_id?: string | null;
   cronograma_kids_id?: string | null;
 }

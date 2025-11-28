@@ -5,10 +5,13 @@ import { Session } from '@supabase/supabase-js';
 import VolunteerStatsModal from './VolunteerStatsModal';
 import { Medalha01Icon, Medalha02Icon, Medalha03Icon } from '../assets/icons';
 import { useRankingData } from '../hooks/useQueries';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface UserProfile {
     volunteer_id: number | null;
     role?: 'admin' | 'leader' | 'volunteer' | 'lider';
+    department_id?: number | null;
 }
 
 const MedalIcon: React.FC<{ rank: number }> = ({ rank }) => {
@@ -38,6 +41,7 @@ export interface RankedVolunteer {
     departments: { id: number; name: string }[];
     totalPresent: number;
     totalScheduled: number;
+    totalAbsences: number;
     avatar_url?: string;
 }
 
@@ -139,41 +143,52 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
             }
             const sortedYears = Array.from(years).sort((a, b) => b - a);
             setAvailableYears(sortedYears);
-            if (sortedYears.length > 0 && selectedYear === new Date().getFullYear().toString()) {
-                // Only set if not already set by user interaction or default
-                // Actually, we want to keep the default 'current year' if possible, or fallback to latest
-                // But since we initialize selectedYear with current year, we might just leave it.
-                // Let's just ensure availableYears is populated.
-            }
         }
-    }, [rawAttendance]); // Run when data is loaded
+    }, [rawAttendance]);
 
     const processedRanking = useMemo(() => {
+        const today = new Date().toISOString().split('T')[0];
+
         // 1. Filter attendance by selected year
         const yearFilteredAttendance = rawAttendance.filter(record => {
             if (selectedYear === 'all') return true;
-            // FIX: The `events` relation from Supabase might be an array even for a to-one join. Handle this by taking the first element.
             const eventData = Array.isArray(record.events) ? record.events[0] : record.events;
             if (!eventData?.date) return false;
             return new Date(eventData.date).getFullYear().toString() === selectedYear;
         });
 
         // 2. Calculate scores based on filtered attendance
-        const attendanceByVolunteer = new Map<number, { totalPresent: number; totalScheduled: number }>();
+        const attendanceByVolunteer = new Map<number, { totalPresent: number; totalScheduled: number; totalAbsences: number }>();
         for (const record of yearFilteredAttendance) {
+            // Filter attendance by department if a specific department is selected
+            if (selectedDepartment !== 'all') {
+                const deptId = parseInt(selectedDepartment, 10);
+                if (record.department_id !== deptId) continue;
+            }
+
             if (!attendanceByVolunteer.has(record.volunteer_id)) {
-                attendanceByVolunteer.set(record.volunteer_id, { totalPresent: 0, totalScheduled: 0 });
+                attendanceByVolunteer.set(record.volunteer_id, { totalPresent: 0, totalScheduled: 0, totalAbsences: 0 });
             }
             const stats = attendanceByVolunteer.get(record.volunteer_id)!;
             stats.totalScheduled++;
+
             if (record.present) {
                 stats.totalPresent++;
+            } else {
+                // Check if it's an absence (past event and not present)
+                const eventData = Array.isArray(record.events) ? record.events[0] : record.events;
+                if (eventData?.date && eventData.date < today) {
+                    stats.totalAbsences++;
+                } else if (record.present === false) {
+                    // Explicitly marked absent
+                    stats.totalAbsences++;
+                }
             }
         }
 
         // 3. Combine volunteer data with calculated scores
         let rankedVolunteers: RankedVolunteer[] = volunteers.map((v: any) => {
-            const stats = attendanceByVolunteer.get(v.id) || { totalPresent: 0, totalScheduled: 0 };
+            const stats = attendanceByVolunteer.get(v.id) || { totalPresent: 0, totalScheduled: 0, totalAbsences: 0 };
             return {
                 id: v.id,
                 name: v.name,
@@ -184,7 +199,7 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
             };
         });
 
-        // 4. Filter by department
+        // 4. Filter by department (volunteers)
         if (selectedDepartment !== 'all') {
             const deptId = parseInt(selectedDepartment, 10);
             rankedVolunteers = rankedVolunteers.filter(v => v.departments.some(d => d.id === deptId));
@@ -195,9 +210,14 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
             const percentageA = a.totalScheduled > 0 ? a.totalPresent / a.totalScheduled : 0;
             const percentageB = b.totalScheduled > 0 ? b.totalPresent / b.totalScheduled : 0;
 
+            const absencesA = a.totalAbsences;
+            const absencesB = b.totalAbsences;
+
             switch (sortBy) {
                 case 'least':
-                    if (a.totalPresent !== b.totalPresent) return a.totalPresent - b.totalPresent;
+                    // Prioritize Absences (Desc) - "More absences = Least Frequent"
+                    if (absencesA !== absencesB) return absencesB - absencesA;
+                    // If absences are equal, sort by percentage (Asc) - "Lower percentage = Worse"
                     return percentageA - percentageB;
                 case 'name':
                     return a.name.localeCompare(b.name);
@@ -215,7 +235,19 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
         return index !== -1 ? index + 1 : null;
     }, [processedRanking, userProfile]);
 
-    const departmentOptions = [{ value: 'all', label: 'Todos os Departamentos' }, ...departments.map(d => ({ value: String(d.id), label: d.name }))];
+    const departmentOptions = useMemo(() => {
+        const allOption = { value: 'all', label: 'Todos os Departamentos' };
+        let options = departments.map(d => ({ value: String(d.id), label: d.name }));
+
+        if (userProfile?.role === 'leader' || userProfile?.role === 'lider') {
+            if (userProfile.department_id) {
+                options = options.filter(d => d.value === String(userProfile.department_id));
+            }
+        }
+
+        return [allOption, ...options];
+    }, [departments, userProfile]);
+
     const yearOptions = [{ value: 'all', label: 'Todos os Anos' }, ...availableYears.map(y => ({ value: String(y), label: String(y) }))];
     const sortOptions = [
         { value: 'most', label: 'Mais Frequentes' },
@@ -228,12 +260,44 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
 
     const handleVolunteerClick = (volunteer: RankedVolunteer) => {
         const isCurrentUser = userProfile?.volunteer_id === volunteer.id;
-        // Check for both English and Portuguese role names to be safe
         const isAdminOrLeader = userProfile?.role === 'admin' || userProfile?.role === 'leader' || userProfile?.role === 'lider';
 
         if (isCurrentUser || isAdminOrLeader) {
             setViewingVolunteer(volunteer);
         }
+    };
+
+    const handleExportPDF = () => {
+        const doc = new jsPDF();
+
+        doc.setFontSize(18);
+        doc.text('Ranking de Voluntários', 14, 22);
+
+        doc.setFontSize(11);
+        doc.text(`Departamento: ${selectedDeptLabel}`, 14, 30);
+        doc.text(`Ano: ${selectedYearLabel}`, 14, 36);
+        doc.text(`Ordenação: ${selectedSortLabel}`, 14, 42);
+
+        const tableColumn = ["Posição", "Nome", "Departamento(s)", "Presenças", "Faltas", "Frequência"];
+        const tableRows = processedRanking.map((v, index) => [
+            index + 1,
+            v.name,
+            v.departments.map(d => d.name).join(', '),
+            v.totalPresent,
+            v.totalAbsences,
+            v.totalScheduled > 0 ? ((v.totalPresent / v.totalScheduled) * 100).toFixed(1) + '%' : '0%'
+        ]);
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 50,
+            styles: { fontSize: 10, cellPadding: 3 },
+            headStyles: { fillColor: [59, 130, 246] }, // Blue-500
+            alternateRowStyles: { fillColor: [245, 247, 250] } // Slate-50
+        });
+
+        doc.save(`ranking_voluntarios_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     return (
@@ -249,10 +313,16 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                 </div>
             )}
 
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-4">
-                <Dropdown buttonLabel={selectedDeptLabel} options={departmentOptions} selectedValue={selectedDepartment} onSelect={setSelectedDepartment} isOpen={isDeptDropdownOpen} setIsOpen={setIsDeptDropdownOpen} dropdownRef={deptDropdownRef} />
-                <Dropdown buttonLabel={selectedYearLabel} options={yearOptions} selectedValue={selectedYear} onSelect={setSelectedYear} isOpen={isYearDropdownOpen} setIsOpen={setIsYearDropdownOpen} dropdownRef={yearDropdownRef} />
-                <Dropdown buttonLabel={selectedSortLabel} options={sortOptions} selectedValue={sortBy} onSelect={(value) => setSortBy(value as 'most' | 'least' | 'name')} isOpen={isSortDropdownOpen} setIsOpen={setIsSortDropdownOpen} dropdownRef={sortDropdownRef} />
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-4 justify-between items-center">
+                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                    <Dropdown buttonLabel={selectedDeptLabel} options={departmentOptions} selectedValue={selectedDepartment} onSelect={setSelectedDepartment} isOpen={isDeptDropdownOpen} setIsOpen={setIsDeptDropdownOpen} dropdownRef={deptDropdownRef} />
+                    <Dropdown buttonLabel={selectedYearLabel} options={yearOptions} selectedValue={selectedYear} onSelect={setSelectedYear} isOpen={isYearDropdownOpen} setIsOpen={setIsYearDropdownOpen} dropdownRef={yearDropdownRef} />
+                    <Dropdown buttonLabel={selectedSortLabel} options={sortOptions} selectedValue={sortBy} onSelect={(value) => setSortBy(value as 'most' | 'least' | 'name')} isOpen={isSortDropdownOpen} setIsOpen={setIsSortDropdownOpen} dropdownRef={sortDropdownRef} />
+                </div>
+                <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold text-sm w-full sm:w-auto justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    Exportar PDF
+                </button>
             </div>
 
             {loading ? <p className="text-center text-slate-500 mt-10">Carregando ranking...</p> : error ? <p className="text-center text-red-500 mt-10">{error}</p> : (
@@ -260,13 +330,30 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                     <div className="divide-y divide-slate-100 dark:divide-slate-700">
                         {processedRanking.map((volunteer, index) => {
                             const rank = index + 1;
-                            const isTop3 = rank <= 3;
-                            const topScore = processedRanking.length > 0 ? processedRanking[0].totalPresent : 0;
-                            const progressBarWidth = topScore > 0 ? Math.round((volunteer.totalPresent / topScore) * 100) : 0;
+                            const isTop3 = rank <= 3 && sortBy === 'most';
+
+                            // Calculate max values for relative progress
+                            const maxScore = Math.max(...processedRanking.map(v => v.totalPresent), 0);
+                            const maxAbsences = Math.max(...processedRanking.map(v => v.totalAbsences), 0);
+
+                            let progressBarWidth = 0;
+                            let barColor = "bg-blue-500";
+                            let progressLabel = "Pontuação Relativa";
+
+                            if (sortBy === 'least') {
+                                progressBarWidth = maxAbsences > 0 ? Math.round((volunteer.totalAbsences / maxAbsences) * 100) : 0;
+                                barColor = "bg-red-500";
+                                progressLabel = "Faltas Relativas";
+                            } else {
+                                progressBarWidth = maxScore > 0 ? Math.round((volunteer.totalPresent / maxScore) * 100) : 0;
+                                barColor = "bg-blue-500";
+                            }
+
                             const isCurrentUser = volunteer.id === userProfile?.volunteer_id;
 
                             const points = volunteer.totalPresent;
                             const level = Math.floor(points / 5) + 1;
+                            const absences = volunteer.totalAbsences;
 
                             const renderContent = () => {
                                 return (
@@ -274,13 +361,16 @@ const RankingPage: React.FC<RankingPageProps> = ({ session, userProfile }) => {
                                         <div className="flex-grow min-w-0">
                                             <div className="font-semibold text-slate-800 dark:text-slate-100 truncate">{volunteer.name}</div>
                                             {volunteer.totalScheduled > 0 && (
-                                                <div className="mt-1" title={`Pontuação Relativa: ${progressBarWidth}%`}>
-                                                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 shadow-inner">
+                                                <div className="mt-1 flex items-center gap-2 w-full">
+                                                    <div className="flex-grow bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 shadow-inner" title={`${progressLabel}: ${progressBarWidth}%`}>
                                                         <div
-                                                            className="bg-blue-500 h-2.5 rounded-full transition-all duration-500"
+                                                            className={`${barColor} h-2.5 rounded-full transition-all duration-500`}
                                                             style={{ width: `${progressBarWidth}%` }}
                                                         ></div>
                                                     </div>
+                                                    {sortBy === 'least' && absences > 0 && (
+                                                        <span className="text-xs font-medium text-red-500 whitespace-nowrap">{absences} faltas</span>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

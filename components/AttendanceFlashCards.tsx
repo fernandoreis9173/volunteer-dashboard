@@ -13,12 +13,13 @@ interface AttendanceFlashCardsProps {
     schedules: DashboardEvent[] | undefined;
     userProfile: UserProfileState | null;
     departmentVolunteers?: { id: number; name: string; }[];
+    showAllDepartments?: boolean;
 }
 
-const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, userProfile, departmentVolunteers = [] }) => {
+const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, userProfile, departmentVolunteers = [], showAllDepartments = false }) => {
 
     const attendanceData = useMemo(() => {
-        if (!schedules || !userProfile?.department_id) {
+        if (!schedules || (!userProfile?.department_id && !showAllDepartments)) {
             return { present: 0, absent: 0, total: 0 };
         }
 
@@ -35,7 +36,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
                 // FIX: Count volunteers who were scheduled FOR this department in this event
                 // This ensures that volunteers from other departments (who might be helping out) are counted correctly if scheduled for this department,
                 // AND volunteers from this department who are helping elsewhere are NOT counted here.
-                if (ev.department_id === userProfile.department_id) {
+                if (showAllDepartments || ev.department_id === userProfile?.department_id) {
                     total++;
                     if (ev.present) {
                         present++;
@@ -48,7 +49,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
         });
 
         return { present, absent, total };
-    }, [schedules, userProfile]);
+    }, [schedules, userProfile, showAllDepartments]);
 
     const { present, absent, total } = attendanceData;
     const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
@@ -82,7 +83,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
                 <div className="flex justify-between items-start">
                     <div>
                         <h2 className="text-xl font-bold text-slate-800">Frequência de Hoje</h2>
-                        <p className="text-sm text-slate-500">Desempenho do seu departamento</p>
+                        <p className="text-sm text-slate-500">{showAllDepartments ? 'Desempenho Geral' : 'Desempenho do seu departamento'}</p>
                     </div>
                     <button className="text-slate-400 hover:text-slate-600 p-1">
 
@@ -106,7 +107,7 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
             </div>
 
             <p className="text-center text-sm text-slate-600 px-6 -mt-4">
-                Você tem <strong>{present} de {total}</strong> presenças confirmadas em seu departamento. Mantenha o bom trabalho!
+                Você tem <strong>{present} de {total}</strong> presenças confirmadas {showAllDepartments ? 'no total' : 'em seu departamento'}. Mantenha o bom trabalho!
             </p>
 
             {/* Bottom Section */}

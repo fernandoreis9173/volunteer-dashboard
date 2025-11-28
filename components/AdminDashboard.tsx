@@ -6,9 +6,9 @@ import { useEvents, useInvalidateQueries, useAdminDashboardStats } from '../hook
 import StatsRow from './StatsRow';
 import UpcomingShiftsList from './UpcomingShiftsList';
 import { AnalysisChart } from './TrafficChart';
-import ActivityFeed from './ActivityFeed';
+import AttendanceFlashCards from './AttendanceFlashCards';
 import EventDetailsModal from './EventDetailsModal';
-import ActiveVolunteersList from './ActiveVolunteersList';
+import DashboardCalendar from './DashboardCalendar';
 import EventTimelineViewerModal from './EventTimelineViewerModal';
 import QRScannerModal from './QRScannerModal';
 import PullToRefresh from './PullToRefresh';
@@ -92,14 +92,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
 
     const dashboardData = useMemo(() => {
         const allEvents = (eventsData as unknown as DashboardEvent[]) || [];
+        const activeLeaders = statsData?.activeLeaders || [];
+        // @ts-ignore
+        const departmentLeadersMap = statsData?.departmentLeadersMap || {};
+
+        // Enrich events with leader names
+        const enrichedEvents = allEvents.map(event => ({
+            ...event,
+            event_departments: event.event_departments?.map(ed => ({
+                ...ed,
+                departments: ed.departments ? {
+                    ...ed.departments,
+                    leader: departmentLeadersMap[String(ed.departments.id)] || ed.departments.leader
+                } : null
+            })) || null
+        }));
 
         const next7Days = new Date(today);
         next7Days.setDate(today.getDate() + 7);
         const next7DaysStr = next7Days.toISOString().split('T')[0];
 
-        const todaySchedules = allEvents.filter(e => e.date === todayStr);
-        const upcomingSchedules = allEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr);
-        const chartEvents = allEvents.filter(e => e.date <= todayStr);
+        const todaySchedules = enrichedEvents.filter(e => e.date === todayStr);
+        const upcomingSchedules = enrichedEvents.filter(e => e.date > todayStr && e.date <= next7DaysStr);
+        const chartEvents = enrichedEvents.filter(e => e.date <= todayStr);
 
         // --- Process Chart Data ---
         const chartDataMap = new Map<string, { scheduledVolunteers: number; involvedDepartments: Set<number>; eventNames: string[] }>();
@@ -136,11 +151,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                 schedulesToday: { value: String(todaySchedules.length), change: 0 },
                 upcomingSchedules: { value: String(upcomingSchedules.length), change: 0 },
             },
-            activeLeaders: statsData?.activeLeaders || [],
+            activeLeaders,
             todaySchedules,
             upcomingSchedules: upcomingSchedules.slice(0, 10),
             chartData,
-        } as DashboardData;
+            allEnrichedEvents: enrichedEvents,
+        } as DashboardData & { allEnrichedEvents: DashboardEvent[] };
 
     }, [eventsData, statsData, todayStr, last30DaysStr]);
 
@@ -273,7 +289,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                         {dashboardData.chartData ? <AnalysisChart data={dashboardData.chartData} /> : <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-full animate-pulse"><div className="h-8 bg-slate-200 rounded w-1/2 mb-6"></div><div className="h-[300px] bg-slate-200 rounded"></div></div>}
                     </div>
                     <div className="lg:col-span-1">
-                        <ActiveVolunteersList stats={dashboardData.stats} userRole={'admin'} />
+                        <DashboardCalendar events={dashboardData.allEnrichedEvents || []} />
                     </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
@@ -282,13 +298,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                             todaySchedules={dashboardData.todaySchedules}
                             upcomingSchedules={dashboardData.upcomingSchedules}
                             onViewDetails={setSelectedEvent}
-                            userRole={'admin'}
+                            userRole="admin"
+                            leaderDepartmentId={null}
                             onMarkAttendance={handleMarkAttendance}
                             onViewTimeline={setViewingTimelineFor}
                         />
                     </div>
                     <div className="lg:col-span-1">
-                        <ActivityFeed leaders={dashboardData.activeLeaders} />
+                        <AttendanceFlashCards
+                            schedules={dashboardData.todaySchedules}
+                            userProfile={{ role: 'admin', department_id: null, volunteer_id: null, status: 'Ativo' }}
+                            departmentVolunteers={[]}
+                            showAllDepartments={true}
+                        />
                     </div>
                 </div>
                 <EventDetailsModal isOpen={!!selectedEvent} event={selectedEvent} onClose={() => setSelectedEvent(null)} />
