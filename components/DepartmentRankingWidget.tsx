@@ -44,7 +44,14 @@ const DepartmentRankingWidget: React.FC<DepartmentRankingWidgetProps> = ({ depar
                 percentage: stats.scheduled > 0 ? (stats.present / stats.scheduled) * 100 : 0
             };
         })
-            .sort((a: any, b: any) => b.totalPresent - a.totalPresent) // Sort by points (presence)
+            .sort((a: any, b: any) => {
+                // Sort by points first (descending)
+                if (b.totalPresent !== a.totalPresent) {
+                    return b.totalPresent - a.totalPresent;
+                }
+                // Then by percentage (descending)
+                return b.percentage - a.percentage;
+            })
             .slice(0, 5); // Top 5
 
     }, [rankingData, departmentId]);
@@ -62,28 +69,34 @@ const DepartmentRankingWidget: React.FC<DepartmentRankingWidgetProps> = ({ depar
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 h-full">
             <h3 className="text-lg font-bold text-slate-800 mb-6">Ranking do Departamento</h3>
             <div className="space-y-6">
-                {rankedVolunteers.map((vol: any, index: number) => (
-                    <div key={vol.id} className="flex items-center gap-4">
-                        <div className="w-8 flex justify-center">
-                            {renderRankIcon(index)}
-                        </div>
-                        <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0">
-                            {vol.avatar_url ? (
-                                <img src={vol.avatar_url} alt={vol.name} className="w-full h-full object-cover" />
-                            ) : (
-                                vol.initials || '?'
-                            )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-800 truncate">{vol.name}</p>
-                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                                <span className="font-medium text-blue-600">{vol.totalPresent} pts</span>
-                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                <span>{Math.round(vol.percentage)}% freq.</span>
+                {rankedVolunteers.map((vol: any, index: number) => {
+                    const maxScore = rankedVolunteers[0]?.totalPresent || 0;
+                    const progressBarWidth = maxScore > 0 ? Math.round((vol.totalPresent / maxScore) * 100) : 0;
+
+                    return (
+                        <div key={vol.id} className="flex items-center gap-4">
+                            <div className="w-8 flex justify-center">
+                                {renderRankIcon(index)}
+                            </div>
+                            <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0">
+                                {vol.avatar_url ? (
+                                    <img src={vol.avatar_url} alt={vol.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    vol.initials || '?'
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-center mb-1">
+                                    <p className="font-semibold text-slate-800 truncate text-sm">{vol.name}</p>
+                                    <span className="text-xs font-bold text-blue-600">{vol.totalPresent} pts</span>
+                                </div>
+                                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                    <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${progressBarWidth}%` }}></div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
                 {rankedVolunteers.length === 0 && (
                     <div className="text-center text-slate-400 py-8">
                         <p>Nenhum dado de ranking disponível.</p>
