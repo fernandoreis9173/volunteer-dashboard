@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
@@ -14,6 +14,100 @@ interface WhatsAppSettings {
     active: boolean;
     provider: 'evolution' | 'generic';
 }
+
+const CustomSelect = ({ options, value, onChange, placeholder, disabled }: {
+    options: { id: string; name: string; date?: string }[],
+    value: string,
+    onChange: (val: string) => void,
+    placeholder: string,
+    disabled: boolean
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const selectedOption = options.find(o => o.id === value);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={wrapperRef}>
+            <button
+                type="button"
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                className={`w-full px-4 py-2 text-left bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg flex justify-between items-center transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-blue-400 focus:ring-2 focus:ring-blue-500'
+                    }`}
+            >
+                <span className={`block truncate ${!selectedOption ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                    {selectedOption ? (
+                        <span>
+                            {selectedOption.name}
+                            {selectedOption.date && (
+                                <span className="text-slate-500 dark:text-slate-400 text-xs ml-2">
+                                    ({new Date(selectedOption.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })})
+                                </span>
+                            )}
+                        </span>
+                    ) : placeholder}
+                </span>
+                <svg
+                    className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''}`}
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                >
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-slate-800 shadow-xl max-h-60 rounded-lg py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm border border-slate-100 dark:border-slate-700">
+                    {options.length === 0 ? (
+                        <div className="cursor-default select-none relative py-3 px-4 text-slate-500 dark:text-slate-400 italic text-center">
+                            Nenhuma opção disponível
+                        </div>
+                    ) : (
+                        options.map((option) => (
+                            <div
+                                key={option.id}
+                                onClick={() => {
+                                    onChange(option.id);
+                                    setIsOpen(false);
+                                }}
+                                className={`cursor-pointer select-none relative py-3 pl-4 pr-9 transition-colors ${option.id === value
+                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                                    : 'text-slate-900 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                    }`}
+                            >
+                                <span className={`block truncate ${option.id === value ? 'font-semibold' : 'font-normal'}`}>
+                                    {option.name}
+                                    {option.date && (
+                                        <span className={`text-xs ml-2 ${option.id === value ? 'text-blue-500 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                                            ({new Date(option.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })})
+                                        </span>
+                                    )}
+                                </span>
+                                {option.id === value && (
+                                    <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-blue-600 dark:text-blue-400">
+                                        <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                    </span>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) => {
     const [settings, setSettings] = useState<WhatsAppSettings>({
@@ -151,7 +245,175 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
         }
     };
 
-    const [activeTab, setActiveTab] = useState<'config' | 'test' | 'history'>('config');
+    const [activeTab, setActiveTab] = useState<'config' | 'test' | 'history' | 'bulk'>('config');
+    const [bulkType, setBulkType] = useState<'department' | 'event'>('department');
+    const [bulkTargetId, setBulkTargetId] = useState<string>('');
+    const [bulkMessage, setBulkMessage] = useState<string>('Olá {nome}, ');
+    const [targetOptions, setTargetOptions] = useState<{ id: string; name: string; date?: string }[]>([]);
+    const [isFetchingTargets, setIsFetchingTargets] = useState(false);
+    const [isSendingBulk, setIsSendingBulk] = useState(false);
+    const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; success: number; error: number } | null>(null);
+    const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+
+    // Carregar opções de alvo quando a aba ou tipo mudar
+    useEffect(() => {
+        if (activeTab === 'bulk') {
+            fetchBulkTargets();
+        }
+    }, [activeTab, bulkType]);
+
+    const fetchBulkTargets = async () => {
+        setIsFetchingTargets(true);
+        setTargetOptions([]);
+        setBulkTargetId('');
+        try {
+            let data: any[] | null = null;
+            let error = null;
+
+            if (bulkType === 'department') {
+                const response = await supabase
+                    .from('departments')
+                    .select('id, name')
+                    .eq('status', 'Ativo')
+                    .order('name');
+                data = response.data;
+                error = response.error;
+            } else {
+                // Eventos futuros apenas (a partir de hoje)
+                const today = new Date();
+
+                const response = await supabase
+                    .from('events')
+                    .select('id, name, date')
+                    .gte('date', today.toISOString().split('T')[0])
+                    .order('date', { ascending: true });
+                data = response.data;
+                error = response.error;
+            }
+
+            if (error) throw error;
+            if (data) {
+                setTargetOptions(data.map((item: any) => ({
+                    id: item.id.toString(),
+                    name: item.name,
+                    date: item.date
+                })));
+            }
+        } catch (err) {
+            console.error('Erro ao buscar opções:', err);
+            setMessage({ type: 'error', text: 'Erro ao carregar lista de departamentos/eventos.' });
+        } finally {
+            setIsFetchingTargets(false);
+        }
+    };
+
+    const handleBulkSendClick = () => {
+        if (!bulkTargetId || !bulkMessage) return;
+        setShowConfirmationModal(true);
+    };
+
+    const confirmBulkSend = async () => {
+        setShowConfirmationModal(false);
+        setIsSendingBulk(true);
+        setBulkProgress({ current: 0, total: 0, success: 0, error: 0 });
+        setMessage(null);
+
+        try {
+            // 1. Buscar Voluntários
+            let volunteers: { name: string; phone: string }[] = [];
+
+            if (bulkType === 'department') {
+                const { data, error } = await supabase
+                    .from('volunteer_departments')
+                    .select('volunteers(name, phone)')
+                    .eq('department_id', bulkTargetId);
+
+                if (error) throw error;
+                if (data) {
+                    volunteers = data
+                        .map((item: any) => item.volunteers)
+                        .filter((v: any) => v && v.phone); // Filtrar quem tem telefone
+                }
+            } else {
+                const { data, error } = await supabase
+                    .from('event_volunteers')
+                    .select('volunteers(name, phone)')
+                    .eq('event_id', bulkTargetId);
+
+                if (error) throw error;
+                if (data) {
+                    volunteers = data
+                        .map((item: any) => item.volunteers)
+                        .filter((v: any) => v && v.phone);
+                }
+            }
+
+            // Remover duplicatas (caso o voluntário esteja em múltiplos departamentos ou escalado 2x)
+            const uniqueVolunteers = Array.from(new Map(volunteers.map(v => [v.phone, v])).values());
+
+            if (uniqueVolunteers.length === 0) {
+                alert('Nenhum voluntário com telefone encontrado para este alvo.');
+                setIsSendingBulk(false);
+                return;
+            }
+
+            setBulkProgress({ current: 0, total: uniqueVolunteers.length, success: 0, error: 0 });
+
+            // 2. Enviar Mensagens (Iterativo)
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (let i = 0; i < uniqueVolunteers.length; i++) {
+                const volunteer = uniqueVolunteers[i];
+                const personalizedMessage = bulkMessage.replace('{nome}', volunteer.name.split(' ')[0]); // Primeiro nome
+
+                try {
+                    const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+                        body: {
+                            number: volunteer.phone.replace(/\D/g, ''),
+                            message: personalizedMessage
+                        }
+                    });
+
+                    if (error) {
+                        console.error(`Erro na requisição para ${volunteer.name}:`, error);
+                        errorCount++;
+                    } else if (!data.success) {
+                        console.error(`API retornou erro para ${volunteer.name}:`, data.error);
+                        errorCount++;
+                    } else {
+                        successCount++;
+                    }
+                } catch (err) {
+                    console.error(`Exceção ao enviar para ${volunteer.name}:`, err);
+                    errorCount++;
+                }
+
+                // Atualizar progresso
+                setBulkProgress({
+                    current: i + 1,
+                    total: uniqueVolunteers.length,
+                    success: successCount,
+                    error: errorCount
+                });
+
+                // Delay aleatório entre 2s e 5s para evitar banimento e rate limits
+                if (i < uniqueVolunteers.length - 1) {
+                    const delay = Math.floor(Math.random() * 3000) + 2000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+
+            setMessage({ type: 'success', text: `Envio finalizado! Sucesso: ${successCount}, Erros: ${errorCount}` });
+            fetchLogs(); // Atualizar histórico
+
+        } catch (err: any) {
+            console.error('Erro no envio em massa:', err);
+            setMessage({ type: 'error', text: 'Erro ao processar envio em massa: ' + err.message });
+        } finally {
+            setIsSendingBulk(false);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -200,6 +462,15 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                         }`}
                 >
                     Histórico de Envios
+                </button>
+                <button
+                    onClick={() => setActiveTab('bulk')}
+                    className={`pb-2 px-4 font-medium transition-colors relative ${activeTab === 'bulk'
+                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                        }`}
+                >
+                    Envio em Massa
                 </button>
             </div>
 
@@ -498,6 +769,168 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                     </div>
                 </>
             )}
+            {/* Conteúdo da Aba: Envio em Massa */}
+            {activeTab === 'bulk' && (
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6">
+                    {!settings.active && (
+                        <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-200 dark:border-yellow-600 rounded-r-lg">
+                            <div className="flex">
+                                <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-yellow-400 dark:text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div className="ml-3">
+                                    <p className="text-sm font-medium">
+                                        Integração Desativada
+                                    </p>
+                                    <p className="text-sm mt-1">
+                                        O envio de mensagens está desabilitado. Ative a integração na aba "Configuração API" para continuar.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Envio em Massa</h2>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        Envie mensagens para todos os voluntários de um departamento ou escalados em um evento.
+                    </p>
+
+                    {/* Seleção de Tipo */}
+                    <div className="flex space-x-6 mb-6">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="radio"
+                                name="bulkType"
+                                value="department"
+                                checked={bulkType === 'department'}
+                                onChange={() => setBulkType('department')}
+                                className="form-radio text-blue-600 w-4 h-4"
+                            />
+                            <span className="text-slate-700 dark:text-slate-300">Por Departamento</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="radio"
+                                name="bulkType"
+                                value="event"
+                                checked={bulkType === 'event'}
+                                onChange={() => setBulkType('event')}
+                                className="form-radio text-blue-600 w-4 h-4"
+                            />
+                            <span className="text-slate-700 dark:text-slate-300">Por Evento</span>
+                        </label>
+                    </div>
+
+                    {/* Seleção do Alvo */}
+                    <div className="mb-6">
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            Selecione o {bulkType === 'department' ? 'Departamento' : 'Evento'}
+                        </label>
+                        <CustomSelect
+                            options={targetOptions}
+                            value={bulkTargetId}
+                            onChange={setBulkTargetId}
+                            placeholder={isFetchingTargets ? 'Carregando...' : 'Selecione...'}
+                            disabled={isFetchingTargets || isSendingBulk}
+                        />
+                    </div>
+
+                    {/* Mensagem */}
+                    <div className="mb-6">
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            Mensagem
+                        </label>
+                        <textarea
+                            value={bulkMessage}
+                            onChange={(e) => setBulkMessage(e.target.value)}
+                            rows={4}
+                            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-slate-100"
+                            placeholder="Digite sua mensagem aqui..."
+                            disabled={isSendingBulk}
+                        />
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Dica: Use <code>{'{nome}'}</code> para inserir o primeiro nome do voluntário automaticamente.
+                        </p>
+                    </div>
+
+                    {/* Botão de Envio */}
+                    <button
+                        onClick={handleBulkSendClick}
+                        disabled={isSendingBulk || !bulkTargetId || !bulkMessage || !settings.active}
+                        className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                        {isSendingBulk ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <span>Enviando ({bulkProgress?.current}/{bulkProgress?.total})...</span>
+                            </>
+                        ) : (
+                            <>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                                <span>Enviar Mensagens</span>
+                            </>
+                        )}
+                    </button>
+
+                    {/* Resultado / Progresso */}
+                    {bulkProgress && (
+                        <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-2">Status do Envio</h4>
+                            <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2.5 mb-2">
+                                <div
+                                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                                    style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
+                                ></div>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-600 dark:text-slate-400">Progresso: {bulkProgress.current}/{bulkProgress.total}</span>
+                                <div className="space-x-4">
+                                    <span className="text-green-600 font-medium">✅ Sucesso: {bulkProgress.success}</span>
+                                    <span className="text-red-600 font-medium">❌ Erros: {bulkProgress.error}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Modal de Confirmação Customizado */}
+            {showConfirmationModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 transform transition-all scale-100">
+                        <div className="flex items-center justify-center w-12 h-12 mx-auto bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-bold text-center text-slate-900 dark:text-white mb-2">
+                            Confirmar Envio em Massa
+                        </h3>
+                        <p className="text-center text-slate-600 dark:text-slate-300 mb-6">
+                            Tem certeza que deseja enviar esta mensagem para todos os voluntários do {bulkType === 'department' ? 'departamento' : 'evento'} selecionado?
+                        </p>
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={() => setShowConfirmationModal(false)}
+                                className="flex-1 px-4 py-2 text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg font-medium transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmBulkSend}
+                                className="flex-1 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors shadow-lg shadow-blue-500/30"
+                            >
+                                Confirmar Envio
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* Conteúdo da Aba: Histórico */}
             {activeTab === 'history' && (

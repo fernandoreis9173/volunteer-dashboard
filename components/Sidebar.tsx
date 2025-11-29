@@ -126,7 +126,6 @@ const allNavItems: NavItemData[] = [
   { page: 'calendar', label: 'Calendário', icon: <img src={CalendarIconAsset} alt="Calendário" />, roles: ['admin', 'leader'] },
   { page: 'timelines', label: 'Cronogramas', icon: <img src={CronogramasIconAsset} alt="Calendário" />, roles: ['admin'] },
   { page: 'frequency', label: 'Frequência', icon: <img src={FrequenciaIconAsset} alt="Frequência" />, roles: ['admin'] },
-  { page: 'admin', label: 'Admin', icon: <img src={AdminIconAsset} alt="Admin" />, roles: ['admin'] },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewEvent, isOpen, setIsOpen, userRole, session, unreadCount, pushPermissionStatus, onSubscribeToPush, canInstallPwa, onInstallPrompt, theme, toggleTheme, adminSubPage = 'users', onAdminSubPageChange }) => {
@@ -219,33 +218,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
               ))}
             </div>
 
-            {/* Admin Submenu */}
-            {activePage === 'admin' && normalizedRole === 'admin' && (
-              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <div className="space-y-1">
-                  <button
-                    onClick={() => onAdminSubPageChange?.('users')}
-                    className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${adminSubPage === 'users'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
-                  >
-                    <img src={ProfileIconAsset} alt="Usuários" className="h-4 w-4 brightness-0 dark:invert" />
-                    <span className="text-sm">Usuários</span>
-                  </button>
-                  <button
-                    onClick={() => onAdminSubPageChange?.('notifications')}
-                    className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${adminSubPage === 'notifications'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
-                  >
-                    <img src={NotificationIconAsset} alt="Notificações" className="h-4 w-4 brightness-0 dark:invert" />
-                    <span className="text-sm">Notificações</span>
-                  </button>
-                </div>
-              </div>
-            )}
+
 
             {/* Settings Menu - Only for Admin */}
             {normalizedRole === 'admin' && (
@@ -273,6 +246,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                   <div className="mt-2 space-y-1 pl-4">
                     <button
                       onClick={() => {
+                        onNavigate('admin');
+                        if (onAdminSubPageChange) onAdminSubPageChange('users');
+                        setIsSettingsMenuOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${activePage === 'admin' && adminSubPage === 'users'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                    >
+                      <img src={AdminIconAsset} alt="Admin" className="h-4 w-4 brightness-0 dark:invert" />
+                      <span className="text-sm">Admin</span>
+                    </button>
+                    <button
+                      onClick={() => {
                         onNavigate('whatsapp-settings');
                         setIsSettingsMenuOpen(false);
                       }}
@@ -283,6 +270,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                     >
                       <img src={WhatsAppIcon} alt="WhatsApp API" className="h-4 w-4" />
                       <span className="text-sm">WhatsApp API</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onNavigate('admin');
+                        if (onAdminSubPageChange) onAdminSubPageChange('notifications');
+                        setIsSettingsMenuOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${activePage === 'admin' && adminSubPage === 'notifications'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                    >
+                      <img src={NotificationIconAsset} alt="Notificações" className="h-4 w-4 brightness-0 dark:invert" />
+                      <span className="text-sm">Notificações</span>
                     </button>
                   </div>
                 )}
