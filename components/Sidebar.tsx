@@ -47,7 +47,9 @@ import {
   AddEventsIcon as AddEventsIconAsset,
   InstallAppIcon as InstallAppIconAsset,
   ProfileIcon as ProfileIconAsset,
-  LogoutIcon as LogoutIconAsset
+  LogoutIcon as LogoutIconAsset,
+  SettingsIcon,
+  WhatsAppIcon
 } from '../assets/icons';
 
 // Since I cannot see the exact imports from the truncated view, I will use the imports I saw in the diffs.
@@ -129,6 +131,7 @@ const allNavItems: NavItemData[] = [
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVolunteer, onNewEvent, isOpen, setIsOpen, userRole, session, unreadCount, pushPermissionStatus, onSubscribeToPush, canInstallPwa, onInstallPrompt, theme, toggleTheme, adminSubPage = 'users', onAdminSubPageChange }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -241,6 +244,48 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                     <span className="text-sm">Notificações</span>
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Settings Menu - Only for Admin */}
+            {normalizedRole === 'admin' && (
+              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => setIsSettingsMenuOpen(!isSettingsMenuOpen)}
+                  className="flex items-center justify-between w-full px-4 py-3 rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <div className="flex items-center space-x-3">
+                    <img src={SettingsIcon} alt="Configurações" className="h-5 w-5 brightness-0 dark:invert" />
+                    <span className="font-medium text-sm">Configurações</span>
+                  </div>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`h-4 w-4 transition-transform ${isSettingsMenuOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {isSettingsMenuOpen && (
+                  <div className="mt-2 space-y-1 pl-4">
+                    <button
+                      onClick={() => {
+                        onNavigate('whatsapp-settings');
+                        setIsSettingsMenuOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${activePage === 'whatsapp-settings'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                    >
+                      <img src={WhatsAppIcon} alt="WhatsApp API" className="h-4 w-4" />
+                      <span className="text-sm">WhatsApp API</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

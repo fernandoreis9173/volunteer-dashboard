@@ -302,11 +302,17 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             }
 
             // FIX: Updated to Supabase v2 API `updateUser` to match library version.
+            let cleanPhone = phone.replace(/[^\d]/g, '');
+            // Auto-add Brazil country code (55) if missing and looks like a valid BR number
+            if (cleanPhone && !cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+                cleanPhone = '55' + cleanPhone;
+            }
+
             const { data: { user: authUser }, error: updateError } = await supabase.auth.updateUser({
                 password: password,
                 data: {
                     name: fullName,
-                    phone: phone.replace(/[^\d]/g, ''),
+                    phone: cleanPhone,
                     status: 'Ativo', // CRITICAL FIX: Update status upon registration
                 }
             });
@@ -332,7 +338,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                     user_id: user.id,
                     email: user.email!,
                     name: fullName,
-                    phone: phone.replace(/[^\d]/g, ''),
+                    phone: cleanPhone,
                     availability: JSON.stringify(selectedAvailabilityDays),
                     initials: calculatedInitials,
                     skills: skills,

@@ -158,11 +158,18 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
 
         try {
             const selectedAvailability = Object.entries(availability).filter(([, v]) => v).map(([k]) => k);
+
+            let cleanPhone = formData.phone.replace(/[^\d]/g, '');
+            // Auto-add Brazil country code (55) if missing and looks like a valid BR number
+            if (cleanPhone && !cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+                cleanPhone = '55' + cleanPhone;
+            }
+
             const { error: updateError } = await supabase
                 .from('volunteers')
                 .update({
                     name: formData.name,
-                    phone: formData.phone,
+                    phone: cleanPhone,
                     skills: skills,
                     availability: JSON.stringify(selectedAvailability)
                 })

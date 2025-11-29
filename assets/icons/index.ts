@@ -23,6 +23,8 @@ import LogoMobileIcon from './logomobile.svg';
 import CronogramasIcon from './iconcronogramas.svg';
 import EditIcon from './editicon.svg';
 import RankingIcon from './rankingicon.svg';
+import SettingsIcon from './settings.svg';
+import WhatsAppIcon from './whatsapp.svg';
 import Medalha01Icon from './Medalha01Icon.svg?react';
 import Medalha02Icon from './Medalha02Icon.svg?react';
 import Medalha03Icon from './Medalha03Icon.svg?react';
@@ -67,6 +69,10 @@ export const icons = {
   cronogramas: CronogramasIcon,
   edit: EditIcon,
   ranking: RankingIcon,
+  settings: SettingsIcon,
+  configuracoes: SettingsIcon,
+  whatsapp: WhatsAppIcon,
+  'whatsapp-settings': WhatsAppIcon,
   medalha01: Medalha01Icon,
   medalha02: Medalha02Icon,
   medalha03: Medalha03Icon,
@@ -101,6 +107,8 @@ export {
   CronogramasIcon,
   EditIcon,
   RankingIcon,
+  SettingsIcon,
+  WhatsAppIcon,
   Medalha01Icon,
   Medalha02Icon,
   Medalha03Icon,

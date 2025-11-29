@@ -160,10 +160,17 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
         setError(null);
         try {
             // Step 1: Update the user's auth metadata (name, phone)
+            let cleanPhone = phone.replace(/[^\d]/g, '');
+
+            // Auto-add Brazil country code (55) if missing and looks like a valid BR number
+            if (cleanPhone && !cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+                cleanPhone = '55' + cleanPhone;
+            }
+
             const { error: updateError } = await supabase.auth.updateUser({
                 data: {
                     name: name.trim(),
-                    phone: phone.replace(/[^\d]/g, '')
+                    phone: cleanPhone
                 }
             });
             if (updateError) throw updateError;
