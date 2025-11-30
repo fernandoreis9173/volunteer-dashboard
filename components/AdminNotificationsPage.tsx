@@ -566,7 +566,7 @@ const AdminNotificationsPage: React.FC<AdminNotificationsPageProps> = ({ onDataC
 
                                 const templateDescriptions: Record<string, string> = {
                                     'push_24h_before': 'Notificação push enviada 24 horas antes do evento',
-                                    'push_2h_before': 'Notificação push enviada 2 horas antes do evento',
+                                    'push_2h_before': 'Notificação push enviada 3 horas antes do evento',
                                     'push_attendance_confirmed': 'Notificação push ao confirmar presença'
                                 };
 
