@@ -45,10 +45,10 @@ serve(async (req) => {
             throw new Error('Não autorizado');
         }
 
-        // Verificar se é admin
+        // Verificar se é admin ou líder
         const userRole = user.user_metadata?.role;
-        if (userRole !== 'admin') {
-            throw new Error('Apenas administradores podem enviar mensagens via WhatsApp');
+        if (userRole !== 'admin' && userRole !== 'leader' && userRole !== 'lider') {
+            throw new Error('Apenas administradores e líderes podem enviar mensagens via WhatsApp');
         }
 
         // Obter dados da requisição

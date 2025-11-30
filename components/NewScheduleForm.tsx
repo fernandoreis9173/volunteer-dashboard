@@ -492,7 +492,7 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
     const selectedStatusLabel = statusOptionsForForm.find(o => o.value === formData.status)?.label;
 
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative">
             <h2 className="text-xl font-bold text-slate-800 mb-4">{title}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
                 {isSchedulingMode ? (
@@ -719,6 +719,17 @@ const NewEventForm: React.FC<NewEventFormProps> = ({ initialData, onCancel, onSa
                 title="Confirmar Alteração de Status"
                 message='Tem certeza que deseja alterar o status do evento para "Confirmado"? Esta ação pode afetar a escalação de voluntários.'
             />
+
+            {/* Loading Overlay */}
+            {isSaving && (
+                <div className="absolute inset-0 bg-white/80 z-50 flex flex-col items-center justify-center rounded-2xl">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                    <p className="text-lg font-semibold text-slate-700">
+                        {isSchedulingMode ? 'Escalando voluntários e enviando notificações...' : 'Salvando evento...'}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-2">Por favor, aguarde.</p>
+                </div>
+            )}
         </div >
     );
 };

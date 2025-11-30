@@ -597,6 +597,61 @@ const SchedulesPage: React.FC<SchedulesPageProps> = ({ isFormOpen, setIsFormOpen
                     await createAndSendNotifications(notifications);
                 }
 
+                // Enviar WhatsApp para novos escalados
+                if (addedVolunteerIds.length > 0) {
+                    try {
+                        // 1. Buscar template
+                        const { data: templateData } = await supabase
+                            .from('whatsapp_message_templates')
+                            .select('*')
+                            .eq('template_type', 'new_schedule')
+                            .eq('active', true)
+                            .single();
+
+                        if (templateData) {
+                            // 2. Buscar dados dos voluntários (nome e telefone)
+                            const { data: volunteersData } = await supabase
+                                .from('volunteers')
+                                .select('id, name, phone')
+                                .in('id', addedVolunteerIds);
+
+                            if (volunteersData) {
+                                // 3. Preparar dados do evento
+                                const { fullDate: eventDate, time: eventTime } = convertUTCToLocal(eventData.date, eventData.start_time);
+
+                                // Buscar nome do departamento
+                                const departmentName = allDepartments.find(d => d.id === leaderDepartmentId)?.name || 'seu departamento';
+
+                                // 4. Enviar para cada voluntário
+                                // Usar Promise.all para enviar em paralelo e não travar muito
+                                await Promise.all(volunteersData.map(async (vol) => {
+                                    if (vol.phone) {
+                                        let message = templateData.message_content;
+                                        // Substituição simples das variáveis
+                                        message = message.replace(/{nome}/g, vol.name.split(' ')[0]); // Primeiro nome
+                                        message = message.replace(/{departamento}/g, departmentName);
+                                        message = message.replace(/{evento}/g, eventName);
+                                        message = message.replace(/{data}/g, eventDate);
+                                        message = message.replace(/{horario}/g, eventTime);
+
+                                        // Invocar Edge Function
+                                        const { error: waError } = await supabase.functions.invoke('send-whatsapp', {
+                                            body: { number: vol.phone, message: message }
+                                        });
+
+                                        if (waError) {
+                                            console.error(`Erro ao enviar WhatsApp para ${vol.name}:`, waError);
+                                        }
+                                    }
+                                }));
+                            }
+                        }
+                    } catch (waError) {
+                        console.error('Erro geral ao enviar WhatsApp:', waError);
+                        // Não bloquear o fluxo se falhar o WhatsApp
+                    }
+                }
+
             } else { // Admin creating or editing an event
                 const { department_ids, volunteer_ids, ...eventDetails } = eventData;
 

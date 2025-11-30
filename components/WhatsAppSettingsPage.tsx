@@ -1173,6 +1173,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                                     '24h_before': 'WhatsApp: Notificação 24h Antes',
                                     '2h_before': 'WhatsApp: Notificação 3h Antes',
                                     'attendance_confirmed': 'WhatsApp: Confirmação de Presença',
+                                    'new_schedule': 'WhatsApp: Nova Escala',
                                     'push_24h_before': 'Push: Lembrete 24h Antes',
                                     'push_2h_before': 'Push: Lembrete 2h Antes',
                                     'push_attendance_confirmed': 'Push: Presença Confirmada'
@@ -1182,6 +1183,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                                     '24h_before': 'Mensagem WhatsApp enviada 24 horas antes do evento',
                                     '2h_before': 'Mensagem WhatsApp enviada 3 horas antes do evento',
                                     'attendance_confirmed': 'Mensagem WhatsApp ao confirmar presença',
+                                    'new_schedule': 'Mensagem WhatsApp enviada ao escalar um voluntário',
                                     'push_24h_before': 'Notificação push (celular) enviada 24 horas antes',
                                     'push_2h_before': 'Notificação push (celular) enviada 2 horas antes',
                                     'push_attendance_confirmed': 'Notificação push (celular) ao confirmar presença'
