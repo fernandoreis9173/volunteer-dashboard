@@ -33,6 +33,7 @@ const sendPushNotification = async (subscription: any, payload: string, supabase
 declare const Deno: any;
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -133,7 +134,7 @@ Deno.serve(async (req) => {
     try {
       const { data: volunteerData, error: volunteerError } = await supabaseAdmin
         .from('volunteers')
-        .select('user_id')
+        .select('user_id, phone, name')
         .eq('id', volunteerId)
         .single();
 
@@ -162,6 +163,120 @@ Deno.serve(async (req) => {
         type: 'info',
         related_event_id: eventId,
       });
+
+      // --- Push Notification (PWA) ---
+      try {
+        console.log('Disparando push notification para confirmação de presença...');
+        const pushResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/create-notifications`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            targetType: 'user',
+            userIds: [userIdToNotify],
+            message: notificationMessage,
+            eventId: eventId
+          })
+        });
+
+        if (!pushResponse.ok) {
+          const errorText = await pushResponse.text();
+          console.error('Erro ao enviar push notification:', errorText);
+        } else {
+          console.log('Push notification enviada com sucesso!');
+        }
+      } catch (pushError) {
+        console.error('Falha ao disparar push notification:', pushError);
+      }
+
+      // --- WhatsApp Notification ---
+      try {
+        const { data: waSettings } = await supabaseAdmin
+          .from('whatsapp_settings')
+          .select('*')
+          .eq('active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (waSettings && volunteerData.phone) {
+          // Buscar template de confirmação de presença
+          const { data: template } = await supabaseAdmin
+            .from('whatsapp_message_templates')
+            .select('message_content')
+            .eq('template_type', 'attendance_confirmed')
+            .eq('active', true)
+            .single();
+
+          // Usar template do banco ou fallback para mensagem padrão
+          let waMessage = '';
+          if (template) {
+            waMessage = template.message_content
+              .replace('{nome}', volunteerData.name || 'Voluntário')
+              .replace('{evento}', eventName);
+          } else {
+            waMessage = `Olá ${volunteerData.name || 'Voluntário'}, sua presença foi confirmada no evento *${eventName}*. Bom serviço!`;
+          }
+
+          const formattedNumber = volunteerData.phone.replace(/\D/g, '');
+          const provider = waSettings.provider || 'evolution';
+
+          let evolutionData = null;
+          let errorMessage = null;
+          let status = 'success';
+
+          if (provider === 'evolution') {
+            const response = await fetch(
+              `${waSettings.evolution_url}/message/sendText/${waSettings.session_name}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': waSettings.token,
+                  'ngrok-skip-browser-warning': 'true',
+                },
+                body: JSON.stringify({
+                  number: formattedNumber,
+                  text: waMessage
+                })
+              }
+            );
+
+            if (!response.ok) {
+              const text = await response.text();
+              status = 'error';
+              errorMessage = `Erro API: ${response.status} - ${text}`;
+            } else {
+              evolutionData = await response.json();
+            }
+          } else {
+            // Generic provider fallback
+            const response = await fetch(waSettings.evolution_url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${waSettings.token}` },
+              body: JSON.stringify({ phone: formattedNumber, message: waMessage })
+            });
+            if (!response.ok) {
+              status = 'error';
+              errorMessage = await response.text();
+            }
+          }
+
+          // Log WhatsApp attempt
+          await supabaseAdmin.from('whatsapp_logs').insert({
+            recipient_phone: formattedNumber,
+            message_content: waMessage,
+            status: status,
+            response_data: evolutionData,
+            error_message: errorMessage
+          });
+        }
+      } catch (waError) {
+        console.error("Falha ao enviar WhatsApp de confirmação:", waError);
+      }
+      // -----------------------------
 
       const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY');
       const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');

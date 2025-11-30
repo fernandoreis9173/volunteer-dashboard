@@ -17,10 +17,9 @@ select
     select
       net.http_post(
           url:='https://zmgwuttcqmpyonvtjprw.supabase.co/functions/v1/cleanup-whatsapp-logs',
-          headers:='{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.settings.service_role_key') || '"}'::jsonb
+          headers:=('{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InptZ3d1dHRjcW1weW9udnRqcHJ3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODY3ODY2MCwiZXhwIjoyMDc0MjU0NjYwfQ.SP2wdtHEw8YMF_TpOD9L-9z_PMIboXcH9hvbeutJIdI"}')::jsonb
       ) as request_id;
     $$
   );
 
--- NOTA: Para que o current_setting funcione, você precisa ter configurado a chave no banco ou substituir manualmente no script.
--- Alternativamente, você pode usar a chave anon se a função permitir, mas para limpeza é melhor service_role.
+

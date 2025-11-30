@@ -13,6 +13,7 @@ interface EventDetailsModalProps {
 
 const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, onClose, userRole, leaderDepartmentId }) => {
   const isLeader = userRole === 'leader' || userRole === 'lider';
+  // Updated to show attendance status and toggle list
 
   // FIX: Moved all hook calls and derived state calculations to the top level,
   // before the early return, to comply with the Rules of Hooks. Added null checks
@@ -40,9 +41,18 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
     return event.event_volunteers;
   }, [event, isLeader, leaderDepartmentId]);
 
-  const volunteerNames = useMemo(() => {
-    return relevantVolunteers.map(sv => sv.volunteers?.name).filter(Boolean);
+  const [showAllVolunteers, setShowAllVolunteers] = React.useState(false);
+
+  const volunteerList = useMemo(() => {
+    return relevantVolunteers.map(sv => ({
+      name: sv.volunteers?.name || 'Voluntário Desconhecido',
+      present: sv.present
+    })).filter(v => v.name !== 'Voluntário Desconhecido');
   }, [relevantVolunteers]);
+
+  const displayedVolunteers = useMemo(() => {
+    return showAllVolunteers ? volunteerList : volunteerList.slice(0, 5);
+  }, [volunteerList, showAllVolunteers]);
 
   const relevantDepartments = useMemo(() => {
     if (!event || !Array.isArray(event.event_departments)) {
@@ -127,14 +137,35 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, isOpen, on
               ) : <p className="text-sm text-slate-500">Nenhum departamento para este evento.</p>}
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-800 mb-3">Voluntários Escalados ({volunteerNames.length})</h3>
-              {volunteerNames.length > 0 ? (
-                <div className="max-h-60 overflow-y-auto pr-2">
-                  <ul className="list-disc list-inside text-slate-700 space-y-1">
-                    {volunteerNames.map(name => (
-                      <li key={name}>{name}</li>
+              <h3 className="text-lg font-bold text-slate-800 mb-3">Voluntários Escalados ({volunteerList.length})</h3>
+              {volunteerList.length > 0 ? (
+                <div className="space-y-2">
+                  <ul className="space-y-2">
+                    {displayedVolunteers.map((vol, index) => (
+                      <li key={index} className="flex items-center justify-between text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span className="flex items-center space-x-2">
+                          <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                          <span>{vol.name}</span>
+                        </span>
+                        {vol.present && (
+                          <span className="flex items-center space-x-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span>Confirmado</span>
+                          </span>
+                        )}
+                      </li>
                     ))}
                   </ul>
+                  {volunteerList.length > 5 && (
+                    <button
+                      onClick={() => setShowAllVolunteers(!showAllVolunteers)}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline focus:outline-none transition-colors"
+                    >
+                      {showAllVolunteers ? 'Ver menos' : `Ver mais (${volunteerList.length - 5})`}
+                    </button>
+                  )}
                 </div>
               ) : <p className="text-sm text-slate-500">Nenhum voluntário escalado para este evento.</p>}
             </div>

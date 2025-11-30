@@ -179,6 +179,35 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
         }
     };
 
+    const fetchTemplates = async () => {
+        try {
+            setIsLoadingTemplates(true);
+            setMessage(null); // Clear previous messages
+            const { data, error } = await supabase
+                .from('whatsapp_message_templates')
+                .select('*')
+                .order('template_type');
+
+            if (error) {
+                console.error('Erro detalhado ao carregar templates:', {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code
+                });
+                throw error;
+            }
+
+            console.log('Templates carregados com sucesso:', data);
+            if (data) setTemplates(data);
+        } catch (error: any) {
+            console.error('Erro ao carregar templates:', error);
+            setMessage({ type: 'error', text: `Erro ao carregar templates de mensagens: ${error.message || 'Erro desconhecido'}` });
+        } finally {
+            setIsLoadingTemplates(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
@@ -246,7 +275,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
         }
     };
 
-    const [activeTab, setActiveTab] = useState<'config' | 'test' | 'history' | 'bulk'>('config');
+    const [activeTab, setActiveTab] = useState<'config' | 'test' | 'history' | 'bulk' | 'templates'>('config');
     const [bulkType, setBulkType] = useState<'department' | 'event'>('department');
     const [bulkTargetId, setBulkTargetId] = useState<string>('');
     const [bulkMessage, setBulkMessage] = useState<string>('Olá {nome}, ');
@@ -254,6 +283,18 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
     const [isFetchingTargets, setIsFetchingTargets] = useState(false);
     const [isSendingBulk, setIsSendingBulk] = useState(false);
     const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; success: number; error: number } | null>(null);
+
+    // Templates state
+    interface MessageTemplate {
+        id: string;
+        template_type: string;
+        message_content: string;
+        variables: string[];
+        active: boolean;
+    }
+    const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+    const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+    const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
     const [showConfirmationModal, setShowConfirmationModal] = useState(false);
     const [preparedVolunteers, setPreparedVolunteers] = useState<any[]>([]);
     const [bulkStats, setBulkStats] = useState({ total: 0, unique: 0 });
@@ -280,6 +321,9 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
     useEffect(() => {
         if (activeTab === 'bulk') {
             fetchBulkTargets();
+        }
+        if (activeTab === 'templates') {
+            fetchTemplates();
         }
     }, [activeTab, bulkType]);
 
@@ -515,6 +559,15 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                         }`}
                 >
                     Envio em Massa
+                </button>
+                <button
+                    onClick={() => setActiveTab('templates')}
+                    className={`pb-2 px-4 font-medium transition-colors relative ${activeTab === 'templates'
+                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                        }`}
+                >
+                    Templates de Mensagens
                 </button>
             </div>
 
@@ -1092,6 +1145,184 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                 </div>,
                 document.body
             )}
+
+            {/* Conteúdo da Aba: Templates de Mensagens */}
+            {activeTab === 'templates' && (
+                <div className="space-y-6">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2 flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Sobre os Templates
+                        </h3>
+                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                            Personalize as mensagens automáticas enviadas pelo sistema. Use as variáveis disponíveis para inserir dados dinâmicos.
+                        </p>
+                    </div>
+
+                    {isLoadingTemplates ? (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    ) : (
+                        templates
+                            .filter(template => !template.template_type.startsWith('push_'))
+                            .map((template) => {
+                                const templateLabels: Record<string, string> = {
+                                    '24h_before': 'WhatsApp: Notificação 24h Antes',
+                                    '2h_before': 'WhatsApp: Notificação 3h Antes',
+                                    'attendance_confirmed': 'WhatsApp: Confirmação de Presença',
+                                    'push_24h_before': 'Push: Lembrete 24h Antes',
+                                    'push_2h_before': 'Push: Lembrete 2h Antes',
+                                    'push_attendance_confirmed': 'Push: Presença Confirmada'
+                                };
+
+                                const templateDescriptions: Record<string, string> = {
+                                    '24h_before': 'Mensagem WhatsApp enviada 24 horas antes do evento',
+                                    '2h_before': 'Mensagem WhatsApp enviada 3 horas antes do evento',
+                                    'attendance_confirmed': 'Mensagem WhatsApp ao confirmar presença',
+                                    'push_24h_before': 'Notificação push (celular) enviada 24 horas antes',
+                                    'push_2h_before': 'Notificação push (celular) enviada 2 horas antes',
+                                    'push_attendance_confirmed': 'Notificação push (celular) ao confirmar presença'
+                                };
+
+                                const isEditing = editingTemplate === template.template_type;
+
+                                return (
+                                    <div key={template.id} className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                                                    {templateLabels[template.template_type]}
+                                                </h3>
+                                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                                    {templateDescriptions[template.template_type]}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => setEditingTemplate(isEditing ? null : template.template_type)}
+                                                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                            >
+                                                {isEditing ? 'Cancelar' : 'Editar'}
+                                            </button>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                                    Variáveis Disponíveis
+                                                </label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {template.variables.map((variable: string) => (
+                                                        <span
+                                                            key={variable}
+                                                            className="px-3 py-1 text-xs font-mono font-semibold rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+                                                        >
+                                                            {`{${variable}}`}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                                    Mensagem
+                                                </label>
+                                                <textarea
+                                                    id={`template-${template.template_type}`}
+                                                    defaultValue={template.message_content}
+                                                    disabled={!isEditing}
+                                                    rows={4}
+                                                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100 ${isEditing
+                                                        ? 'border-slate-300 dark:border-slate-600'
+                                                        : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 cursor-not-allowed'
+                                                        }`}
+                                                />
+                                            </div>
+
+                                            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                                                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                                    Preview (Exemplo)
+                                                </p>
+                                                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                                    {(document.getElementById(`template-${template.template_type}`) as HTMLTextAreaElement)?.value
+                                                        ?.replace('{nome}', 'João')
+                                                        ?.replace('{evento}', 'Culto de Domingo')
+                                                        ?.replace('{horario}', '09:00') || template.message_content
+                                                            .replace('{nome}', 'João')
+                                                            .replace('{evento}', 'Culto de Domingo')
+                                                            .replace('{horario}', '09:00')}
+                                                </p>
+                                            </div>
+
+                                            {isEditing && (
+                                                <div className="flex space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                                    <button
+                                                        onClick={async () => {
+                                                            const textarea = document.getElementById(`template-${template.template_type}`) as HTMLTextAreaElement;
+                                                            const newContent = textarea.value;
+
+                                                            try {
+                                                                const { error } = await supabase
+                                                                    .from('whatsapp_message_templates')
+                                                                    .update({ message_content: newContent, updated_at: new Date().toISOString() })
+                                                                    .eq('template_type', template.template_type);
+
+                                                                if (error) throw error;
+
+                                                                setMessage({ type: 'success', text: 'Template atualizado com sucesso!' });
+                                                                fetchTemplates();
+                                                                setEditingTemplate(null);
+                                                            } catch (error: any) {
+                                                                console.error('Erro ao salvar template:', error);
+                                                                setMessage({ type: 'error', text: 'Erro ao salvar template: ' + error.message });
+                                                            }
+                                                        }}
+                                                        className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                                                    >
+                                                        Salvar Alterações
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (!confirm('Tem certeza que deseja restaurar o template padrão? Esta ação não pode ser desfeita.')) return;
+
+                                                            const defaultTemplates: Record<string, string> = {
+                                                                '24h_before': 'Olá {nome}, lembrete: Você está escalado para o evento *{evento}* amanhã às {horario}.',
+                                                                '2h_before': 'Olá {nome}, lembrete: O evento *{evento}* começa em breve (às {horario}).',
+                                                                'attendance_confirmed': 'Olá {nome}, sua presença foi confirmada no evento *{evento}*. Bom serviço!'
+                                                            };
+
+                                                            try {
+                                                                const { error } = await supabase
+                                                                    .from('whatsapp_message_templates')
+                                                                    .update({ message_content: defaultTemplates[template.template_type], updated_at: new Date().toISOString() })
+                                                                    .eq('template_type', template.template_type);
+
+                                                                if (error) throw error;
+
+                                                                setMessage({ type: 'success', text: 'Template restaurado para o padrão!' });
+                                                                fetchTemplates();
+                                                                setEditingTemplate(null);
+                                                            } catch (error: any) {
+                                                                console.error('Erro ao restaurar template:', error);
+                                                                setMessage({ type: 'error', text: 'Erro ao restaurar template: ' + error.message });
+                                                            }
+                                                        }}
+                                                        className="px-4 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-lg transition-colors"
+                                                    >
+                                                        Restaurar Padrão
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                    )}
+                </div>
+            )}
+
             {/* Conteúdo da Aba: Histórico */}
             {activeTab === 'history' && (
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden border border-slate-200 dark:border-slate-700">

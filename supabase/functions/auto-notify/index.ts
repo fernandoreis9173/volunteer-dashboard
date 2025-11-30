@@ -72,12 +72,12 @@ serve(async (req) => {
             // Criar data baseada na string (será interpretada como UTC no servidor)
             const eventDate = new Date(eventDateTimeStr);
 
-            // CORREÇÃO DE FUSO HORÁRIO (BRASÍLIA -03:00)
-            // O evento "09:00" no banco significa 09:00 em Brasília.
-            // 09:00 Brasília = 12:00 UTC.
+            // CORREÇÃO DE FUSO HORÁRIO (MANAUS -04:00)
+            // O evento "09:00" no banco significa 09:00 em Manaus.
+            // 09:00 Manaus = 13:00 UTC.
             // O new Date("...09:00") cria 09:00 UTC.
-            // Precisamos adicionar 3 horas para transformar em 12:00 UTC (horário real do evento).
-            eventDate.setHours(eventDate.getHours() + 3);
+            // Precisamos adicionar 4 horas para transformar em 13:00 UTC (horário real do evento).
+            eventDate.setHours(eventDate.getHours() + 4);
 
             // Calcular tempo até o evento
             const now = new Date();
@@ -103,6 +103,19 @@ serve(async (req) => {
             if (type) {
                 console.log(`>>> Disparando notificação ${type} para evento ${event.name}`);
 
+                // Buscar templates de mensagens
+                const { data: templates, error: templatesError } = await supabaseClient
+                    .from('whatsapp_message_templates')
+                    .select('*')
+                    .eq('active', true);
+
+                if (templatesError) {
+                    console.error('Erro ao buscar templates:', templatesError);
+                }
+
+                const template24h = templates?.find(t => t.template_type === '24h_before');
+                const template2h = templates?.find(t => t.template_type === '2h_before');
+
                 // Buscar voluntários escalados
                 const { data: volunteers, error: volError } = await supabaseClient
                     .from('event_volunteers')
@@ -122,14 +135,24 @@ serve(async (req) => {
                         const name = volunteer.volunteers?.name || 'Voluntário';
 
                         if (phone) {
-                            let message = '';
-                            if (type === '24h') {
-                                message = `Olá ${name}, lembrete: Você está escalado para o evento *${event.name}* amanhã às ${event.start_time}.`;
+                            // Usar template do banco ou fallback para mensagem padrão
+                            const template = type === '24h' ? template24h : template2h;
+                            let waMessage = '';
+
+                            if (template) {
+                                // Substituir variáveis no template
+                                waMessage = template.message_content
+                                    .replace('{nome}', volunteer.volunteers.name.split(' ')[0])
+                                    .replace('{evento}', event.name)
+                                    .replace('{horario}', event.start_time);
                             } else {
-                                message = `Olá ${name}, lembrete: O evento *${event.name}* começa em breve (às ${event.start_time}).`;
+                                // Fallback para mensagem padrão
+                                waMessage = type === '24h'
+                                    ? `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: Você está escalado para o evento *${event.name}* amanhã às ${event.start_time}.`
+                                    : `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: O evento *${event.name}* começa em breve (às ${event.start_time}).`;
                             }
 
-                            await sendWhatsAppMessage(whatsappSettings, phone, message, supabaseClient); // Ajustado para a assinatura da função
+                            await sendWhatsAppMessage(whatsappSettings, phone, waMessage, supabaseClient); // Ajustado para a assinatura da função
                             sentCount++; // Contar cada mensagem WhatsApp enviada
                         }
                     }
@@ -144,11 +167,26 @@ serve(async (req) => {
                 const userIds = volunteers.map((v: any) => v.volunteers?.user_id).filter((id: any) => id);
 
                 if (userIds.length > 0) {
+                    // Buscar template de push notification
+                    const pushTemplateType = type === '24h' ? 'push_24h_before' : 'push_2h_before';
+                    const { data: pushTemplate } = await supabaseClient
+                        .from('whatsapp_message_templates')
+                        .select('message_content')
+                        .eq('template_type', pushTemplateType)
+                        .eq('active', true)
+                        .single();
+
                     let pushMessage = '';
-                    if (type === '24h') {
-                        pushMessage = `Lembrete (24h): Você está escalado para "${event.name}" amanhã às ${event.start_time}.`;
+                    if (pushTemplate) {
+                        // Substituir variáveis no template
+                        pushMessage = pushTemplate.message_content
+                            .replace('{evento}', event.name)
+                            .replace('{horario}', event.start_time);
                     } else {
-                        pushMessage = `Lembrete (2h): Você está escalado para "${event.name}" hoje às ${event.start_time}.`;
+                        // Fallback para mensagem padrão
+                        pushMessage = type === '24h'
+                            ? `Lembrete (24h): Você está escalado para "${event.name}" amanhã às ${event.start_time}.`
+                            : `Lembrete (2h): Você está escalado para "${event.name}" hoje às ${event.start_time}.`;
                     }
 
                     await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/create-notifications`, {
