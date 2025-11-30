@@ -25,7 +25,16 @@ interface VolunteerCardProps {
 const formatPhoneNumber = (value: string) => {
   if (!value) return '';
 
-  const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
+  let phoneNumber = value.replace(/\D/g, '');
+
+  // Remove DDI 55 se presente e o número for longo o suficiente (12 ou 13 dígitos)
+  if (phoneNumber.startsWith('55') && phoneNumber.length > 11) {
+    phoneNumber = phoneNumber.substring(2);
+  }
+
+  // Garante que trabalhamos com no máximo 11 dígitos (DDD + 9 dígitos)
+  phoneNumber = phoneNumber.slice(0, 11);
+
   const { length } = phoneNumber;
 
   if (length <= 2) {
@@ -35,8 +44,10 @@ const formatPhoneNumber = (value: string) => {
     return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
   }
   if (length <= 10) {
+    // Fixo: (XX) XXXX-XXXX
     return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
   }
+  // Celular: (XX) XXXXX-XXXX
   return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
 };
 

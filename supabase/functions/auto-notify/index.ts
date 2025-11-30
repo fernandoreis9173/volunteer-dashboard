@@ -72,12 +72,12 @@ serve(async (req) => {
             // Criar data baseada na string (será interpretada como UTC no servidor)
             const eventDate = new Date(eventDateTimeStr);
 
-            // CORREÇÃO DE FUSO HORÁRIO (MANAUS -04:00)
-            // O evento "09:00" no banco significa 09:00 em Manaus.
-            // 09:00 Manaus = 13:00 UTC.
+            // CORREÇÃO DE FUSO HORÁRIO (BRASÍLIA -03:00)
+            // O evento "09:00" no banco significa 09:00 em Brasília.
+            // 09:00 Brasília = 12:00 UTC.
             // O new Date("...09:00") cria 09:00 UTC.
-            // Precisamos adicionar 4 horas para transformar em 13:00 UTC (horário real do evento).
-            eventDate.setHours(eventDate.getHours() + 4);
+            // Precisamos adicionar 3 horas para transformar em 12:00 UTC (horário real do evento).
+            eventDate.setHours(eventDate.getHours() + 3);
 
             // Calcular tempo até o evento
             const now = new Date();
