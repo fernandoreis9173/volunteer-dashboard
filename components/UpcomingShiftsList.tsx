@@ -56,7 +56,8 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
   const cardContainerClasses = isToday ? 'w-full' : 'w-80 flex-shrink-0';
 
   const now = new Date();
-  const isFinished = endDateTime ? now > endDateTime : false;
+  const toleranceAfter = 10 * 60 * 1000; // 10 minutos após o fim
+  const isFinished = endDateTime ? now > new Date(endDateTime.getTime() + toleranceAfter) : false;
   const hasStarted = startDateTime ? now >= startDateTime : false;
 
   return (
@@ -169,7 +170,7 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
             </p>
           </div>
           <div className="flex items-center space-x-1 flex-shrink-0">
-            {isLeader && isToday && (
+            {isLeader && isToday && hasStarted && !isFinished && (
               <button
                 onClick={() => onMarkAttendance(schedule)}
                 className="p-1.5 text-slate-400 hover:text-teal-600 rounded-md hover:bg-teal-50 transition-colors"

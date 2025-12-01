@@ -116,8 +116,8 @@ serve(async (req) => {
             if (hoursUntilEvent >= 23 && hoursUntilEvent <= 25 && !event.notification_24h_sent) {
                 type = '24h';
             }
-            // Lógica de 2h (entre 1h e 3h)
-            else if (hoursUntilEvent >= 1 && hoursUntilEvent <= 3 && !event.notification_2h_sent) {
+            // Lógica de 2h (entre 1.5h e 2.5h para maior precisão)
+            else if (hoursUntilEvent >= 1.5 && hoursUntilEvent <= 2.5 && !event.notification_2h_sent) {
                 type = '2h';
             }
 

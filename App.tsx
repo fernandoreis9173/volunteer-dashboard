@@ -410,10 +410,9 @@ const App: React.FC = () => {
                 endDateTime.setDate(endDateTime.getDate() + 1);
             }
 
-            // Tolerance: 10 minutes before, 10 minutes after
-            const toleranceBefore = 10 * 60 * 1000; // 10 minutes
+            // QR Code disponível: do início do evento até 10 minutos após o fim
             const toleranceAfter = 10 * 60 * 1000;  // 10 minutes
-            return now.getTime() >= (startDateTime.getTime() - toleranceBefore) && now.getTime() <= (endDateTime.getTime() + toleranceAfter);
+            return now.getTime() >= startDateTime.getTime() && now.getTime() <= (endDateTime.getTime() + toleranceAfter);
         });
 
         setActiveEvent(liveEvent || null);
