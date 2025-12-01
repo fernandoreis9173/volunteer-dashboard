@@ -479,8 +479,9 @@ const EventCard: React.FC<{
     }
 
     const now = new Date();
-    const isFinished = endDateTime ? now > endDateTime : false;
-    const isLive = startDateTime && endDateTime ? now >= startDateTime && now < endDateTime : false;
+    const toleranceAfter = 10 * 60 * 1000; // 10 minutos após o fim
+    const isFinished = endDateTime ? now > new Date(endDateTime.getTime() + toleranceAfter) : false;
+    const isLive = startDateTime && endDateTime ? now >= startDateTime && now <= new Date(endDateTime.getTime() + toleranceAfter) : false;
 
     const myAttendance = event.present;
 

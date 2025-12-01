@@ -124,7 +124,8 @@ const EventCard: React.FC<EventCardProps> = ({
     const hasEventStarted = startDateTime ? now >= startDateTime : false;
     const isToday = startDateTime ? startDateTime.toLocaleDateString() === now.toLocaleDateString() : false;
     const isLive = startDateTime && endDateTime ? now >= startDateTime && now < endDateTime : false;
-    const isFinished = endDateTime ? now > endDateTime : false;
+    const toleranceAfter = 10 * 60 * 1000; // 10 minutos após o fim
+    const isFinished = endDateTime ? now > new Date(endDateTime.getTime() + toleranceAfter) : false;
 
     const canLeaderSchedule = isLeader && event.status === 'Confirmado' && !hasEventStarted;
     const isVolunteer = !isLeader && !isAdmin && onGenerateQrCode; // Helper to identify volunteer view

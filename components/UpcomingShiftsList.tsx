@@ -234,7 +234,9 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
         endDateTime.setDate(endDateTime.getDate() + 1);
       }
 
-      return now <= endDateTime;
+      // Manter evento visível até 10 minutos após o término
+      const toleranceAfter = 10 * 60 * 1000; // 10 minutos
+      return now <= new Date(endDateTime.getTime() + toleranceAfter);
     });
   }, [activeFilter, todaySchedules, upcomingSchedules]);
 

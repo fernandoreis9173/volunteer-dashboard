@@ -30,7 +30,9 @@ const AttendanceFlashCards: React.FC<AttendanceFlashCardsProps> = ({ schedules, 
         schedules.forEach(event => {
             if (event.status !== 'Confirmado') return;
 
-            const hasEventEnded = new Date() > new Date(`${event.date}T${event.end_time}`);
+            const eventEndTime = new Date(`${event.date}T${event.end_time}`);
+            const toleranceAfter = 10 * 60 * 1000; // 10 minutos
+            const hasEventEnded = new Date() > new Date(eventEndTime.getTime() + toleranceAfter);
 
             (event.event_volunteers || []).forEach(ev => {
                 // FIX: Count volunteers who were scheduled FOR this department in this event

@@ -156,9 +156,10 @@ const DashboardCalendar: React.FC<DashboardCalendarProps> = ({ events }) => {
                                             vol => vol.department_id === dept.department_id
                                         ) || [];
 
-                                        // Verificar se o evento já terminou
+                                        // Verificar se o evento já terminou (com tolerância de 10 minutos)
                                         const eventEndDateTime = new Date(`${selectedEvent.date}T${selectedEvent.end_time}`);
-                                        const isEventEnded = new Date() > eventEndDateTime;
+                                        const toleranceAfter = 10 * 60 * 1000; // 10 minutos
+                                        const isEventEnded = new Date() > new Date(eventEndDateTime.getTime() + toleranceAfter);
 
                                         return (
                                             <div key={idx} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
