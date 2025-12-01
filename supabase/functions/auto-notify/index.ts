@@ -58,7 +58,10 @@ serve(async (req) => {
         const { data: events, error: eventsError } = await supabaseClient
             .from('events')
             .select('*')
-            .gte('date', now.toISOString().split('T')[0]) // Eventos de hoje em diante
+            // Ajuste na busca de data: Como estamos comparando UTC com Local, 
+            // se for 01:00 UTC (dia 2), ainda pode ser 21:00 Local (dia 1).
+            // Então precisamos buscar eventos desde "ontem" (UTC) para garantir.
+            .gte('date', new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0])
             .neq('status', 'Cancelado');
 
         if (eventsError) throw eventsError;
@@ -72,12 +75,30 @@ serve(async (req) => {
             // Criar data baseada na string (será interpretada como UTC no servidor)
             const eventDate = new Date(eventDateTimeStr);
 
-            // CORREÇÃO DE FUSO HORÁRIO (MANAUS -04:00)
-            // O evento "09:00" no banco significa 09:00 em Manaus.
-            // 09:00 Manaus = 13:00 UTC.
-            // O new Date("...09:00") cria 09:00 UTC.
-            // Precisamos adicionar 4 horas para transformar em 13:00 UTC (horário real do evento).
-            eventDate.setHours(eventDate.getHours() + 4);
+            // 1.1 Buscar Fuso Horário Configurado
+            const { data: appSettings } = await supabaseClient
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'timezone')
+                .single();
+
+            const timeZone = appSettings?.value || 'America/Manaus'; // Default para Manaus se não configurado
+
+            // Função para calcular offset do fuso horário em horas
+            const getOffsetHours = (tz: string) => {
+                const date = new Date();
+                const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+                const tzDate = new Date(date.toLocaleString('en-US', { timeZone: tz }));
+                return (tzDate.getTime() - utcDate.getTime()) / (1000 * 60 * 60);
+            };
+
+            const offsetHours = getOffsetHours(timeZone);
+
+            // CORREÇÃO DE FUSO HORÁRIO DINÂMICA
+            // O evento "09:00" no banco é hora local.
+            // new Date("...09:00") cria 09:00 UTC.
+            // Para ter o UTC real do evento, subtraímos o offset (ex: Manaus -4 -> 09 - (-4) = 13 UTC)
+            eventDate.setHours(eventDate.getHours() - offsetHours);
 
             // Calcular tempo até o evento
             const now = new Date();

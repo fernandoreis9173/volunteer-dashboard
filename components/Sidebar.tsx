@@ -246,20 +246,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                   <div className="mt-2 space-y-1 pl-4">
                     <button
                       onClick={() => {
-                        onNavigate('admin');
-                        if (onAdminSubPageChange) onAdminSubPageChange('users');
-                        setIsSettingsMenuOpen(false);
-                      }}
-                      className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${activePage === 'admin' && adminSubPage === 'users'
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                    >
-                      <img src={AdminIconAsset} alt="Admin" className="h-4 w-4 brightness-0 dark:invert" />
-                      <span className="text-sm">Admin</span>
-                    </button>
-                    <button
-                      onClick={() => {
                         onNavigate('whatsapp-settings');
                         setIsSettingsMenuOpen(false);
                       }}
@@ -284,6 +270,35 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onNewVoluntee
                     >
                       <img src={NotificationIconAsset} alt="Notificações" className="h-4 w-4 brightness-0 dark:invert" />
                       <span className="text-sm">Notificações</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onNavigate('general-settings');
+                        setIsSettingsMenuOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${activePage === 'general-settings'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm">Fuso Horário</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onNavigate('admin');
+                        if (onAdminSubPageChange) onAdminSubPageChange('users');
+                        setIsSettingsMenuOpen(false);
+                      }}
+                      className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors w-full text-left ${activePage === 'admin' && adminSubPage === 'users'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                    >
+                      <img src={AdminIconAsset} alt="Admin" className="h-4 w-4 brightness-0 dark:invert" />
+                      <span className="text-sm">Admin</span>
                     </button>
                   </div>
                 )}

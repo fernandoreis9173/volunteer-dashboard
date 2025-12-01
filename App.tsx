@@ -35,6 +35,7 @@ import RankingPage from './components/RankingPage'; // Import the new RankingPag
 import LgpdConsentPage from './components/LgpdConsentPage'; // Importar a página de consentimento LGPD
 import SplashScreen from './components/SplashScreen'; // Import SplashScreen
 import WhatsAppSettingsPage from './components/WhatsAppSettingsPage'; // Import WhatsApp Settings Page
+import GeneralSettingsPage from './components/GeneralSettingsPage'; // Import General Settings Page
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
 // FIX: Import EnrichedUser type to correctly type users from `list-users` function.
 import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer, type EnrichedUser } from './types';
@@ -72,6 +73,7 @@ const pagePermissions: Record<Page, string[]> = {
     'frequency': ['admin'],
     'admin': ['admin'],
     'whatsapp-settings': ['admin'],
+    'general-settings': ['admin'],
 };
 
 const getInitialAuthView = (): AuthView => {
@@ -83,7 +85,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2);
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking', 'whatsapp-settings'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking', 'whatsapp-settings', 'general-settings'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -408,7 +410,10 @@ const App: React.FC = () => {
                 endDateTime.setDate(endDateTime.getDate() + 1);
             }
 
-            return now >= startDateTime && now <= endDateTime;
+            // Tolerance: 10 minutes before, 10 minutes after
+            const toleranceBefore = 10 * 60 * 1000; // 10 minutes
+            const toleranceAfter = 10 * 60 * 1000;  // 10 minutes
+            return now.getTime() >= (startDateTime.getTime() - toleranceBefore) && now.getTime() <= (endDateTime.getTime() + toleranceAfter);
         });
 
         setActiveEvent(liveEvent || null);
@@ -770,6 +775,8 @@ const App: React.FC = () => {
                 return <UserProfilePage session={session} onUpdate={refetchUserData} leaders={leaders} />;
             case 'whatsapp-settings':
                 return <WhatsAppSettingsPage session={session} />;
+            case 'general-settings':
+                return <GeneralSettingsPage />;
             case 'dashboard':
             default:
                 if (userProfile.role === 'admin') {

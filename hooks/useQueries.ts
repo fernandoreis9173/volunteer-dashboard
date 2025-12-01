@@ -126,7 +126,11 @@ export const useEvents = (options: UseEventsOptions = {}) => {
 };
 
 export const useTodaysEvents = (userId: string, userRole: string, departmentId?: number | null, volunteerId?: number | null) => {
-    const today = new Date().toISOString().split('T')[0];
+    // Fix: Use local date instead of UTC to avoid issues late at night in Western timezones
+    const today = new Date();
+    const offset = today.getTimezoneOffset();
+    const localDate = new Date(today.getTime() - (offset * 60 * 1000));
+    const todayStr = localDate.toISOString().split('T')[0];
 
     return useQuery({
         queryKey: ['events', 'today', userId, userRole, departmentId, volunteerId],
@@ -134,7 +138,7 @@ export const useTodaysEvents = (userId: string, userRole: string, departmentId?:
             let query = supabase
                 .from('events')
                 .select('*, event_departments(*, departments(*)), event_volunteers(*, volunteers(*))')
-                .eq('date', today)
+                .eq('date', todayStr)
                 .eq('status', 'Confirmado');
 
             if ((userRole === 'leader' || userRole === 'lider') && departmentId) {

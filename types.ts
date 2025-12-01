@@ -76,7 +76,7 @@ export interface DashboardData {
   activeLeaders?: EnrichedUser[];
 }
 
-export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin' | 'history' | 'timelines' | 'ranking' | 'whatsapp-settings';
+export type Page = 'dashboard' | 'volunteers' | 'departments' | 'events' | 'calendar' | 'my-profile' | 'notifications' | 'frequency' | 'admin' | 'history' | 'timelines' | 'ranking' | 'whatsapp-settings' | 'general-settings';
 
 export type AuthView = 'login' | 'accept-invite' | 'reset-password';
 

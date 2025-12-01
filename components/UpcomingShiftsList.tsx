@@ -169,7 +169,7 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
             </p>
           </div>
           <div className="flex items-center space-x-1 flex-shrink-0">
-            {isLeader && isToday && !isFinished && hasStarted && (
+            {isLeader && isToday && (
               <button
                 onClick={() => onMarkAttendance(schedule)}
                 className="p-1.5 text-slate-400 hover:text-teal-600 rounded-md hover:bg-teal-50 transition-colors"
@@ -219,8 +219,22 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
   }, [activeFilter, todaySchedules, upcomingSchedules]);
 
   const displayedSchedules = useMemo(() => {
-    if (activeFilter === 'today') return todaySchedules || [];
-    return upcomingSchedules || [];
+    const now = new Date();
+    const schedules = activeFilter === 'today' ? (todaySchedules || []) : (upcomingSchedules || []);
+
+    // Filter out events that have already finished
+    return schedules.filter(schedule => {
+      const { dateTime: endDateTime } = convertUTCToLocal(schedule.date, schedule.end_time);
+      if (!endDateTime) return true; // Keep if invalid date to be safe
+
+      // Handle overnight events
+      const { dateTime: startDateTime } = convertUTCToLocal(schedule.date, schedule.start_time);
+      if (startDateTime && endDateTime < startDateTime) {
+        endDateTime.setDate(endDateTime.getDate() + 1);
+      }
+
+      return now <= endDateTime;
+    });
   }, [activeFilter, todaySchedules, upcomingSchedules]);
 
   const isToday = activeFilter === 'today';
