@@ -266,9 +266,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeEvent, onNavigate
                     <div className="flex flex-col md:flex-row md:items-center gap-4 w-full md:w-auto">
                         {activeEvent && <LiveEventTimer event={activeEvent} onNavigate={onNavigate} />}
                         {
-                            (activeEvent || dashboardData.todaySchedules[0]) && (
+                            activeEvent && (
                                 <button
-                                    onClick={() => handleMarkAttendance((activeEvent || dashboardData.todaySchedules[0]) as DashboardEvent)}
+                                    onClick={() => handleMarkAttendance(activeEvent)}
                                     className="p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors flex flex-row items-center justify-center gap-3 w-full md:w-auto md:px-6"
                                     aria-label="Marcar Presença"
                                 >
