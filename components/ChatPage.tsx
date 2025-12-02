@@ -17,6 +17,7 @@ interface Contact {
     lastMessage?: string;
     lastMessageTime?: string;
     unreadCount?: number;
+    avatar_url?: string | null;
 }
 
 interface Message {
@@ -41,17 +42,102 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
     const [showGroupModal, setShowGroupModal] = useState(false);
     const [groupName, setGroupName] = useState('');
     const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
-    const [groups, setGroups] = useState<Array<{ id: string, name: string, members: string[], whatsappGroupId?: string }>>([]);
+    const [groups, setGroups] = useState<Array<{ id: string, name: string, members: string[], whatsappGroupId?: string, avatar_url?: string | null, unreadCount?: number, lastMessageTime?: Date | null }>>([]);
     const [creatingGroup, setCreatingGroup] = useState(false);
     const [toast, setToast] = useState<{ show: boolean, message: string, type: 'success' | 'error' | 'info' }>({
         show: false,
         message: '',
         type: 'info'
     });
-    const [selectedGroup, setSelectedGroup] = useState<{ id: string, name: string, members: string[], whatsappGroupId?: string } | null>(null);
+    const [selectedGroup, setSelectedGroup] = useState<{ id: string, name: string, members: string[], whatsappGroupId?: string, avatar_url?: string | null, unreadCount?: number, lastMessageTime?: Date | null } | null>(null);
     const [groupMessages, setGroupMessages] = useState<any[]>([]);
     const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+
+    // Estados para detalhes do grupo
+    const [showGroupDetailsModal, setShowGroupDetailsModal] = useState(false);
+    const [groupDetailsMembers, setGroupDetailsMembers] = useState<Contact[]>([]);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+    // Estado para o modal de confirmação de exclusão
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
+    const [showChatMenu, setShowChatMenu] = useState(false);
+    const [showClearChatModal, setShowClearChatModal] = useState(false);
+    const [activeSession, setActiveSession] = useState<{ id: string, leader_id: string, leader_name?: string } | null>(null);
+
+    useEffect(() => {
+        if (selectedContact) {
+            checkActiveSession(selectedContact.id);
+        } else {
+            setActiveSession(null);
+        }
+    }, [selectedContact]);
+
+    const checkActiveSession = async (volunteerId: string) => {
+        console.log('Verificando sessão para:', volunteerId);
+        const { data, error } = await supabase
+            .from('chat_sessions')
+            .select('id, leader_id')
+            .eq('volunteer_id', volunteerId)
+            .eq('status', 'active')
+            .maybeSingle();
+
+        if (error) {
+            console.error('Erro ao verificar sessão:', error);
+        } else {
+            console.log('Sessão encontrada:', data);
+        }
+
+        if (data) {
+            const leaderContact = contacts.find(c => c.id === data.leader_id);
+            const leaderName = leaderContact?.name || 'Outro Líder';
+            setActiveSession({ id: data.id, leader_id: data.leader_id, leader_name: leaderName });
+        } else {
+            setActiveSession(null);
+        }
+    };
+
+    const handleCloseSession = async () => {
+        if (!activeSession) return;
+
+        const { error } = await supabase
+            .from('chat_sessions')
+            .update({ status: 'closed', closed_at: new Date().toISOString() })
+            .eq('id', activeSession.id);
+
+        if (!error) {
+            setActiveSession(null);
+            showToast('Atendimento encerrado', 'success');
+        } else {
+            console.error('Erro ao encerrar sessão:', error);
+            showToast('Erro ao encerrar atendimento', 'error');
+        }
+    };
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const tabsContainerRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll para a aba ativa
+    useEffect(() => {
+        if (filterTab === 'grupos' && tabsContainerRef.current) {
+            const gruposTab = document.getElementById('tab-grupos');
+            if (gruposTab) {
+                // Scroll suave para mostrar a aba de grupos
+                tabsContainerRef.current.scrollTo({
+                    left: gruposTab.offsetLeft - 20, // Um pouco de margem
+                    behavior: 'smooth'
+                });
+            }
+        } else if (tabsContainerRef.current) {
+            // Voltar para o início se não for grupos (simplificação)
+            tabsContainerRef.current.scrollTo({
+                left: 0,
+                behavior: 'smooth'
+            });
+        }
+    }, [filterTab]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -332,25 +418,83 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
         };
     }, [session?.user?.id]); // Dependência selectedContact REMOVIDA para evitar recriação do canal
 
+    const selectedGroupRef = useRef(selectedGroup);
+    useEffect(() => {
+        selectedGroupRef.current = selectedGroup;
+    }, [selectedGroup]);
+
+    // Realtime para Grupos
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        const channel = supabase
+            .channel('group_chat_realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'whatsapp_group_messages'
+                },
+                (payload) => {
+                    const newMessage = payload.new;
+                    const currentSelectedGroup = selectedGroupRef.current;
+
+                    // Se o grupo da mensagem for o selecionado, atualizar mensagens
+                    if (currentSelectedGroup?.id === newMessage.group_id) {
+                        setGroupMessages((prev) => {
+                            if (prev.some(m => m.id === newMessage.id)) return prev;
+                            return [...prev, newMessage];
+                        });
+                        // Marcar como lido imediatamente
+                        // markGroupAsRead(newMessage.group_id); // Comentado pois pode causar loop ou race condition, melhor deixar o usuário clicar ou focar
+                    }
+
+                    // Sempre atualizar a lista de grupos (contador e última mensagem)
+                    // Se estiver selecionado, o contador será zerado pelo markGroupAsRead no click/focus, 
+                    // mas aqui incrementamos para garantir consistência visual se o usuário sair e voltar
+                    setGroups(prev => prev.map(g => {
+                        if (g.id === newMessage.group_id) {
+                            const isSelected = currentSelectedGroup?.id === newMessage.group_id;
+                            return {
+                                ...g,
+                                unreadCount: isSelected ? 0 : (g.unreadCount || 0) + 1,
+                                lastMessageTime: new Date(newMessage.created_at)
+                            };
+                        }
+                        return g;
+                    }));
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [session?.user?.id]);
+
     const fetchContacts = async () => {
         try {
             setLoading(true);
 
-            // 1. Buscar contatos de volunteers (com telefone)
-            const { data: volunteersData, error: volError } = await supabase
-                .from('volunteers')
-                .select('user_id, name, phone, email')
-                .not('phone', 'is', null);
+            // 1. Buscar contatos via RPC (já traz avatares e unifica volunteers/profiles)
+            const { data: contactsData, error: contactsError } = await supabase
+                .rpc('get_chat_contacts', { current_user_id: session?.user?.id });
 
-            if (volError) throw volError;
+            if (contactsError) throw contactsError;
 
-            // 2. Buscar contatos de profiles (admins/leaders com telefone)
-            const { data: profilesData, error: profError } = await supabase
-                .from('profiles')
-                .select('id, name, phone, role')
-                .not('phone', 'is', null);
+            // 2. Buscar avatar do usuário atual separadamente
+            if (session?.user?.id) {
+                const { data: userData } = await supabase
+                    .from('profiles')
+                    .select('avatar_url')
+                    .eq('id', session.user.id)
+                    .single();
 
-            if (profError) throw profError;
+                if (userData?.avatar_url) {
+                    setCurrentUserAvatar(userData.avatar_url);
+                }
+            }
 
             // 3. Buscar todas as mensagens do usuário atual
             const { data: messagesData, error: messagesError } = await supabase
@@ -361,33 +505,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
 
             if (messagesError) throw messagesError;
 
-            // 4. Combinar contatos (volunteers + profiles, evitando duplicatas)
+            // 4. Preparar mapa de contatos
             const contactsMap = new Map();
 
-            // Adicionar volunteers
-            volunteersData?.forEach(vol => {
-                if (vol.phone && vol.phone.trim() && vol.user_id !== session?.user?.id) {
-                    contactsMap.set(vol.user_id, {
-                        id: vol.user_id,
-                        name: vol.name || 'Sem nome',
-                        phone: vol.phone,
-                        role: 'Voluntário',
-                        email: vol.email
-                    });
-                }
-            });
-
-            // Adicionar profiles (se não existir como volunteer)
-            profilesData?.forEach(prof => {
-                if (prof.phone && prof.phone.trim() && prof.id !== session?.user?.id && !contactsMap.has(prof.id)) {
-                    contactsMap.set(prof.id, {
-                        id: prof.id,
-                        name: prof.name || 'Sem nome',
-                        phone: prof.phone,
-                        role: prof.role === 'admin' ? 'Admin' : prof.role === 'leader' ? 'Líder' : 'Voluntário',
-                        email: null
-                    });
-                }
+            contactsData?.forEach((contact: any) => {
+                contactsMap.set(contact.id, {
+                    id: contact.id,
+                    name: contact.name || 'Sem nome',
+                    phone: contact.phone,
+                    role: contact.role,
+                    email: contact.email,
+                    avatar_url: contact.avatar_url
+                });
             });
 
             const allMessages = messagesData || [];
@@ -415,7 +544,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                     lastMessage: lastMsg ? lastMsg.message : undefined,
                     lastMessageTime: lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : undefined,
                     lastMessageDate: lastMsg ? new Date(lastMsg.created_at) : undefined,
-                    unreadCount: unreadCount
+                    unreadCount: unreadCount,
+                    avatar_url: contact.avatar_url
                 };
             });
 
@@ -466,11 +596,95 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
         }
     };
 
+    const handleClearChat = async () => {
+        if (!selectedContact || !session?.user?.id) return;
+
+        try {
+            const { error } = await supabase
+                .from('chat_messages')
+                .delete()
+                .or(`and(sender_id.eq.${session.user.id},receiver_id.eq.${selectedContact.id}),and(sender_id.eq.${selectedContact.id},receiver_id.eq.${session.user.id})`);
+
+            if (error) throw error;
+
+            setMessages([]);
+            setShowClearChatModal(false);
+            setShowChatMenu(false);
+            fetchContacts(); // Atualizar lista para remover última mensagem
+            showToast('Conversa limpa com sucesso', 'success');
+        } catch (error) {
+            console.error('Erro ao limpar conversa:', error);
+            showToast('Erro ao limpar conversa', 'error');
+        }
+    };
+
+    const handleClearGroupChat = async () => {
+        if (!selectedGroup) return;
+
+        try {
+            const { error } = await supabase
+                .from('whatsapp_group_messages')
+                .delete()
+                .eq('group_id', selectedGroup.id);
+
+            if (error) throw error;
+
+            setGroupMessages([]);
+            setShowClearChatModal(false);
+            setShowChatMenu(false);
+            showToast('Conversa do grupo limpa com sucesso', 'success');
+        } catch (error) {
+            console.error('Erro ao limpar conversa do grupo:', error);
+            showToast('Erro ao limpar conversa do grupo', 'error');
+        }
+    };
+
     const sendMessage = async () => {
         if (!newMessage.trim() || !selectedContact || !session) return;
 
         try {
             setSending(true);
+
+            // Verificar/Criar sessão ativa
+            if (!activeSession) {
+                const { data: sessionData, error: sessionError } = await supabase
+                    .from('chat_sessions')
+                    .insert({
+                        volunteer_id: selectedContact.id,
+                        leader_id: session.user.id,
+                        status: 'active'
+                    })
+                    .select()
+                    .single();
+
+                if (sessionData) {
+                    setActiveSession({ id: sessionData.id, leader_id: session.user.id });
+                } else if (sessionError) {
+                    // Se erro for duplicidade (já existe ativa), buscar quem é
+                    const { data: existingSession } = await supabase
+                        .from('chat_sessions')
+                        .select('id, leader_id')
+                        .eq('volunteer_id', selectedContact.id)
+                        .eq('status', 'active')
+                        .maybeSingle();
+
+                    if (existingSession) {
+                        const leaderContact = contacts.find(c => c.id === existingSession.leader_id);
+                        const leaderName = leaderContact?.name || 'Outro Líder';
+                        setActiveSession({ id: existingSession.id, leader_id: existingSession.leader_id, leader_name: leaderName });
+
+                        if (existingSession.leader_id !== session.user.id) {
+                            showToast(`Este voluntário já está em atendimento com ${leaderName}`, 'error');
+                            setSending(false);
+                            return; // Bloquear envio
+                        }
+                    }
+                }
+            } else if (activeSession.leader_id !== session.user.id) {
+                showToast(`Este voluntário está em atendimento com ${activeSession.leader_name}`, 'error');
+                setSending(false);
+                return;
+            }
 
             // 1. Salvar mensagem no banco de dados
             const { error: dbError } = await supabase
@@ -620,29 +834,138 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
     const fetchGroups = async () => {
         try {
             const { data, error } = await supabase
-                .from('whatsapp_groups')
-                .select(`
-                    id,
-                    name,
-                    whatsapp_group_id,
-                    whatsapp_group_members (
-                        phone
-                    )
-                `);
+                .rpc('get_groups_with_unread_count', { current_user_id: session?.user?.id });
 
             if (error) throw error;
 
             if (data) {
-                const formattedGroups = data.map(g => ({
+                const formattedGroups = data.map((g: any) => ({
                     id: g.id,
                     name: g.name,
                     whatsappGroupId: g.whatsapp_group_id,
-                    members: g.whatsapp_group_members.map((m: any) => m.phone)
+                    avatar_url: g.avatar_url,
+                    members: g.members.map((m: any) => m.phone),
+                    unreadCount: g.unread_count,
+                    lastMessageTime: g.last_message_time ? new Date(g.last_message_time) : null
                 }));
                 setGroups(formattedGroups);
             }
         } catch (error) {
             console.error('Erro ao buscar grupos:', error);
+        }
+    };
+
+    const markGroupAsRead = async (groupId: string) => {
+        if (!session?.user?.id) return;
+        try {
+            const { error } = await supabase
+                .from('whatsapp_group_reads')
+                .upsert({
+                    group_id: groupId,
+                    user_id: session.user.id,
+                    last_read_at: new Date().toISOString()
+                }, { onConflict: 'group_id, user_id' });
+
+            if (error) throw error;
+
+            // Atualizar localmente
+            setGroups(prev => prev.map(g => g.id === groupId ? { ...g, unreadCount: 0 } : g));
+        } catch (error) {
+            console.error('Erro ao marcar grupo como lido:', error);
+        }
+    };
+
+    const fetchGroupMembersDetails = async (groupId: string) => {
+        try {
+            // Buscar membros do grupo (telefones)
+            const { data: groupData, error: groupError } = await supabase
+                .from('whatsapp_groups')
+                .select(`
+                    whatsapp_group_members (
+                        phone
+                    )
+                `)
+                .eq('id', groupId)
+                .single();
+
+            if (groupError) throw groupError;
+
+            const memberPhones = groupData.whatsapp_group_members.map((m: any) => m.phone);
+
+            // Buscar detalhes desses telefones na lista de contatos já carregada
+            const membersDetails = contacts.filter(c => memberPhones.includes(c.phone));
+
+            // Adicionar membros que podem não estar na lista de contatos (apenas telefone)
+            const foundPhones = new Set(membersDetails.map(m => m.phone));
+            const unknownMembers = memberPhones
+                .filter((phone: string) => !foundPhones.has(phone))
+                .map((phone: string) => ({
+                    id: phone,
+                    name: phone,
+                    phone: phone,
+                    role: 'Membro',
+                    avatar_url: null
+                }));
+
+            setGroupDetailsMembers([...membersDetails, ...unknownMembers]);
+        } catch (error) {
+            console.error('Erro ao buscar detalhes dos membros:', error);
+        }
+    };
+
+    const handleGroupAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!event.target.files || event.target.files.length === 0 || !selectedGroup) {
+            return;
+        }
+
+        try {
+            setUploadingAvatar(true);
+            const file = event.target.files[0];
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${selectedGroup.id}-${Date.now()}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            // Upload
+            const { error: uploadError } = await supabase.storage
+                .from('group-avatars')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            // Get URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('group-avatars')
+                .getPublicUrl(filePath);
+
+            // Update group
+            const { error: updateError } = await supabase
+                .from('whatsapp_groups')
+                .update({ avatar_url: publicUrl })
+                .eq('id', selectedGroup.id);
+
+            if (updateError) throw updateError;
+
+            // Update local state
+            setSelectedGroup(prev => prev ? { ...prev, avatar_url: publicUrl } : null);
+            setGroups(prev => prev.map(g => g.id === selectedGroup.id ? { ...g, avatar_url: publicUrl } : g));
+
+            showToast('Foto do grupo atualizada!', 'success');
+
+            // Chamar Edge Function para atualizar no WhatsApp
+            try {
+                const { error: fnError } = await supabase.functions.invoke('update-whatsapp-group-icon', {
+                    body: { groupId: selectedGroup.id, avatarUrl: publicUrl }
+                });
+                if (fnError) console.warn('Erro ao atualizar ícone no WhatsApp (Edge Function):', fnError);
+            } catch (apiError) {
+                console.error('Erro ao atualizar ícone no WhatsApp:', apiError);
+            }
+
+        } catch (error) {
+            console.error('Erro ao atualizar foto do grupo:', error);
+            showToast('Erro ao atualizar foto', 'error');
+        } finally {
+            setUploadingAvatar(false);
         }
     };
 
@@ -652,21 +975,38 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
         }
     }, [session]);
 
-    const deleteGroup = async (groupId: string) => {
-        if (confirm('Tem certeza que deseja deletar este grupo?')) {
-            try {
-                const { error } = await supabase
-                    .from('whatsapp_groups')
-                    .delete()
-                    .eq('id', groupId);
+    const handleDeleteClick = (groupId: string) => {
+        setGroupToDelete(groupId);
+        setShowDeleteModal(true);
+    };
 
-                if (error) throw error;
+    const confirmDeleteGroup = async () => {
+        if (!groupToDelete) return;
 
-                setGroups(prev => prev.filter(g => g.id !== groupId));
-                showToast('Grupo deletado com sucesso', 'success');
-            } catch (error) {
-                console.error('Erro ao deletar grupo:', error);
+        setIsDeleting(true);
+        try {
+            const { error } = await supabase
+                .from('whatsapp_groups')
+                .delete()
+                .eq('id', groupToDelete);
+
+            if (error) throw error;
+
+            setGroups(prev => prev.filter(g => g.id !== groupToDelete));
+
+            // Se o grupo deletado for o selecionado, limpar seleção
+            if (selectedGroup?.id === groupToDelete) {
+                setSelectedGroup(null);
             }
+
+            showToast('Grupo deletado com sucesso', 'success');
+            setShowDeleteModal(false);
+            setGroupToDelete(null);
+        } catch (error) {
+            console.error('Erro ao deletar grupo:', error);
+            showToast('Erro ao deletar grupo', 'error');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -764,14 +1104,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                     <div className="p-4 border-b border-slate-200">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-2xl font-bold text-slate-800">Chat</h2>
-                            <button
-                                onClick={() => setShowGroupModal(true)}
-                                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                                </svg>
-                            </button>
+                            {userRole === 'admin' && (
+                                <button
+                                    onClick={() => setShowGroupModal(true)}
+                                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                    title="Criar novo grupo"
+                                >
+                                    <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                </button>
+                            )}
                         </div>
 
                         {/* Search Bar */}
@@ -789,10 +1132,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                         </div>
 
                         {/* Filter Tabs */}
-                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        <div
+                            ref={tabsContainerRef}
+                            className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide scroll-smooth"
+                        >
                             <button
                                 onClick={() => setFilterTab('tudo')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filterTab === 'tudo'
+                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'tudo'
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
@@ -801,7 +1147,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                             </button>
                             <button
                                 onClick={() => setFilterTab('nao_lidas')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filterTab === 'nao_lidas'
+                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'nao_lidas'
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
@@ -810,7 +1156,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                             </button>
                             <button
                                 onClick={() => setFilterTab('favoritas')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filterTab === 'favoritas'
+                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'favoritas'
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
@@ -818,8 +1164,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                 Favoritas
                             </button>
                             <button
+                                id="tab-grupos" // ID para referência
                                 onClick={() => setFilterTab('grupos')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filterTab === 'grupos'
+                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'grupos'
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                     }`}
@@ -838,55 +1185,103 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                         ) : (() => {
                             // Aplicar filtros
                             let filteredContacts = contacts;
+                            let filteredGroups = groups;
 
                             // Filtro por busca
                             if (searchQuery.trim()) {
+                                const query = searchQuery.toLowerCase();
                                 filteredContacts = filteredContacts.filter(c =>
-                                    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                    c.name.toLowerCase().includes(query) ||
                                     c.phone.includes(searchQuery)
+                                );
+                                filteredGroups = filteredGroups.filter(g =>
+                                    g.name.toLowerCase().includes(query)
                                 );
                             }
 
                             // Filtro por aba
                             if (filterTab === 'nao_lidas') {
                                 filteredContacts = filteredContacts.filter(c => c.unreadCount && c.unreadCount > 0);
+                                filteredGroups = filteredGroups.filter(g => (g.unreadCount || 0) > 0);
                             } else if (filterTab === 'favoritas') {
                                 filteredContacts = filteredContacts.filter(c => favorites.has(c.id));
+                                filteredGroups = [];
                             } else if (filterTab === 'grupos') {
-                                // Mostrar grupos criados
-                                return groups.length > 0 ? (
-                                    groups.map((group) => (
+                                filteredContacts = [];
+                            } else if (filterTab === 'tudo') {
+                                // Mantém ambos
+                            }
+
+                            const hasItems = filteredGroups.length > 0 || filteredContacts.length > 0;
+
+                            if (!hasItems) {
+                                return (
+                                    <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
+                                        <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                        </svg>
+                                        <p className="font-medium">Nenhum contato ou grupo encontrado</p>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <>
+                                    {filteredGroups.map((group) => (
                                         <div
                                             key={group.id}
-                                            className="w-full p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors relative group"
+                                            className="w-full p-3 flex items-center gap-1 hover:bg-slate-50 transition-colors group"
                                         >
                                             <button
                                                 onClick={() => {
                                                     setSelectedGroup(group);
                                                     setSelectedContact(null);
+                                                    fetchGroupMessages(group.id);
+                                                    markGroupAsRead(group.id);
                                                 }}
-                                                className={`flex items-start gap-3 flex-1 min-w-0 ${selectedGroup?.id === group.id ? 'bg-slate-100 rounded-lg -m-2 p-2' : ''}`}
+                                                className={`flex items-start gap-3 flex-1 min-w-0 text-left ${selectedGroup?.id === group.id ? 'bg-slate-100 rounded-lg -m-2 p-2' : ''}`}
                                             >
-                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold flex-shrink-0 mt-1">
-                                                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                                    </svg>
+                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold flex-shrink-0 mt-1 overflow-hidden relative">
+                                                    {group.avatar_url ? (
+                                                        <img src={group.avatar_url} alt={group.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                                                        </svg>
+                                                    )}
                                                 </div>
-                                                <div className="flex-1 text-left min-w-0 py-1">
+                                                <div className="flex-1 min-w-0 py-1">
                                                     <div className="flex items-start justify-between mb-1">
-                                                        <h3 className="font-semibold text-slate-800 truncate text-[15px] pr-2">{group.name}</h3>
+                                                        <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                                                            <h3 className="font-semibold text-slate-800 truncate text-[15px]">{group.name}</h3>
+                                                            <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                                                Grupo
+                                                            </span>
+                                                        </div>
+                                                        {group.lastMessageTime && (
+                                                            <span className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
+                                                                {group.lastMessageTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    <p className="text-sm text-slate-500 truncate">
-                                                        {group.members.length} {group.members.length === 1 ? 'membro' : 'membros'}
-                                                    </p>
+                                                    <div className="flex justify-between items-center">
+                                                        <p className="text-sm text-slate-500 truncate">
+                                                            {group.members.length} {group.members.length === 1 ? 'membro' : 'membros'}
+                                                        </p>
+                                                        {group.unreadCount && group.unreadCount > 0 ? (
+                                                            <span className="bg-green-500 text-white text-xs font-bold h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full">
+                                                                {group.unreadCount}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
                                                 </div>
                                             </button>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    deleteGroup(group.id);
+                                                    handleDeleteClick(group.id);
                                                 }}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="p-2 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                                                 title="Deletar grupo"
                                             >
                                                 <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -894,90 +1289,93 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                                 </svg>
                                             </button>
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
-                                        <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                        </svg>
-                                        <p className="font-medium">Nenhum grupo criado</p>
-                                        <p className="text-sm mt-1">Clique no + para criar seu primeiro grupo</p>
-                                    </div>
-                                );
-                            }
+                                    ))}
 
-                            return filteredContacts.length > 0 ? (
-                                filteredContacts.map((contact) => (
-                                    <div
-                                        key={contact.id}
-                                        className={`w-full p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors relative group ${selectedContact?.id === contact.id ? 'bg-slate-100' : ''
-                                            }`}
-                                    >
-                                        <button
-                                            onClick={() => setSelectedContact(contact)}
-                                            className="flex items-start gap-3 flex-1 min-w-0 pr-8"
+                                    {filteredContacts.map((contact) => (
+                                        <div
+                                            key={contact.id}
+                                            className={`w-full p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors relative group ${selectedContact?.id === contact.id ? 'bg-slate-100' : ''
+                                                }`}
                                         >
-                                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0 mt-1">
-                                                {contact.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 text-left min-w-0 py-1">
-                                                <div className="flex items-start justify-between mb-1">
-                                                    <h3 className="font-semibold text-slate-800 truncate text-[15px] pr-2">{contact.name}</h3>
-                                                    {contact.lastMessageTime && (
-                                                        <span className="text-xs text-slate-500 flex-shrink-0">{contact.lastMessageTime}</span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-sm text-slate-500 truncate flex-1">
-                                                        {contact.lastMessage || contact.role}
-                                                    </p>
-                                                    {contact.unreadCount && contact.unreadCount > 0 && (
-                                                        <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold ml-2 flex-shrink-0">
-                                                            {contact.unreadCount}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                toggleFavorite(contact.id);
-                                            }}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
-                                            <svg
-                                                className={`w-4 h-4 ${favorites.has(contact.id) ? 'fill-yellow-400 text-yellow-400' : 'text-slate-400'}`}
-                                                fill={favorites.has(contact.id) ? 'currentColor' : 'none'}
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedContact(contact);
+                                                    if (contact.unreadCount && contact.unreadCount > 0) {
+                                                        markMessagesAsRead(contact.id);
+                                                        setContacts(prev => prev.map(c =>
+                                                            c.id === contact.id ? { ...c, unreadCount: 0 } : c
+                                                        ));
+                                                    }
+                                                }}
+                                                className="flex items-start gap-3 flex-1 min-w-0 pr-8"
                                             >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
-                                    <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                                    </svg>
-                                    <p className="font-medium">
-                                        {filterTab === 'nao_lidas' ? 'Nenhuma mensagem não lida' :
-                                            filterTab === 'grupos' ? 'Grupos em breve' :
-                                                filterTab === 'favoritas' ? 'Nenhuma conversa favorita' :
-                                                    searchQuery ? 'Nenhum resultado encontrado' : 'Nenhuma conversa'}
-                                    </p>
-                                    <p className="text-sm mt-1">
-                                        {filterTab === 'nao_lidas' ? 'Todas as conversas estão em dia!' :
-                                            filterTab === 'grupos' ? 'Funcionalidade em desenvolvimento' :
-                                                filterTab === 'favoritas' ? 'Marque conversas como favoritas' :
-                                                    searchQuery ? 'Tente outro termo de busca' : 'Selecione um contato para começar'}
-                                    </p>
-                                </div>
+                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0 mt-1 overflow-hidden">
+                                                    {contact.avatar_url ? (
+                                                        <img src={contact.avatar_url} alt={contact.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        contact.name.charAt(0).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 text-left min-w-0 py-1">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                                                            <h3 className="font-semibold text-slate-800 truncate text-[15px]">
+                                                                {contact.name}
+                                                            </h3>
+                                                            {contact.role === 'Admin' && (
+                                                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                                                                    Admin
+                                                                </span>
+                                                            )}
+                                                            {(contact.role === 'Líder' || contact.role === 'leader') && (
+                                                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                                                                    Líder
+                                                                </span>
+                                                            )}
+                                                            {contact.role === 'Voluntário' && (
+                                                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                                    Vol
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {contact.lastMessageTime && (
+                                                            <span className="text-xs text-slate-500 flex-shrink-0">{contact.lastMessageTime}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-sm text-slate-500 truncate flex-1">
+                                                            {contact.lastMessage || contact.role}
+                                                        </p>
+                                                        {(contact.unreadCount || 0) > 0 && (
+                                                            <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold ml-2 flex-shrink-0">
+                                                                {contact.unreadCount}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleFavorite(contact.id);
+                                                }}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <svg
+                                                    className={`w-4 h-4 ${favorites.has(contact.id) ? 'fill-yellow-400 text-yellow-400' : 'text-slate-400'}`}
+                                                    fill={favorites.has(contact.id) ? 'currentColor' : 'none'}
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </>
                             );
                         })()}
-                    </div>
+                    </div >
                 </div>
 
                 {/* Área de Chat */}
@@ -987,19 +1385,77 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                             {/* Header do Chat */}
                             <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold">
-                                        {selectedContact.name.charAt(0).toUpperCase()}
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold overflow-hidden">
+                                        {selectedContact.avatar_url ? (
+                                            <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            selectedContact.name.charAt(0).toUpperCase()
+                                        )}
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-slate-800">{selectedContact.name}</h3>
                                         <p className="text-sm text-slate-500">{selectedContact.phone}</p>
+                                        {activeSession ? (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-xs px-2 py-0.5 rounded-full ${activeSession.leader_id === session?.user?.id
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-red-100 text-red-700'
+                                                    }`}>
+                                                    {activeSession.leader_id === session?.user?.id
+                                                        ? 'Em atendimento com você'
+                                                        : `Em atendimento com ${activeSession.leader_name}`}
+                                                </span>
+                                                {activeSession.leader_id === session?.user?.id && (
+                                                    <button
+                                                        onClick={handleCloseSession}
+                                                        className="ml-2 px-2 py-0.5 bg-red-100 text-red-600 hover:bg-red-200 rounded text-xs font-medium transition-colors"
+                                                    >
+                                                        Encerrar Atendimento
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="mt-1">
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                                    Disponível
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                                <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                                    <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                    </svg>
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowChatMenu(!showChatMenu)}
+                                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                    >
+                                        <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                        </svg>
+                                    </button>
+
+                                    {showChatMenu && (
+                                        <>
+                                            <div
+                                                className="fixed inset-0 z-10"
+                                                onClick={() => setShowChatMenu(false)}
+                                            ></div>
+                                            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 z-20 py-1">
+                                                <button
+                                                    onClick={() => {
+                                                        setShowClearChatModal(true);
+                                                        setShowChatMenu(false);
+                                                    }}
+                                                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                    Limpar conversa
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Mensagens */}
@@ -1019,14 +1475,31 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                             return (
                                                 <div
                                                     key={msg.id}
-                                                    className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}
+                                                    className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
                                                 >
+                                                    {!isSent && (
+                                                        <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
+                                                            {selectedContact.avatar_url ? (
+                                                                <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
+                                                                    {selectedContact.name.charAt(0).toUpperCase()}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
                                                     <div
                                                         className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
                                                             ? 'bg-blue-600 text-white'
                                                             : 'bg-white text-slate-800 border border-slate-200'
                                                             }`}
                                                     >
+                                                        {!isSent && (
+                                                            <p className="text-xs font-bold text-blue-600 mb-1">
+                                                                {selectedContact.name}
+                                                            </p>
+                                                        )}
                                                         <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
                                                         <p className={`text-xs mt-1 ${isSent ? 'text-blue-100' : 'text-slate-400'}`}>
                                                             {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
@@ -1035,6 +1508,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                                             })}
                                                         </p>
                                                     </div>
+
+                                                    {isSent && (
+                                                        <div className="w-8 h-8 rounded-full bg-blue-700 flex-shrink-0 overflow-hidden mb-1">
+                                                            {currentUserAvatar ? (
+                                                                <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                                                                    {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -1086,16 +1571,61 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                         <>
                             {/* Header do Grupo */}
                             <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold">
-                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                        </svg>
+                                <div
+                                    className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors -ml-2"
+                                    onClick={() => {
+                                        if (selectedGroup) {
+                                            fetchGroupMembersDetails(selectedGroup.id);
+                                            setShowGroupDetailsModal(true);
+                                        }
+                                    }}
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold overflow-hidden">
+                                        {selectedGroup.avatar_url ? (
+                                            <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                                            </svg>
+                                        )}
                                     </div>
                                     <div>
                                         <h3 className="font-semibold text-slate-800">{selectedGroup.name}</h3>
                                         <p className="text-sm text-slate-500">{selectedGroup.members.length} membros</p>
                                     </div>
+                                </div>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowChatMenu(!showChatMenu)}
+                                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                    >
+                                        <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                        </svg>
+                                    </button>
+
+                                    {showChatMenu && (
+                                        <>
+                                            <div
+                                                className="fixed inset-0 z-10"
+                                                onClick={() => setShowChatMenu(false)}
+                                            ></div>
+                                            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 z-20 py-1">
+                                                <button
+                                                    onClick={() => {
+                                                        setShowClearChatModal(true);
+                                                        setShowChatMenu(false);
+                                                    }}
+                                                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                    Limpar conversa
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -1116,8 +1646,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                             return (
                                                 <div
                                                     key={msg.id}
-                                                    className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}
+                                                    className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
                                                 >
+                                                    {!isSent && (
+                                                        <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
+                                                            {(() => {
+                                                                const senderContact = contacts.find(c => c.id === msg.sender_id);
+                                                                const avatarUrl = senderContact?.avatar_url;
+                                                                const initial = (senderContact?.name || msg.sender_name || msg.sender_phone || '?').charAt(0).toUpperCase();
+
+                                                                return avatarUrl ? (
+                                                                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
+                                                                        {initial}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    )}
+
                                                     <div
                                                         className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
                                                             ? 'bg-green-600 text-white'
@@ -1126,7 +1674,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                                     >
                                                         {!isSent && (
                                                             <p className="text-xs font-bold text-orange-500 mb-1">
-                                                                {msg.sender?.email?.split('@')[0] || msg.sender_name || msg.sender_phone || 'Membro'}
+                                                                {(() => {
+                                                                    const senderContact = contacts.find(c => c.id === msg.sender_id);
+                                                                    return senderContact?.name || msg.sender_name || msg.sender_phone || 'Membro';
+                                                                })()}
                                                             </p>
                                                         )}
                                                         <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
@@ -1137,6 +1688,18 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                                             })}
                                                         </p>
                                                     </div>
+
+                                                    {isSent && (
+                                                        <div className="w-8 h-8 rounded-full bg-green-700 flex-shrink-0 overflow-hidden mb-1">
+                                                            {currentUserAvatar ? (
+                                                                <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                                                                    {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -1166,7 +1729,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                         <textarea
                                             value={newMessage}
                                             onChange={(e) => setNewMessage(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendGroupMessage()}
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleSendGroupMessage();
+                                                }
+                                            }}
                                             placeholder="Enviar mensagem para o grupo..."
                                             className="flex-1 resize-none border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent max-h-32"
                                             rows={1}
@@ -1199,6 +1767,91 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                     )}
                 </div>
             </div>
+
+            {/* Modal de Detalhes do Grupo */}
+            {showGroupDetailsModal && selectedGroup && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-slate-800">Dados do Grupo</h3>
+                            <button
+                                onClick={() => setShowGroupDetailsModal(false)}
+                                className="text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto">
+                            {/* Foto do Grupo */}
+                            <div className="flex flex-col items-center mb-8">
+                                <div className="relative group cursor-pointer">
+                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white text-3xl font-semibold overflow-hidden shadow-lg">
+                                        {selectedGroup.avatar_url ? (
+                                            <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                                            </svg>
+                                        )}
+                                    </div>
+                                    <label className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                        {uploadingAvatar ? (
+                                            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        ) : (
+                                            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        )}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleGroupAvatarUpload}
+                                            disabled={uploadingAvatar}
+                                        />
+                                    </label>
+                                </div>
+                                <h4 className="mt-3 text-lg font-semibold text-slate-800">{selectedGroup.name}</h4>
+                                <p className="text-sm text-slate-500">Grupo • {selectedGroup.members.length} membros</p>
+                            </div>
+
+                            {/* Lista de Membros */}
+                            <div>
+                                <h5 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Membros ({groupDetailsMembers.length})</h5>
+                                <div className="space-y-3">
+                                    {groupDetailsMembers.map((member) => (
+                                        <div key={member.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-semibold flex-shrink-0 overflow-hidden">
+                                                {member.avatar_url ? (
+                                                    <img src={member.avatar_url} alt={member.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    member.name.charAt(0).toUpperCase()
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="font-medium text-slate-800 truncate">{member.name}</p>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${member.role === 'Admin' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                                                        (member.role === 'Líder' || member.role === 'leader') ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                                            'bg-slate-100 text-slate-600 border-slate-200'
+                                                        }`}>
+                                                        {member.role === 'leader' ? 'Líder' : member.role}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-500 truncate">{member.phone}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal de Criar Grupo */}
             {showGroupModal && (
@@ -1262,6 +1915,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                                 </svg>
                                             )}
+
+
                                         </button>
                                     ))}
                                 </div>
@@ -1291,6 +1946,46 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                 </div>
             )}
 
+            {/* Modal de Confirmação de Exclusão */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => !isDeleting && setShowDeleteModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800 mb-2">Excluir Grupo?</h3>
+                            <p className="text-slate-600 mb-6">
+                                Tem certeza que deseja excluir este grupo? Esta ação não pode ser desfeita e todas as mensagens serão perdidas.
+                            </p>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowDeleteModal(false)}
+                                    disabled={isDeleting}
+                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium disabled:opacity-50"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={confirmDeleteGroup}
+                                    disabled={isDeleting}
+                                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isDeleting ? (
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                        'Sim, Excluir'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Toast Notification */}
             {toast.show && (
                 <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
@@ -1314,6 +2009,38 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                             </svg>
                         )}
                         <p className="text-white font-medium">{toast.message}</p>
+                    </div>
+                </div>
+            )}
+            {/* Modal de Confirmação de Limpar Conversa */}
+            {showClearChatModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 text-red-600">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 mb-2">Limpar conversa?</h3>
+                            <p className="text-slate-500 mb-6">
+                                Tem certeza que deseja apagar todas as mensagens desta conversa? Esta ação não pode ser desfeita.
+                            </p>
+                            <div className="flex gap-3 w-full">
+                                <button
+                                    onClick={() => setShowClearChatModal(false)}
+                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={selectedGroup ? handleClearGroupChat : handleClearChat}
+                                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+                                >
+                                    Limpar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

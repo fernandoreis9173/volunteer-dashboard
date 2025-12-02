@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -88,6 +89,8 @@ serve(async (req) => {
                 const pushName = messageData.pushName || participantPhone
 
                 let senderId = null
+                let senderName = pushName // Default to WhatsApp name
+
                 if (participantPhone) {
                     // Tentar achar usuário pelo telefone usando a função robusta (lida com 9º dígito)
                     const { data: userId } = await supabaseClient
@@ -95,6 +98,29 @@ serve(async (req) => {
 
                     if (userId) {
                         senderId = userId;
+
+                        // Buscar nome real do usuário nas tabelas profiles ou volunteers
+                        // Primeiro tenta profiles
+                        const { data: profile } = await supabaseClient
+                            .from('profiles')
+                            .select('name')
+                            .eq('id', userId)
+                            .single();
+
+                        if (profile?.name) {
+                            senderName = profile.name;
+                        } else {
+                            // Se não encontrou em profiles, tenta volunteers
+                            const { data: volunteer } = await supabaseClient
+                                .from('volunteers')
+                                .select('name')
+                                .eq('user_id', userId)
+                                .single();
+
+                            if (volunteer?.name) {
+                                senderName = volunteer.name;
+                            }
+                        }
                     }
                 }
 
@@ -124,7 +150,7 @@ serve(async (req) => {
                     .insert({
                         group_id: group.id,
                         sender_id: senderId, // Pode ser null se for alguém fora do sistema
-                        sender_name: pushName, // Salvar nome do WhatsApp
+                        sender_name: senderName, // Nome real do banco ou pushName como fallback
                         sender_phone: participantPhone, // Salvar telefone
                         message: messageContent,
                         whatsapp_message_id: messageData.key.id,
@@ -174,19 +200,49 @@ serve(async (req) => {
                         .rpc('find_user_by_phone', { search_phone: participantPhone });
 
                     if (userId) {
-                        // Descobrir destinatário (última conversa)
-                        const { data: lastMessage } = await supabaseClient
-                            .from('chat_messages')
-                            .select('sender_id, receiver_id')
-                            .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-                            .order('created_at', { ascending: false })
-                            .limit(1)
+                        // Descobrir destinatário
+                        let receiverId = null;
+
+                        // 1. Verificar se existe uma sessão de atendimento ativa
+                        const { data: activeSession } = await supabaseClient
+                            .from('chat_sessions')
+                            .select('leader_id')
+                            .eq('volunteer_id', userId)
+                            .eq('status', 'active')
                             .single();
 
-                        let receiverId = null;
-                        if (lastMessage) {
-                            receiverId = lastMessage.sender_id === userId ? lastMessage.receiver_id : lastMessage.sender_id;
+                        if (activeSession) {
+                            receiverId = activeSession.leader_id;
+                            console.log('Sessão ativa encontrada. Destinatário:', receiverId);
                         } else {
+                            // 2. Fallback: Tentar na tabela persistente chat_conversations (última interação)
+                            const { data: lastConv } = await supabaseClient
+                                .from('chat_conversations')
+                                .select('partner_id')
+                                .eq('user_id', userId)
+                                .order('last_interaction', { ascending: false })
+                                .limit(1)
+                                .single();
+
+                            receiverId = lastConv?.partner_id;
+                        }
+
+                        // 2. Fallback para chat_messages (caso a tabela nova esteja vazia ou algo assim)
+                        if (!receiverId) {
+                            const { data: lastMessage } = await supabaseClient
+                                .from('chat_messages')
+                                .select('sender_id, receiver_id')
+                                .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+                                .order('created_at', { ascending: false })
+                                .limit(1)
+                                .single();
+
+                            if (lastMessage) {
+                                receiverId = lastMessage.sender_id === userId ? lastMessage.receiver_id : lastMessage.sender_id;
+                            }
+                        }
+
+                        if (!receiverId) {
                             await supabaseClient.from('webhook_logs').insert({
                                 payload: { participantPhone, userId },
                                 message: 'Sem histórico para definir destinatário individual'
