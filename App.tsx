@@ -36,6 +36,7 @@ import LgpdConsentPage from './components/LgpdConsentPage'; // Importar a págin
 import SplashScreen from './components/SplashScreen'; // Import SplashScreen
 import WhatsAppSettingsPage from './components/WhatsAppSettingsPage'; // Import WhatsApp Settings Page
 import GeneralSettingsPage from './components/GeneralSettingsPage'; // Import General Settings Page
+import ChatPage from './components/ChatPage'; // Import Chat Page
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
 // FIX: Import EnrichedUser type to correctly type users from `list-users` function.
 import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer, type EnrichedUser } from './types';
@@ -74,6 +75,7 @@ const pagePermissions: Record<Page, string[]> = {
     'admin': ['admin'],
     'whatsapp-settings': ['admin'],
     'general-settings': ['admin'],
+    'chat': ['admin', 'leader'],
 };
 
 const getInitialAuthView = (): AuthView => {
@@ -85,7 +87,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2);
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking', 'whatsapp-settings', 'general-settings'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking', 'whatsapp-settings', 'general-settings', 'chat'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -776,6 +778,8 @@ const App: React.FC = () => {
                 return <WhatsAppSettingsPage session={session} />;
             case 'general-settings':
                 return <GeneralSettingsPage />;
+            case 'chat':
+                return <ChatPage session={session} userRole={userProfile.role} />;
             case 'dashboard':
             default:
                 if (userProfile.role === 'admin') {

@@ -447,9 +447,12 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                 }]);
 
                 try {
+                    const cleanNumber = volunteer.phone.replace(/\D/g, '');
+                    const whatsappJid = `${cleanNumber}@s.whatsapp.net`;
+
                     const { data, error } = await supabase.functions.invoke('send-whatsapp', {
                         body: {
-                            number: volunteer.phone.replace(/\D/g, ''),
+                            number: whatsappJid,
                             message: personalizedMessage
                         }
                     });
@@ -761,7 +764,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                                 <input
                                     type="text"
                                     id="test_message"
-                                    defaultValue="Olá! Teste de integração do Volunteer Dashboard."
+                                    defaultValue="Olá! Bem-vindo ao Chat Volunteers."
                                     className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-slate-100"
                                 />
                             </div>
@@ -788,9 +791,12 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
 
                                         const { supabase } = await import('../lib/supabaseClient');
 
+                                        const cleanNumber = phoneInput.value.replace(/\D/g, '');
+                                        const whatsappJid = `${cleanNumber}@s.whatsapp.net`;
+
                                         const { data, error } = await supabase.functions.invoke('send-whatsapp', {
                                             body: {
-                                                number: phoneInput.value.replace(/\D/g, ''),
+                                                number: whatsappJid,
                                                 message: messageInput.value
                                             }
                                         });

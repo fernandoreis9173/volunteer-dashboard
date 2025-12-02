@@ -73,8 +73,8 @@ serve(async (req) => {
 
         const whatsappSettings = settings as WhatsAppSettings;
 
-        // Formatar número (remover caracteres especiais)
-        const formattedNumber = number.replace(/\D/g, '');
+        // Formatar número (remover caracteres especiais, mas manter @ e . para JIDs)
+        const formattedNumber = number.includes('@') ? number.trim() : number.replace(/\D/g, '');
 
         let evolutionData = null;
         let errorMessage = null;
@@ -90,6 +90,8 @@ serve(async (req) => {
                     text: message,
                 };
 
+                console.log('Enviando para Evolution:', JSON.stringify(evolutionPayload));
+
                 const evolutionResponse = await fetch(
                     `${whatsappSettings.evolution_url}/message/sendText/${whatsappSettings.session_name}`,
                     {
@@ -102,6 +104,8 @@ serve(async (req) => {
                         body: JSON.stringify(evolutionPayload),
                     }
                 );
+
+                console.log('Status Evolution:', evolutionResponse.status);
 
                 if (!evolutionResponse.ok) {
                     const errorText = await evolutionResponse.text();

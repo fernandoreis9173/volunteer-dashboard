@@ -27,24 +27,24 @@ interface InputFieldProps {
     readOnly?: boolean;
 }
 
-const InputField: React.FC<InputFieldProps> = 
-({ label, type, name, value, onChange, placeholder, required, className, readOnly }) => (
-    <div className={className}>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-            {label} {required && <span className="text-red-500">*</span>}
-        </label>
-        <input 
-            type={type} 
-            name={name}
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            required={required}
-            readOnly={readOnly}
-            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900 read-only:bg-slate-100 read-only:cursor-not-allowed"
-        />
-    </div>
-);
+const InputField: React.FC<InputFieldProps> =
+    ({ label, type, name, value, onChange, placeholder, required, className, readOnly }) => (
+        <div className={className}>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+                {label} {required && <span className="text-red-500">*</span>}
+            </label>
+            <input
+                type={type}
+                name={name}
+                value={value}
+                onChange={onChange}
+                placeholder={placeholder}
+                required={required}
+                readOnly={readOnly}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900 read-only:bg-slate-100 read-only:cursor-not-allowed"
+            />
+        </div>
+    );
 
 interface CheckboxFieldProps {
     label: string;
@@ -56,8 +56,8 @@ interface CheckboxFieldProps {
 
 const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onChange, disabled = false }) => (
     <div className="flex items-center">
-        <input 
-            type="checkbox" 
+        <input
+            type="checkbox"
             name={name}
             id={name}
             checked={checked}
@@ -116,10 +116,10 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
 };
 
 
-const TagInputField: React.FC<{ 
-    label: string; 
-    placeholder: string; 
-    tags: string[]; 
+const TagInputField: React.FC<{
+    label: string;
+    placeholder: string;
+    tags: string[];
     setTags: React.Dispatch<React.SetStateAction<string[]>>;
     color: 'blue' | 'yellow';
     disabled?: boolean;
@@ -146,33 +146,33 @@ const TagInputField: React.FC<{
     };
 
     return (
-    <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
-        <div className="flex">
-            <input 
-                type="text" 
-                placeholder={placeholder}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={disabled}
-                className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900 disabled:bg-slate-100 disabled:cursor-not-allowed"
-            />
-            <button 
-                type="button"
-                onClick={handleAddTag}
-                disabled={disabled}
-                className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
-            >
-                +
-            </button>
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+            <div className="flex">
+                <input
+                    type="text"
+                    placeholder={placeholder}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={disabled}
+                    className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                />
+                <button
+                    type="button"
+                    onClick={handleAddTag}
+                    disabled={disabled}
+                    className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                >
+                    +
+                </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                    <RemovableTag key={tag} text={tag} color={color} onRemove={() => handleRemoveTag(tag)} disabled={disabled} />
+                ))}
+            </div>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-            {tags.map((tag) => (
-                <RemovableTag key={tag} text={tag} color={color} onRemove={() => handleRemoveTag(tag)} disabled={disabled} />
-            ))}
-        </div>
-    </div>
     );
 };
 
@@ -194,7 +194,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
     const [isActive, setIsActive] = useState(true);
     const isEditing = !!initialData;
     const canOnlyEditDepartments = isEditing && (userRole === 'leader' || userRole === 'lider');
-    
+
     const isLeader = userRole === 'leader' || userRole === 'lider';
     const isLeaderInviting = !isEditing && isLeader;
 
@@ -233,7 +233,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             setSkills(initialData.skills || []);
             setSelectedDepartments(initialData.departments || []);
             setIsActive(initialData.status === 'Ativo');
-            
+
             let availabilityArray: string[] = [];
             const rawAvailability: any = initialData.availability;
 
@@ -242,16 +242,16 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             } else if (typeof rawAvailability === 'string' && rawAvailability.startsWith('[') && rawAvailability.endsWith(']')) {
                 try {
                     const parsed = JSON.parse(rawAvailability);
-                    if(Array.isArray(parsed)) {
+                    if (Array.isArray(parsed)) {
                         availabilityArray = parsed;
                     }
                 } catch (e) {
                     console.error("Failed to parse availability string:", e);
                 }
             }
-            
+
             const newAvailabilityState = { ...availabilityKeys };
-            
+
             availabilityArray.forEach(day => {
                 if (day === 'domingo_manha' || day === 'domingo_noite') {
                     newAvailabilityState.domingo = true;
@@ -281,19 +281,19 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
         if (!isEditing) return;
         const name = formData.fullName.trim();
         if (!name) {
-            setFormData(prev => ({...prev, initials: ''}));
+            setFormData(prev => ({ ...prev, initials: '' }));
             return;
         }
         const nameParts = name.split(' ').filter(p => p);
         if (nameParts.length === 0) {
-            setFormData(prev => ({...prev, initials: ''}));
+            setFormData(prev => ({ ...prev, initials: '' }));
             return;
         }
         const newInitials = (
-            (nameParts[0]?.[0] || '') + 
+            (nameParts[0]?.[0] || '') +
             (nameParts.length > 1 ? nameParts[nameParts.length - 1]?.[0] || '' : '')
         ).toUpperCase();
-        setFormData(prev => ({...prev, initials: newInitials}));
+        setFormData(prev => ({ ...prev, initials: newInitials }));
     }, [formData.fullName, isEditing]);
 
 
@@ -301,15 +301,15 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
         const { name, value } = e.target;
         if (name === 'phone') {
             const formattedPhone = formatPhoneNumber(value);
-            setFormData(prev => ({...prev, [name]: formattedPhone}));
+            setFormData(prev => ({ ...prev, [name]: formattedPhone }));
         } else {
-            setFormData(prev => ({...prev, [name]: value}));
+            setFormData(prev => ({ ...prev, [name]: value }));
         }
     };
 
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, checked } = e.target;
-        setAvailability(prev => ({...prev, [name]: checked}));
+        setAvailability(prev => ({ ...prev, [name]: checked }));
     };
 
     const handleSelectDepartment = (item: SearchItem) => {
@@ -326,7 +326,7 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!formData.fullName || !formData.email) {
             alert('Por favor, preencha o Nome Completo e Email.');
             return;
@@ -335,16 +335,22 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
             alert('As iniciais são obrigatórias ao editar um voluntário.');
             return;
         }
-        
+
         const selectedAvailabilityDays = Object.entries(availability)
             .filter(([, isSelected]) => isSelected)
             .map(([day]) => day);
+
+        let cleanPhone = formData.phone.replace(/[^\d]/g, '');
+        // Auto-add Brazil country code (55) if missing and looks like a valid BR number
+        if (cleanPhone && !cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+            cleanPhone = '55' + cleanPhone;
+        }
 
         const volunteerData: Omit<DetailedVolunteer, 'created_at' | 'departments'> = {
             id: initialData?.id,
             name: formData.fullName,
             email: formData.email,
-            phone: isEditing ? formData.phone.replace(/[^\d]/g, '') : '',
+            phone: cleanPhone,
             initials: isEditing ? formData.initials : '',
             status: isEditing ? (isActive ? 'Ativo' : 'Inativo') : 'Pendente',
             skills: isEditing ? skills : [],
@@ -354,21 +360,21 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
         const departmentIds = selectedDepartments.map(d => d.id).filter((id): id is number => id !== undefined);
         onSave(volunteerData, departmentIds);
     };
-    
+
     return (
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
-             <style>{`
+            <style>{`
                 input[type="checkbox"]:checked {
                     background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
                 }
             `}</style>
             <div className="flex items-center space-x-3 mb-8">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                 </svg>
                 <h2 className="text-2xl font-bold text-slate-800">{isEditing ? 'Editar Voluntário' : 'Convidar Novo Voluntário'}</h2>
             </div>
-            
+
             <form className="space-y-6" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <InputField label="Nome Completo" type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} required readOnly={canOnlyEditDepartments} />
@@ -403,55 +409,55 @@ const NewVolunteerForm: React.FC<NewVolunteerFormProps> = ({ initialData, onCanc
 
 
                 {isEditing && (
-                <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InputField label="Iniciais" type="text" name="initials" value={formData.initials} onChange={handleInputChange} placeholder="Ex: BF" required readOnly={canOnlyEditDepartments} />
-                        <InputField label="Telefone" type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="(11) 99876-5432" readOnly={canOnlyEditDepartments} />
-                    </div>
-
-                    <TagInputField 
-                        label="Habilidades e Talentos" 
-                        placeholder="Ex: Música, Tecnologia, Liderança..." 
-                        tags={skills}
-                        setTags={setSkills}
-                        color="blue"
-                        disabled={canOnlyEditDepartments}
-                    />
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
-                            <CheckboxField label="Segunda-feira" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
-                            <CheckboxField label="Terça-feira" name="terca" checked={availability.terca} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
-                            <CheckboxField label="Quarta-feira" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
-                            <CheckboxField label="Quinta-feira" name="quinta" checked={availability.quinta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
-                            <CheckboxField label="Sexta-feira" name="sexta" checked={availability.sexta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
-                            <CheckboxField label="Sábado" name="sabado" checked={availability.sabado} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <InputField label="Iniciais" type="text" name="initials" value={formData.initials} onChange={handleInputChange} placeholder="Ex: BF" required readOnly={canOnlyEditDepartments} />
+                            <InputField label="Telefone" type="tel" name="phone" value={formData.phone} onChange={handleInputChange} placeholder="(11) 99876-5432" readOnly={canOnlyEditDepartments} />
                         </div>
-                    </div>
-                    
-                    <CheckboxField label="Voluntário ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={canOnlyEditDepartments} />
-                </>
+
+                        <TagInputField
+                            label="Habilidades e Talentos"
+                            placeholder="Ex: Música, Tecnologia, Liderança..."
+                            tags={skills}
+                            setTags={setSkills}
+                            color="blue"
+                            disabled={canOnlyEditDepartments}
+                        />
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                                <CheckboxField label="Segunda-feira" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                                <CheckboxField label="Terça-feira" name="terca" checked={availability.terca} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                                <CheckboxField label="Quarta-feira" name="quarta" checked={availability.quarta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                                <CheckboxField label="Quinta-feira" name="quinta" checked={availability.quinta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                                <CheckboxField label="Sexta-feira" name="sexta" checked={availability.sexta} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                                <CheckboxField label="Sábado" name="sabado" checked={availability.sabado} onChange={handleCheckboxChange} disabled={canOnlyEditDepartments} />
+                            </div>
+                        </div>
+
+                        <CheckboxField label="Voluntário ativo" name="ativo" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={canOnlyEditDepartments} />
+                    </>
                 )}
-                
+
                 <div className="pt-6 border-t border-slate-200 flex flex-wrap justify-end items-center gap-3">
                     {saveError && <p className="text-sm text-red-500 mr-auto">{saveError}</p>}
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         onClick={onCancel}
                         disabled={isSaving}
                         className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Cancelar
                     </button>
-                    <button 
+                    <button
                         type="submit"
                         disabled={isSaving}
                         className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors shadow-sm disabled:bg-blue-400 disabled:cursor-not-allowed"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} >
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                         <span>{isSaving ? 'Salvando...' : (isEditing ? 'Atualizar Voluntário' : 'Enviar Convite')}</span>
                     </button>
