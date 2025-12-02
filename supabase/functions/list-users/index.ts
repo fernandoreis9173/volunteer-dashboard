@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
         phone, // Override phone with the correct one
         app_status: status
       };
-    }).filter(user => user.phone && user.phone.trim() !== ''); // Filter out users without phone
+    }); // Removed filter - show all users including those without phone
 
     return new Response(JSON.stringify({ users: enrichedUsers }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

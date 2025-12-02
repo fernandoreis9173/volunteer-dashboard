@@ -394,10 +394,25 @@ export const useInvalidateQueries = () => {
 
 // Função auxiliar para fetch de usuários (compartilhada)
 export const fetchAdminUsers = async () => {
-    const { data, error: fetchError } = await supabase.functions.invoke('list-users');
-    if (fetchError) throw fetchError;
-    if (data && data.error) throw new Error(data.error);
-    return data.users || [];
+    // Chamar função RPC que busca admins e líderes com segurança
+    const { data, error } = await supabase
+        .rpc('get_admin_users');
+
+    if (error) throw error;
+
+    // Formatar para manter compatibilidade com o formato anterior
+    return (data || []).map((user: any) => ({
+        id: user.id,
+        email: user.email || '',
+        phone: user.phone,
+        created_at: user.created_at,
+        user_metadata: {
+            name: user.name,
+            role: user.role,
+            avatar_url: user.avatar_url
+        },
+        app_status: 'Ativo' // Profiles sempre ativos
+    }));
 };
 
 export const useAdminUsers = () => {
