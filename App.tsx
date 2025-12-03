@@ -203,12 +203,12 @@ const App: React.FC = () => {
     const fetchCoreData = useCallback(async (currentSession: Session) => {
         try {
             const userStatus = currentSession.user.user_metadata?.status;
-            const userRole = currentSession.user.user_metadata?.role;
+            const metadataRole = currentSession.user.user_metadata?.role;
 
-            // Fetch LGPD status from the 'profiles' table for all users.
+            // Fetch LGPD status and role from the 'profiles' table for all users.
             const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
-                .select('lgpd_accepted')
+                .select('lgpd_accepted, role')
                 .eq('id', currentSession.user.id)
                 .single();
 
@@ -221,6 +221,8 @@ const App: React.FC = () => {
             }
 
             const lgpdAccepted = profileData?.lgpd_accepted ?? false;
+            // Prioritize role from DB, fallback to metadata
+            const userRole = profileData?.role || metadataRole;
 
             if (userStatus === 'Inativo') {
                 setUserProfile({ role: userRole, department_id: null, volunteer_id: null, status: 'Inativo', lgpd_accepted: lgpdAccepted });
@@ -229,7 +231,7 @@ const App: React.FC = () => {
             }
 
             if (!userRole) {
-                console.error("User role not found in metadata.");
+                console.error("User role not found in metadata or database.");
                 setUserProfile(null);
                 return;
             }
@@ -779,7 +781,7 @@ const App: React.FC = () => {
             case 'general-settings':
                 return <GeneralSettingsPage />;
             case 'chat':
-                return <ChatPage session={session} userRole={userProfile.role} />;
+                return <ChatPage session={session} userRole={userProfile.role} departmentId={userProfile.department_id} />;
             case 'dashboard':
             default:
                 if (userProfile.role === 'admin') {

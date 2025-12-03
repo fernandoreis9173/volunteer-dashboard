@@ -98,22 +98,57 @@ serve(async (req) => {
             return cleanPhone.includes('@') ? cleanPhone : `${cleanPhone}@s.whatsapp.net`;
         });
 
+        // Buscar telefone do usuário criador
+        const { data: creatorProfile } = await supabaseClient
+            .from('profiles')
+            .select('phone')
+            .eq('id', user.id)
+            .single();
+
+        let initialParticipants: string[] = [];
+        let membersToAddLater = [...formattedMembers];
+
+        if (creatorProfile?.phone) {
+            const cleanCreatorPhone = creatorProfile.phone.replace(/\D/g, '');
+            const creatorWhatsapp = cleanCreatorPhone.includes('@') ? cleanCreatorPhone : `${cleanCreatorPhone}@s.whatsapp.net`;
+
+            // Filtrar criador da lista de membros disponíveis para criação inicial
+            const otherMembers = formattedMembers.filter(p => p !== creatorWhatsapp);
+
+            if (otherMembers.length > 0) {
+                // TENTATIVA DE SOLUÇÃO DEFINITIVA:
+                // Enviar TODOS os membros (exceto criador) JÁ na criação do grupo.
+                // Isso evita depender da rota updateParticipant que está falhando com erro 400.
+                initialParticipants = otherMembers;
+
+                // Ninguém para adicionar depois (exceto talvez o criador se a lógica mudasse, mas ele entra auto)
+                membersToAddLater = [];
+            } else {
+                // Se só tem o criador
+                initialParticipants = [creatorWhatsapp];
+                membersToAddLater = [];
+            }
+        } else {
+            // Se não achou telefone do criador, tenta criar com todos
+            if (formattedMembers.length > 0) {
+                initialParticipants = formattedMembers;
+                membersToAddLater = [];
+            }
+        }
+
         // Criar grupo via Evolution API
         const evolutionUrl = `${whatsappSettings.evolution_url}/group/create/${whatsappSettings.session_name}`;
 
-        console.log('Criando grupo no WhatsApp:', {
+        console.log('Criando grupo no WhatsApp com participante inicial:', {
             url: evolutionUrl,
             groupName,
-            membersCount: formattedMembers.length,
-            members: formattedMembers
+            initialParticipants
         });
 
         const evolutionPayload = {
             subject: groupName,
-            participants: formattedMembers
+            participants: initialParticipants
         };
-
-        console.log('Evolution payload:', JSON.stringify(evolutionPayload));
 
         const response = await fetch(evolutionUrl, {
             method: 'POST',
@@ -125,9 +160,8 @@ serve(async (req) => {
             body: JSON.stringify(evolutionPayload),
         });
 
-        console.log('Response status:', response.status);
         const responseText = await response.text();
-        console.log('Response body:', responseText);
+        console.log('Response status (criação):', response.status);
 
         if (!response.ok) {
             console.error('Erro ao criar grupo:', responseText);
@@ -142,11 +176,85 @@ serve(async (req) => {
             throw new Error('Resposta inválida da API do WhatsApp');
         }
 
-        console.log('Grupo criado com sucesso no WhatsApp:', result);
+        console.log('Grupo criado com sucesso:', result);
 
-        // Salvar grupo no banco de dados
+        // Obter ID do grupo criado
         const whatsappGroupId = result.id || result.groupId;
 
+        // Aguardar um pouco para garantir que o grupo foi propagado no WhatsApp
+        console.log('Aguardando 4 segundos para propagação do grupo...');
+        await new Promise(resolve => setTimeout(resolve, 4000));
+
+        // Adicionar o restante dos membros um por um
+        if (membersToAddLater.length > 0) {
+            console.log(`Adicionando ${membersToAddLater.length} membros restantes ao grupo ${whatsappGroupId}...`);
+
+            for (const memberPhone of membersToAddLater) {
+                // Adicionar groupJid na query string (sem encode manual excessivo, o fetch lida com a URL)
+                // E também manter no body para garantir compatibilidade com diferentes versões
+                const addMemberUrl = `${whatsappSettings.evolution_url}/group/updateParticipant/${whatsappSettings.session_name}?groupJid=${whatsappGroupId}`;
+
+                try {
+                    console.log(`Tentando adicionar: ${memberPhone}`);
+                    let addResponse = await fetch(addMemberUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': whatsappSettings.token,
+                            'ngrok-skip-browser-warning': 'true',
+                        },
+                        body: JSON.stringify({
+                            action: 'add',
+                            groupId: whatsappGroupId, // Recolocando no body por garantia
+                            participants: [memberPhone]
+                        }),
+                    });
+
+                    let addText = await addResponse.text();
+
+                    if (addResponse.ok) {
+                        console.log(`Sucesso ao adicionar ${memberPhone}:`, addText);
+                    } else {
+                        console.warn(`Falha ao adicionar ${memberPhone} (Status ${addResponse.status}):`, addText);
+
+                        // TENTATIVA DE FALLBACK: Remover o 9 dígito (para números BR)
+                        // Formato BR: 55 + 2 DDD + 9 dígitos = 13 dígitos
+                        if (memberPhone.length === 13 && memberPhone.startsWith('55')) {
+                            const phoneWithout9 = memberPhone.slice(0, 4) + memberPhone.slice(5);
+                            console.log(`Tentando fallback sem o 9 dígito: ${phoneWithout9}`);
+
+                            const addResponseFallback = await fetch(addMemberUrl, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'apikey': whatsappSettings.token,
+                                    'ngrok-skip-browser-warning': 'true',
+                                },
+                                body: JSON.stringify({
+                                    action: 'add',
+                                    participants: [phoneWithout9]
+                                }),
+                            });
+
+                            const addTextFallback = await addResponseFallback.text();
+
+                            if (addResponseFallback.ok) {
+                                console.log(`Sucesso ao adicionar ${phoneWithout9} (fallback):`, addTextFallback);
+                            } else {
+                                console.warn(`Falha no fallback para ${phoneWithout9}:`, addTextFallback);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error(`Erro de exceção ao adicionar ${memberPhone}:`, err);
+                }
+
+                // Pequeno delay
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Salvar grupo no banco de dados
         const { data: groupData, error: groupError } = await supabaseClient
             .from('whatsapp_groups')
             .insert({

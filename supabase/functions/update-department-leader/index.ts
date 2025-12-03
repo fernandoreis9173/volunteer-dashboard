@@ -32,20 +32,36 @@ Deno.serve(async (req: Request) => {
 
     // --- NEW VALIDATION: Check if any of the leaders are already assigned elsewhere ---
     if (leader_ids.length > 0) {
+      console.log('Validando líderes:', leader_ids, 'para departamento:', department_id);
+
       const { data: conflictingLeaders, error: conflictCheckError } = await supabaseAdmin
         .from('department_leaders')
-        .select('user_id, leader:profiles(name)')
+        .select('user_id, department_id')
         .in('user_id', leader_ids)
         .neq('department_id', department_id);
 
+      console.log('Conflitos encontrados:', conflictingLeaders);
+
       if (conflictCheckError) {
+        console.error('Erro ao verificar conflitos:', conflictCheckError);
         throw new Error(`Erro ao verificar conflitos de líder: ${conflictCheckError.message}`);
       }
 
       if (conflictingLeaders && conflictingLeaders.length > 0) {
-        const leaderName = (conflictingLeaders[0] as any)?.leader?.name || 'um líder';
+        // Buscar nome do líder conflitante
+        const conflictUserId = conflictingLeaders[0].user_id;
+        const { data: profileData } = await supabaseAdmin
+          .from('profiles')
+          .select('name')
+          .eq('id', conflictUserId)
+          .single();
+
+        const leaderName = profileData?.name || 'um líder';
+        console.error(`Conflito: ${leaderName} já é líder de outro departamento`);
         throw new Error(`Não é possível atribuir. ${leaderName} já está gerenciando outro departamento.`);
       }
+
+      console.log('Validação passou - nenhum conflito encontrado');
     }
 
 

@@ -9,6 +9,7 @@ const corsHeaders = {
 interface SendGroupMessageRequest {
     groupId: string; // ID do banco de dados
     message: string;
+    formattedMessage?: string; // Mensagem formatada para o WhatsApp (com assinatura)
     messageId?: string;
 }
 
@@ -50,6 +51,30 @@ serve(async (req) => {
 
         if (groupError || !group) throw new Error('Grupo não encontrado');
 
+        // 1.1 Buscar nome do remetente para assinatura
+        let senderName = 'Admin';
+
+        // Tentar buscar no profiles
+        const { data: profile } = await supabaseClient
+            .from('profiles')
+            .select('name')
+            .eq('id', user.id)
+            .single();
+
+        if (profile?.name) {
+            senderName = profile.name;
+        } else {
+            // Se não achar, tenta volunteers
+            const { data: volunteer } = await supabaseClient
+                .from('volunteers')
+                .select('name')
+                .eq('user_id', user.id)
+                .single();
+            if (volunteer?.name) senderName = volunteer.name;
+        }
+
+        const formattedMessage = `📱 *Mensagem do Dashboard*\n\n${message}\n\n_Enviado por: ${senderName}_`;
+
         // 2. Buscar configurações
         const { data: settings, error: settingsError } = await supabaseClient
             .from('whatsapp_settings')
@@ -67,10 +92,8 @@ serve(async (req) => {
 
         const payload = {
             number: group.whatsapp_group_id, // O ID do grupo no WhatsApp (JID)
-            text: message
+            text: formattedMessage // Usa a mensagem formatada gerada aqui
         };
-
-        console.log('Enviando mensagem para grupo:', payload);
 
         const response = await fetch(evolutionUrl, {
             method: 'POST',
@@ -101,7 +124,7 @@ serve(async (req) => {
                 id: messageId, // Usar ID fornecido pelo frontend se existir
                 group_id: groupId,
                 sender_id: user.id,
-                message: message,
+                message: message, // Salva sempre a mensagem original (sem assinatura)
                 whatsapp_message_id: result.key?.id || result.id
             });
 
@@ -112,7 +135,7 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Erro:', error);
         return new Response(
             JSON.stringify({ success: false, error: error.message }),

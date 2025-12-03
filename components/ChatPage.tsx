@@ -6,6 +6,7 @@ import { getErrorMessage } from '../lib/utils';
 interface ChatPageProps {
     session: Session | null;
     userRole: string;
+    departmentId?: number | null;
 }
 
 interface Contact {
@@ -14,6 +15,7 @@ interface Contact {
     phone: string;
     role: string;
     department?: string;
+    department_ids?: number[]; // IDs dos departamentos
     lastMessage?: string;
     lastMessageTime?: string;
     unreadCount?: number;
@@ -29,7 +31,7 @@ interface Message {
     read: boolean;
 }
 
-const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
+const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) => {
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -44,6 +46,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
     const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
     const [groups, setGroups] = useState<Array<{ id: string, name: string, members: string[], whatsappGroupId?: string, avatar_url?: string | null, unreadCount?: number, lastMessageTime?: Date | null }>>([]);
     const [creatingGroup, setCreatingGroup] = useState(false);
+    const [includeMe, setIncludeMe] = useState(true); // Estado para incluir o próprio usuário
+    const [memberSearchQuery, setMemberSearchQuery] = useState(''); // Estado para busca de membros
     const [toast, setToast] = useState<{ show: boolean, message: string, type: 'success' | 'error' | 'info' }>({
         show: false,
         message: '',
@@ -479,9 +483,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
 
             // 1. Buscar contatos via RPC (já traz avatares e unifica volunteers/profiles)
             const { data: contactsData, error: contactsError } = await supabase
-                .rpc('get_chat_contacts', { current_user_id: session?.user?.id });
+                .rpc('get_contacts_with_departments', { current_user_id: session?.user?.id });
 
             if (contactsError) throw contactsError;
+
+
 
             // 2. Buscar avatar do usuário atual separadamente
             if (session?.user?.id) {
@@ -515,7 +521,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                     phone: contact.phone,
                     role: contact.role,
                     email: contact.email,
-                    avatar_url: contact.avatar_url
+                    avatar_url: contact.avatar_url,
+                    department_ids: contact.department_ids || [] // IMPORTANTE: preservar department_ids
                 });
             });
 
@@ -541,6 +548,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                     phone: contact.phone,
                     role: contact.role,
                     department: '',
+                    department_ids: contact.department_ids || [], // IMPORTANTE: preservar department_ids
                     lastMessage: lastMsg ? lastMsg.message : undefined,
                     lastMessageTime: lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : undefined,
                     lastMessageDate: lastMsg ? new Date(lastMsg.created_at) : undefined,
@@ -674,14 +682,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                         setActiveSession({ id: existingSession.id, leader_id: existingSession.leader_id, leader_name: leaderName });
 
                         if (existingSession.leader_id !== session.user.id) {
-                            showToast(`Este voluntário já está em atendimento com ${leaderName}`, 'error');
+                            showToast('Este voluntário está em atendimento', 'error');
                             setSending(false);
                             return; // Bloquear envio
                         }
                     }
                 }
             } else if (activeSession.leader_id !== session.user.id) {
-                showToast(`Este voluntário está em atendimento com ${activeSession.leader_name}`, 'error');
+                showToast('Este voluntário está em atendimento', 'error');
                 setSending(false);
                 return;
             }
@@ -747,6 +755,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
         });
     };
 
+    const closeGroupModal = () => {
+        setShowGroupModal(false);
+        setGroupName('');
+        setSelectedMembers(new Set());
+        setMemberSearchQuery('');
+    };
+
     const toggleMember = (contactId: string) => {
         setSelectedMembers(prev => {
             const newMembers = new Set(prev);
@@ -773,12 +788,34 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
 
             try {
                 // Preparar membros com ID e telefone
-                const membersData = contacts
+                let membersData = contacts
                     .filter(c => selectedMembers.has(c.id))
                     .map(c => ({
                         userId: c.id,
                         phone: c.phone
                     }));
+
+                // Se includeMe estiver marcado, adicionar o próprio usuário
+                if (includeMe && session?.user?.id) {
+                    // Buscar telefone do usuário atual
+                    const { data: currentUserData } = await supabase
+                        .from('profiles')
+                        .select('phone')
+                        .eq('id', session.user.id)
+                        .single();
+
+                    if (currentUserData?.phone) {
+                        membersData = [
+                            {
+                                userId: session.user.id,
+                                phone: currentUserData.phone
+                            },
+                            ...membersData
+                        ];
+                    }
+                }
+
+                console.log('Membros enviados para criação do grupo:', membersData);
 
                 // Chamar Edge Function para criar grupo no WhatsApp
                 const { data, error } = await supabase.functions.invoke('create-whatsapp-group', {
@@ -811,9 +848,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                 };
 
                 setGroups(prev => [...prev, newGroup]);
-                setShowGroupModal(false);
-                setGroupName('');
-                setSelectedMembers(new Set());
+                closeGroupModal();
                 setCreatingGroup(false);
 
                 showToast('Grupo criado com sucesso!', 'success');
@@ -837,6 +872,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                 .rpc('get_groups_with_unread_count', { current_user_id: session?.user?.id });
 
             if (error) throw error;
+
+            console.log('Grupos carregados:', data);
 
             if (data) {
                 const formattedGroups = data.map((g: any) => ({
@@ -895,19 +932,45 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
             // Buscar detalhes desses telefones na lista de contatos já carregada
             const membersDetails = contacts.filter(c => memberPhones.includes(c.phone));
 
-            // Adicionar membros que podem não estar na lista de contatos (apenas telefone)
+            // Identificar telefones que não foram encontrados nos contatos
             const foundPhones = new Set(membersDetails.map(m => m.phone));
-            const unknownMembers = memberPhones
-                .filter((phone: string) => !foundPhones.has(phone))
-                .map((phone: string) => ({
-                    id: phone,
-                    name: phone,
-                    phone: phone,
-                    role: 'Membro',
-                    avatar_url: null
-                }));
+            const unknownPhones = memberPhones.filter((phone: string) => !foundPhones.has(phone));
 
-            setGroupDetailsMembers([...membersDetails, ...unknownMembers]);
+            let additionalMembers: any[] = [];
+
+            if (unknownPhones.length > 0) {
+                // Tentar buscar esses telefones na tabela profiles
+                const { data: profilesData } = await supabase
+                    .from('profiles')
+                    .select('id, name, phone, role, avatar_url')
+                    .in('phone', unknownPhones);
+
+                if (profilesData) {
+                    additionalMembers = profilesData.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        phone: p.phone,
+                        role: p.role === 'leader' || p.role === 'lider' ? 'Líder' : p.role === 'admin' ? 'Admin' : 'Membro',
+                        avatar_url: p.avatar_url
+                    }));
+                }
+
+                // Adicionar ainda os que não foram encontrados nem no profiles (apenas telefone)
+                const foundInProfiles = new Set(additionalMembers.map(m => m.phone));
+                const stillUnknown = unknownPhones
+                    .filter((phone: string) => !foundInProfiles.has(phone))
+                    .map((phone: string) => ({
+                        id: phone,
+                        name: phone,
+                        phone: phone,
+                        role: 'Membro',
+                        avatar_url: null
+                    }));
+
+                additionalMembers = [...additionalMembers, ...stillUnknown];
+            }
+
+            setGroupDetailsMembers([...membersDetails, ...additionalMembers]);
         } catch (error) {
             console.error('Erro ao buscar detalhes dos membros:', error);
         }
@@ -1104,7 +1167,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                     <div className="p-4 border-b border-slate-200">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-2xl font-bold text-slate-800">Chat</h2>
-                            {userRole === 'admin' && (
+                            {(userRole === 'admin' || ['leader', 'lider', 'líder'].includes(userRole?.toLowerCase())) && (
                                 <button
                                     onClick={() => setShowGroupModal(true)}
                                     className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
@@ -1403,7 +1466,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                                     }`}>
                                                     {activeSession.leader_id === session?.user?.id
                                                         ? 'Em atendimento com você'
-                                                        : `Em atendimento com ${activeSession.leader_name}`}
+                                                        : 'Em atendimento'}
                                                 </span>
                                                 {activeSession.leader_id === session?.user?.id && (
                                                     <button
@@ -1855,14 +1918,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
 
             {/* Modal de Criar Grupo */}
             {showGroupModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowGroupModal(false)}>
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={closeGroupModal}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
                         {/* Header */}
                         <div className="p-6 border-b border-slate-200">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-xl font-bold text-slate-800">Criar Grupo</h3>
                                 <button
-                                    onClick={() => setShowGroupModal(false)}
+                                    onClick={closeGroupModal}
                                     className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                                 >
                                     <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1873,7 +1936,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                         </div>
 
                         {/* Body */}
-                        <div className="p-6 max-h-96 overflow-y-auto scrollbar-glass">
+                        <div className="p-6">
                             {/* Nome do Grupo */}
                             <div className="mb-6">
                                 <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -1893,32 +1956,114 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                                 <label className="block text-sm font-medium text-slate-700 mb-2">
                                     Adicionar Membros ({selectedMembers.size})
                                 </label>
-                                <div className="space-y-2">
-                                    {contacts.map((contact) => (
-                                        <button
-                                            key={contact.id}
-                                            onClick={() => toggleMember(contact.id)}
-                                            className={`w-full p-3 flex items-center gap-3 rounded-lg transition-colors ${selectedMembers.has(contact.id)
-                                                ? 'bg-blue-50 border-2 border-blue-500'
-                                                : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
-                                                }`}
-                                        >
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                                                {contact.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <h4 className="font-semibold text-slate-800 text-sm">{contact.name}</h4>
-                                                <p className="text-xs text-slate-500">{contact.role}</p>
-                                            </div>
-                                            {selectedMembers.has(contact.id) && (
-                                                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                </svg>
+
+                                {/* Opção para incluir a si mesmo */}
+                                <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center gap-3 border border-blue-100">
+                                    <input
+                                        type="checkbox"
+                                        id="includeMe"
+                                        checked={includeMe}
+                                        onChange={(e) => setIncludeMe(e.target.checked)}
+                                        className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                                    />
+                                    <label htmlFor="includeMe" className="flex items-center gap-3 cursor-pointer flex-1">
+                                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-semibold flex-shrink-0 overflow-hidden">
+                                            {currentUserAvatar ? (
+                                                <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                                            ) : (
+                                                session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'
                                             )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-semibold text-slate-800 text-sm">Você ({session?.user?.user_metadata?.name || 'Eu'})</p>
+                                            <p className="text-xs text-slate-500">Adicionar-me ao grupo</p>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                {/* Campo de busca de membros */}
+                                <div className="mb-3">
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={memberSearchQuery}
+                                            onChange={(e) => setMemberSearchQuery(e.target.value)}
+                                            placeholder="Buscar voluntário..."
+                                            className="w-full px-4 py-2 pl-10 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                {/* Lista de membros com scroll único */}
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 scrollbar-glass">
+                                    {contacts
+                                        .filter(contact => {
+                                            // Filtro de telefone obrigatório
+                                            if (!contact.phone) return false;
+
+                                            // Filtro de busca por nome
+                                            if (memberSearchQuery.trim()) {
+                                                const searchLower = memberSearchQuery.toLowerCase();
+                                                if (!contact.name.toLowerCase().includes(searchLower)) {
+                                                    return false;
+                                                }
+                                            }
+
+                                            // Se for admin, mostra todos (que tenham telefone)
+                                            if (userRole === 'admin') return true;
+
+                                            // Se for líder, filtra por departamento
+                                            const normalizedRole = userRole?.toLowerCase();
+                                            if (['leader', 'lider', 'líder'].includes(normalizedRole)) {
+                                                if (!departmentId) return false;
+
+                                                // Normalizar department_ids (pode vir como array ou string JSON)
+                                                let deptIds = contact.department_ids;
+                                                if (typeof deptIds === 'string') {
+                                                    try {
+                                                        deptIds = JSON.parse(deptIds);
+                                                    } catch (e) {
+                                                        deptIds = [];
+                                                    }
+                                                }
+
+                                                // Garantir que é array
+                                                if (!Array.isArray(deptIds)) return false;
+
+                                                return deptIds.includes(Number(departmentId));
+                                            }
+
+                                            return true; // Fallback
+                                        })
+                                        .map((contact) => (
+                                            <button
+                                                key={contact.id}
+                                                onClick={() => toggleMember(contact.id)}
+                                                className={`w-full p-3 flex items-center gap-3 rounded-lg transition-colors ${selectedMembers.has(contact.id)
+                                                    ? 'bg-blue-50 border-2 border-blue-500'
+                                                    : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
+                                                    }`}
+                                            >
+                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                                                    {contact.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 text-left">
+                                                    <h4 className="font-semibold text-slate-800 text-sm">{contact.name}</h4>
+                                                    <p className="text-xs text-slate-500">{contact.role}</p>
+                                                </div>
+                                                {selectedMembers.has(contact.id) && (
+                                                    <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                    </svg>
+                                                )}
 
 
-                                        </button>
-                                    ))}
+                                            </button>
+                                        ))
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -1926,7 +2071,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole }) => {
                         {/* Footer */}
                         <div className="p-6 border-t border-slate-200 flex gap-3">
                             <button
-                                onClick={() => setShowGroupModal(false)}
+                                onClick={closeGroupModal}
                                 className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
                             >
                                 Cancelar
