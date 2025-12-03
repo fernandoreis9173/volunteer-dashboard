@@ -38,7 +38,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
-    const [filterTab, setFilterTab] = useState<'tudo' | 'nao_lidas' | 'favoritas' | 'grupos'>('tudo');
+    const [filterTab, setFilterTab] = useState<'tudo' | 'nao_lidas' | 'favoritas' | 'grupos' | 'lideres' | 'voluntarios'>('tudo');
     const [searchQuery, setSearchQuery] = useState('');
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
     const [showGroupModal, setShowGroupModal] = useState(false);
@@ -70,6 +70,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     const [showChatMenu, setShowChatMenu] = useState(false);
     const [showClearChatModal, setShowClearChatModal] = useState(false);
     const [activeSession, setActiveSession] = useState<{ id: string, leader_id: string, leader_name?: string } | null>(null);
+
+    // Estados para adicionar membros
+    const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+    const [addingMembers, setAddingMembers] = useState(false);
+    const [membersToAdd, setMembersToAdd] = useState<Set<string>>(new Set());
+    const [addMemberSearchQuery, setAddMemberSearchQuery] = useState('');
+    const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+    const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
+    const [memberToRemove, setMemberToRemove] = useState<{ id: string, phone: string, name: string } | null>(null);
 
     useEffect(() => {
         if (selectedContact) {
@@ -914,12 +923,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
 
     const fetchGroupMembersDetails = async (groupId: string) => {
         try {
-            // Buscar membros do grupo (telefones)
+            // Buscar membros do grupo (telefones e status de admin)
             const { data: groupData, error: groupError } = await supabase
                 .from('whatsapp_groups')
                 .select(`
                     whatsapp_group_members (
-                        phone
+                        phone,
+                        user_id,
+                        is_admin
                     )
                 `)
                 .eq('id', groupId)
@@ -927,10 +938,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
 
             if (groupError) throw groupError;
 
-            const memberPhones = groupData.whatsapp_group_members.map((m: any) => m.phone);
+            const membersRaw = groupData.whatsapp_group_members;
+            const memberPhones = membersRaw.map((m: any) => m.phone);
+            const adminMap = new Map(membersRaw.map((m: any) => [m.phone, m.is_admin]));
 
             // Buscar detalhes desses telefones na lista de contatos já carregada
-            const membersDetails = contacts.filter(c => memberPhones.includes(c.phone));
+            const membersDetails = contacts.filter(c => memberPhones.includes(c.phone)).map(c => ({
+                ...c,
+                is_group_admin: adminMap.get(c.phone) || false
+            }));
 
             // Identificar telefones que não foram encontrados nos contatos
             const foundPhones = new Set(membersDetails.map(m => m.phone));
@@ -951,7 +967,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                         name: p.name,
                         phone: p.phone,
                         role: p.role === 'leader' || p.role === 'lider' ? 'Líder' : p.role === 'admin' ? 'Admin' : 'Membro',
-                        avatar_url: p.avatar_url
+                        avatar_url: p.avatar_url,
+                        is_group_admin: adminMap.get(p.phone) || false
                     }));
                 }
 
@@ -964,7 +981,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                         name: phone,
                         phone: phone,
                         role: 'Membro',
-                        avatar_url: null
+                        avatar_url: null,
+                        is_group_admin: adminMap.get(phone) || false
                     }));
 
                 additionalMembers = [...additionalMembers, ...stillUnknown];
@@ -973,6 +991,39 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
             setGroupDetailsMembers([...membersDetails, ...additionalMembers]);
         } catch (error) {
             console.error('Erro ao buscar detalhes dos membros:', error);
+        }
+    };
+
+    const handleToggleGroupAdmin = async (memberId: string, memberPhone: string, currentStatus: boolean) => {
+        if (!selectedGroup) return;
+
+        const action = currentStatus ? 'demote' : 'promote';
+        const confirmMsg = currentStatus
+            ? 'Deseja remover as permissões de admin deste membro?'
+            : 'Deseja promover este membro a admin do grupo?';
+
+        if (!confirm(confirmMsg)) return;
+
+        showToast(currentStatus ? 'Removendo permissão...' : 'Promovendo a admin...', 'info');
+
+        try {
+            const { data, error } = await supabase.functions.invoke('toggle-group-admin', {
+                body: {
+                    groupId: selectedGroup.id,
+                    userId: memberId,
+                    phone: memberPhone,
+                    action
+                }
+            });
+
+            if (error) throw error;
+            if (!data.success) throw new Error(data.error);
+
+            showToast(data.message, 'success');
+            fetchGroupMembersDetails(selectedGroup.id); // Recarregar lista
+        } catch (error) {
+            console.error('Erro ao alterar permissão:', error);
+            showToast('Erro: ' + (error as Error).message, 'error');
         }
     };
 
@@ -1032,6 +1083,126 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
         }
     };
 
+    const handleAddMembers = async () => {
+        if (!selectedGroup || membersToAdd.size === 0) return;
+
+        setAddingMembers(true);
+        showToast('Adicionando membros...', 'info');
+
+        try {
+            // Preparar membros
+            const membersData = contacts
+                .filter(c => membersToAdd.has(c.id))
+                .map(c => ({
+                    userId: c.id,
+                    phone: c.phone
+                }));
+
+            const { data, error } = await supabase.functions.invoke('add-whatsapp-group-member', {
+                body: {
+                    groupId: selectedGroup.id,
+                    members: membersData
+                }
+            });
+
+            if (error) throw error;
+
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao adicionar membros');
+            }
+
+            // Atualizar lista de membros localmente
+            // Recarregar detalhes do grupo
+            await fetchGroupMembersDetails(selectedGroup.id);
+
+            // Atualizar contagem de membros na lista de grupos
+            setGroups(prev => prev.map(g => {
+                if (g.id === selectedGroup.id) {
+                    return {
+                        ...g,
+                        members: [...g.members, ...membersData.map(m => m.phone)] // Simplificação
+                    };
+                }
+                return g;
+            }));
+
+            showToast('Membros adicionados com sucesso!', 'success');
+            setShowAddMemberModal(false);
+            setMembersToAdd(new Set());
+            setAddMemberSearchQuery('');
+
+        } catch (error) {
+            console.error('Erro ao adicionar membros:', error);
+            showToast('Erro ao adicionar membros: ' + (error as Error).message, 'error');
+        } finally {
+            setAddingMembers(false);
+        }
+    };
+
+    const toggleMemberToAdd = (contactId: string) => {
+        setMembersToAdd(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(contactId)) {
+                newSet.delete(contactId);
+            } else {
+                newSet.add(contactId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleRemoveMember = (memberId: string, memberPhone: string, memberName: string) => {
+        if (!selectedGroup || removingMemberId) return;
+        setMemberToRemove({ id: memberId, phone: memberPhone, name: memberName });
+        setShowRemoveMemberModal(true);
+    };
+
+    const confirmRemoveMember = async () => {
+        if (!selectedGroup || !memberToRemove) return;
+
+        setRemovingMemberId(memberToRemove.id);
+        setShowRemoveMemberModal(false);
+        showToast('Removendo membro...', 'info');
+
+        try {
+            const { data, error } = await supabase.functions.invoke('remove-whatsapp-group-member', {
+                body: {
+                    groupId: selectedGroup.id,
+                    userId: memberToRemove.id,
+                    phone: memberToRemove.phone
+                }
+            });
+
+            if (error) throw error;
+
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao remover membro');
+            }
+
+            // Atualizar lista localmente
+            await fetchGroupMembersDetails(selectedGroup.id);
+
+            // Atualizar contagem na lista de grupos
+            setGroups(prev => prev.map(g => {
+                if (g.id === selectedGroup.id) {
+                    // Remover telefone da lista de membros do objeto grupo (simplificado)
+                    const newMembers = g.members.filter((p: any) => typeof p === 'string' ? p !== memberToRemove.phone : p.phone !== memberToRemove.phone);
+                    return { ...g, members: newMembers };
+                }
+                return g;
+            }));
+
+            showToast('Membro removido com sucesso!', 'success');
+
+        } catch (error) {
+            console.error('Erro ao remover membro:', error);
+            showToast('Erro ao remover membro: ' + (error as Error).message, 'error');
+        } finally {
+            setRemovingMemberId(null);
+            setMemberToRemove(null);
+        }
+    };
+
     useEffect(() => {
         if (session) {
             fetchGroups();
@@ -1048,12 +1219,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
 
         setIsDeleting(true);
         try {
-            const { error } = await supabase
-                .from('whatsapp_groups')
-                .delete()
-                .eq('id', groupToDelete);
+            // Usar Edge Function para deletar (que remove do WhatsApp também)
+            const { data, error } = await supabase.functions.invoke('delete-whatsapp-group', {
+                body: { groupId: groupToDelete }
+            });
 
             if (error) throw error;
+            if (!data.success) throw new Error(data.error || 'Erro ao excluir grupo');
 
             setGroups(prev => prev.filter(g => g.id !== groupToDelete));
 
@@ -1062,12 +1234,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                 setSelectedGroup(null);
             }
 
-            showToast('Grupo deletado com sucesso', 'success');
+            showToast('Grupo excluído com sucesso!', 'success');
             setShowDeleteModal(false);
             setGroupToDelete(null);
         } catch (error) {
-            console.error('Erro ao deletar grupo:', error);
-            showToast('Erro ao deletar grupo', 'error');
+            console.error('Erro ao excluir grupo:', error);
+            showToast('Erro ao excluir grupo: ' + (error as Error).message, 'error');
         } finally {
             setIsDeleting(false);
         }
@@ -1076,8 +1248,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     return (
         <div className="-m-4 sm:-m-6 lg:-m-8 h-screen bg-white relative">
             <style>{`
-                .scrollbar-hide::-webkit-scrollbar {
-                    display: none;
+                /* Scrollbar Hover Only */
+                .scrollbar-hover-only::-webkit-scrollbar {
+                    height: 6px;
+                    background: transparent;
                 }
                 .scrollbar-hide {
                     -ms-overflow-style: none;
@@ -1197,7 +1371,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                         {/* Filter Tabs */}
                         <div
                             ref={tabsContainerRef}
-                            className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide scroll-smooth"
+                            className="flex gap-2 overflow-x-auto pb-2 scrollbar-hover-only relative"
                         >
                             <button
                                 onClick={() => setFilterTab('tudo')}
@@ -1227,7 +1401,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                 Favoritas
                             </button>
                             <button
-                                id="tab-grupos" // ID para referência
                                 onClick={() => setFilterTab('grupos')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'grupos'
                                     ? 'bg-blue-600 text-white'
@@ -1236,11 +1409,29 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             >
                                 Grupos
                             </button>
+                            <button
+                                onClick={() => setFilterTab('lideres')}
+                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'lideres'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    }`}
+                            >
+                                Líderes
+                            </button>
+                            <button
+                                onClick={() => setFilterTab('voluntarios')}
+                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'voluntarios'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    }`}
+                            >
+                                Voluntários
+                            </button>
                         </div>
                     </div>
 
                     {/* Lista de Contatos */}
-                    <div className="flex-1 overflow-y-auto scrollbar-glass">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-glass">
                         {loading ? (
                             <div className="flex items-center justify-center h-32">
                                 <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -1255,7 +1446,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                 const query = searchQuery.toLowerCase();
                                 filteredContacts = filteredContacts.filter(c =>
                                     c.name.toLowerCase().includes(query) ||
-                                    c.phone.includes(searchQuery)
+                                    (c.phone && c.phone.includes(searchQuery))
                                 );
                                 filteredGroups = filteredGroups.filter(g =>
                                     g.name.toLowerCase().includes(query)
@@ -1271,6 +1462,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                 filteredGroups = [];
                             } else if (filterTab === 'grupos') {
                                 filteredContacts = [];
+                            } else if (filterTab === 'lideres') {
+                                filteredContacts = filteredContacts.filter(c => ['leader', 'lider', 'líder', 'admin'].includes(c.role?.toLowerCase()));
+                                filteredGroups = [];
+                            } else if (filterTab === 'voluntarios') {
+                                filteredContacts = filteredContacts.filter(c => !['leader', 'lider', 'líder', 'admin'].includes(c.role?.toLowerCase()));
+                                filteredGroups = [];
                             } else if (filterTab === 'tudo') {
                                 // Mantém ambos
                             }
@@ -1884,10 +2081,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
 
                             {/* Lista de Membros */}
                             <div>
-                                <h5 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Membros ({groupDetailsMembers.length})</h5>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h5 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Membros ({groupDetailsMembers.length})</h5>
+                                    {(userRole === 'admin' || ['leader', 'lider', 'líder'].includes(userRole?.toLowerCase())) && (
+                                        <button
+                                            onClick={() => setShowAddMemberModal(true)}
+                                            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                            </svg>
+                                            Adicionar
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="space-y-3">
                                     {groupDetailsMembers.map((member) => (
-                                        <div key={member.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                        <div key={member.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors group/member">
                                             <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-semibold flex-shrink-0 overflow-hidden">
                                                 {member.avatar_url ? (
                                                     <img src={member.avatar_url} alt={member.name} className="w-full h-full object-cover" />
@@ -1898,18 +2108,93 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between">
                                                     <p className="font-medium text-slate-800 truncate">{member.name}</p>
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${member.role === 'Admin' ? 'bg-purple-100 text-purple-700 border-purple-200' :
-                                                        (member.role === 'Líder' || member.role === 'leader') ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                                                            'bg-slate-100 text-slate-600 border-slate-200'
-                                                        }`}>
-                                                        {member.role === 'leader' ? 'Líder' : member.role}
-                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${member.role === 'Admin' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                                                            (member.role === 'Líder' || member.role === 'leader') ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                                                'bg-slate-100 text-slate-600 border-slate-200'
+                                                            }`}>
+                                                            {member.role === 'leader' ? 'Líder' : member.role}
+                                                        </span>
+                                                        {member.is_group_admin && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded font-bold border bg-green-100 text-green-700 border-green-200" title="Admin do Grupo">
+                                                                Admin
+                                                            </span>
+                                                        )}
+
+                                                        {/* Botão de Remover Membro */}
+                                                        {/* Botão de Remover Membro */}
+                                                        {(userRole === 'admin' || (['leader', 'lider', 'líder'].includes(userRole?.toLowerCase()) && member.role !== 'Admin')) && member.id !== session?.user?.id && (
+                                                            <>
+                                                                {/* Botão de Promover/Rebaixar Admin (apenas se quem está vendo tiver permissão) */}
+                                                                {/* Lógica simplificada: Admin do sistema ou Criador do grupo pode promover */}
+                                                                {(userRole === 'admin' || selectedGroup.created_by === session?.user?.id) && (
+                                                                    <button
+                                                                        onClick={() => handleToggleGroupAdmin(member.id, member.phone, member.is_group_admin)}
+                                                                        className={`opacity-0 group-hover/member:opacity-100 p-1 rounded transition-all ${member.is_group_admin ? 'text-green-600 hover:bg-green-50' : 'text-slate-400 hover:text-green-600 hover:bg-green-50'}`}
+                                                                        title={member.is_group_admin ? "Remover admin do grupo" : "Promover a admin do grupo"}
+                                                                    >
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                                                        </svg>
+                                                                    </button>
+                                                                )}
+
+                                                                <button
+                                                                    onClick={() => handleRemoveMember(member.id, member.phone, member.name)}
+                                                                    disabled={removingMemberId === member.id}
+                                                                    className="opacity-0 group-hover/member:opacity-100 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                                                    title="Remover membro"
+                                                                >
+                                                                    {removingMemberId === member.id ? (
+                                                                        <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                                                                    ) : (
+                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                        </svg>
+                                                                    )}
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <p className="text-xs text-slate-500 truncate">{member.phone}</p>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Confirmação de Remoção de Membro */}
+            {showRemoveMemberModal && memberToRemove && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]" onClick={() => setShowRemoveMemberModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col items-center text-center">
+                            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-800 mb-2">Remover Membro</h3>
+                            <p className="text-slate-600 mb-6">
+                                Tem certeza que deseja remover <strong>{memberToRemove.name}</strong> do grupo? Esta ação não pode ser desfeita.
+                            </p>
+                            <div className="flex gap-3 w-full">
+                                <button
+                                    onClick={() => setShowRemoveMemberModal(false)}
+                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={confirmRemoveMember}
+                                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+                                >
+                                    Remover
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2085,6 +2370,136 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                 )}
                                 {creatingGroup ? 'Criando...' : 'Criar Grupo'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Adicionar Membros */}
+            {showAddMemberModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowAddMemberModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-slate-800">Adicionar Membros</h3>
+                            <button
+                                onClick={() => setShowAddMemberModal(false)}
+                                className="text-slate-400 hover:text-slate-600"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-4 border-b border-slate-100">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={addMemberSearchQuery}
+                                    onChange={(e) => setAddMemberSearchQuery(e.target.value)}
+                                    placeholder="Buscar voluntário..."
+                                    className="w-full px-4 py-2 pl-10 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-glass">
+                            {contacts
+                                .filter(contact => {
+                                    // 1. Deve ter telefone
+                                    if (!contact.phone) return false;
+
+                                    // 2. Não pode estar no grupo
+                                    const isAlreadyMember = groupDetailsMembers.some(m =>
+                                        m.id === contact.id || m.phone === contact.phone
+                                    );
+                                    if (isAlreadyMember) return false;
+
+                                    // 3. Filtro de busca
+                                    if (addMemberSearchQuery.trim()) {
+                                        const searchLower = addMemberSearchQuery.toLowerCase();
+                                        if (!contact.name.toLowerCase().includes(searchLower)) {
+                                            return false;
+                                        }
+                                    }
+
+                                    // 4. Regras de Permissão (Admin vs Líder)
+                                    if (userRole === 'admin') return true;
+
+                                    const normalizedRole = userRole?.toLowerCase();
+                                    if (['leader', 'lider', 'líder'].includes(normalizedRole)) {
+                                        // Se for líder, só pode adicionar quem é do seu departamento
+                                        // O departmentId vem das props. Se não tiver, assume que não pode filtrar (ou mostra todos que ele vê)
+                                        // Mas a lista 'contacts' já deve vir filtrada ou conter info de departamentos.
+
+                                        // Verificando department_ids do contato
+                                        let deptIds = contact.department_ids;
+                                        if (typeof deptIds === 'string') {
+                                            try { deptIds = JSON.parse(deptIds); } catch (e) { deptIds = []; }
+                                        }
+                                        if (!Array.isArray(deptIds)) deptIds = [];
+
+                                        // Se o líder tem um departmentId definido na prop, usa ele
+                                        if (departmentId) {
+                                            return deptIds.includes(Number(departmentId));
+                                        }
+
+                                        // Se não tem departmentId explícito (ex: vê todos), talvez permitir?
+                                        // Por segurança, vamos assumir que se ele vê na lista de contatos (que já é filtrada para ele), ele pode adicionar.
+                                        return true;
+                                    }
+
+                                    return false;
+                                })
+                                .map((contact) => (
+                                    <button
+                                        key={contact.id}
+                                        onClick={() => toggleMemberToAdd(contact.id)}
+                                        className={`w-full p-3 flex items-center gap-3 rounded-lg transition-colors ${membersToAdd.has(contact.id)
+                                            ? 'bg-blue-50 border-2 border-blue-500'
+                                            : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
+                                            }`}
+                                    >
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                                            {contact.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <h4 className="font-semibold text-slate-800 text-sm">{contact.name}</h4>
+                                            <p className="text-xs text-slate-500">{contact.role}</p>
+                                        </div>
+                                        {membersToAdd.has(contact.id) && (
+                                            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                ))
+                            }
+                            {contacts.filter(c => !groupDetailsMembers.some(m => m.id === c.id || m.phone === c.phone)).length === 0 && (
+                                <p className="text-center text-slate-500 py-4">Nenhum contato disponível para adicionar.</p>
+                            )}
+                        </div>
+
+                        <div className="p-6 border-t border-slate-200 flex gap-3">
+                            <button
+                                onClick={() => setShowAddMemberModal(false)}
+                                className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleAddMembers}
+                                disabled={membersToAdd.size === 0 || addingMembers}
+                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {addingMembers && (
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                )}
+                                {addingMembers ? 'Adicionando...' : `Adicionar(${membersToAdd.size})`}
                             </button>
                         </div>
                     </div>

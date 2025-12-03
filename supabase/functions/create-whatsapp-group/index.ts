@@ -112,24 +112,13 @@ serve(async (req) => {
             const cleanCreatorPhone = creatorProfile.phone.replace(/\D/g, '');
             const creatorWhatsapp = cleanCreatorPhone.includes('@') ? cleanCreatorPhone : `${cleanCreatorPhone}@s.whatsapp.net`;
 
-            // Filtrar criador da lista de membros disponíveis para criação inicial
-            const otherMembers = formattedMembers.filter(p => p !== creatorWhatsapp);
-
-            if (otherMembers.length > 0) {
-                // TENTATIVA DE SOLUÇÃO DEFINITIVA:
-                // Enviar TODOS os membros (exceto criador) JÁ na criação do grupo.
-                // Isso evita depender da rota updateParticipant que está falhando com erro 400.
-                initialParticipants = otherMembers;
-
-                // Ninguém para adicionar depois (exceto talvez o criador se a lógica mudasse, mas ele entra auto)
-                membersToAddLater = [];
-            } else {
-                // Se só tem o criador
-                initialParticipants = [creatorWhatsapp];
-                membersToAddLater = [];
-            }
+            // Adicionar criador à lista de participantes iniciais
+            // Se o criador for o dono da instância, a API pode ignorar, mas se não for, ele será adicionado.
+            const allParticipants = new Set([...formattedMembers, creatorWhatsapp]);
+            initialParticipants = Array.from(allParticipants);
+            membersToAddLater = []; // Enviar todos de uma vez
         } else {
-            // Se não achou telefone do criador, tenta criar com todos
+            // Se não achou telefone do criador, tenta criar com os membros fornecidos
             if (formattedMembers.length > 0) {
                 initialParticipants = formattedMembers;
                 membersToAddLater = [];
@@ -271,12 +260,29 @@ serve(async (req) => {
         } else {
             console.log('Grupo salvo no banco:', groupData);
 
-            // Salvar membros
+            // Preparar membros para salvar no banco
+            // Incluir o criador explicitamente se ele tiver telefone
             const membersToInsert = members.map(m => ({
                 group_id: groupData.id,
                 user_id: m.userId,
-                phone: m.phone
+                phone: m.phone,
+                is_admin: false // Membros normais não são admins por padrão
             }));
+
+            // Adicionar criador como admin se não estiver na lista (ou atualizar se estiver)
+            if (creatorProfile?.phone) {
+                const creatorIndex = membersToInsert.findIndex(m => m.user_id === user.id);
+                if (creatorIndex >= 0) {
+                    membersToInsert[creatorIndex].is_admin = true;
+                } else {
+                    membersToInsert.push({
+                        group_id: groupData.id,
+                        user_id: user.id,
+                        phone: creatorProfile.phone,
+                        is_admin: true
+                    });
+                }
+            }
 
             const { error: membersError } = await supabaseClient
                 .from('whatsapp_group_members')
