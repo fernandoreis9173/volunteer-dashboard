@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Department } from '../types';
 
+import { supabase } from '../lib/supabaseClient';
+
 interface DemoteToVolunteerModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -28,8 +30,37 @@ const DemoteToVolunteerModal: React.FC<DemoteToVolunteerModalProps> = ({
         if (!isOpen) {
             setSelectedDepartmentIds([]); // Reset on close
             setSearchQuery(''); // Reset search
+        } else if (user) {
+            // Tentar buscar departamentos anteriores do voluntário
+            const fetchPreviousDepartments = async () => {
+                try {
+                    // 1. Buscar ID do voluntário pelo user_id
+                    const { data: volunteerData } = await supabase
+                        .from('volunteers')
+                        .select('id')
+                        .eq('user_id', user.id)
+                        .maybeSingle();
+
+                    if (volunteerData) {
+                        // 2. Buscar departamentos vinculados
+                        const { data: deptData } = await supabase
+                            .from('volunteer_departments')
+                            .select('department_id')
+                            .eq('volunteer_id', volunteerData.id);
+
+                        if (deptData && deptData.length > 0) {
+                            const prevDeptIds = deptData.map(d => d.department_id);
+                            console.log('Departamentos anteriores encontrados:', prevDeptIds);
+                            setSelectedDepartmentIds(prevDeptIds);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Erro ao buscar departamentos anteriores:', err);
+                }
+            };
+            fetchPreviousDepartments();
         }
-    }, [isOpen]);
+    }, [isOpen, user]);
 
     if (!isOpen || !user) return null;
 
