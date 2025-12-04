@@ -12,12 +12,38 @@ interface UserProfilePageProps {
 
 const formatPhoneNumber = (value: string) => {
     if (!value) return '';
-    const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
+    const cleaned = value.replace(/\D/g, '');
+    // Formato: 55995199962 -> (+55) 99519-9962
+    if (cleaned.length === 11 && cleaned.startsWith('55')) {
+        const part1 = cleaned.substring(2, 7);
+        const part2 = cleaned.substring(7);
+        return `(+55) ${part1}-${part2}`;
+    }
+
+    // Formato: 5511999999999 -> (+55) 11 99999-9999
+    if (cleaned.length === 13 && cleaned.startsWith('55')) {
+        const ddd = cleaned.substring(2, 4);
+        const part1 = cleaned.substring(4, 9);
+        const part2 = cleaned.substring(9);
+        return `(+55) ${ddd} ${part1}-${part2}`;
+    }
+
+    // Formato: 551199999999 -> (+55) 11 9999-9999
+    if (cleaned.length === 12 && cleaned.startsWith('55')) {
+        const ddd = cleaned.substring(2, 4);
+        const part1 = cleaned.substring(4, 8);
+        const part2 = cleaned.substring(8);
+        return `(+55) ${ddd} ${part1}-${part2}`;
+    }
+
+    // Fallback para formatação simples se não começar com 55 ou tiver tamanho diferente
+    const phoneNumber = cleaned.slice(0, 11);
     const { length } = phoneNumber;
     if (length <= 2) return `(${phoneNumber}`;
     if (length <= 6) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
     if (length <= 10) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
     return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
+
 };
 
 const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
@@ -185,7 +211,7 @@ const UserProfilePage: React.FC<UserProfilePageProps> = ({ session, onUpdate, le
                 .from('profiles')
                 .update({
                     default_map_iframe: defaultMapIframe, // Keep syncing for now
-                    default_location_data: locationData
+                    default_location_data: locationData, name: name.trim(), phone: cleanPhone
                 })
                 .eq('id', user.id);
 

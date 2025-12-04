@@ -22,6 +22,16 @@ interface Contact {
     avatar_url?: string | null;
 }
 
+interface Group {
+    id: string;
+    name: string;
+    members: string[];
+    whatsappGroupId?: string;
+    avatar_url?: string | null;
+    unreadCount?: number;
+    lastMessageTime?: Date | null;
+}
+
 interface Message {
     id: number;
     sender_id: string;
@@ -30,6 +40,400 @@ interface Message {
     created_at: string;
     read: boolean;
 }
+
+const formatDateSeparator = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+        return 'HOJE';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+        return 'ONTEM';
+    } else {
+        return date.toLocaleDateString('pt-BR');
+    }
+};
+
+const formatPhoneNumber = (phone: string | null | undefined) => {
+    if (!phone || phone === 'Sem contato') return 'Sem contato';
+
+    const cleaned = phone.replace(/\D/g, '');
+
+    // Formato: 55995199962 -> (+55) 99519-9962
+    if (cleaned.length === 11 && cleaned.startsWith('55')) {
+        const part1 = cleaned.substring(2, 7);
+        const part2 = cleaned.substring(7);
+        return `(+55) ${part1}-${part2}`;
+    }
+
+    // Formato: 5511999999999 -> (+55) 11 99999-9999
+    if (cleaned.length === 13 && cleaned.startsWith('55')) {
+        const ddd = cleaned.substring(2, 4);
+        const part1 = cleaned.substring(4, 9);
+        const part2 = cleaned.substring(9);
+        return `(+55) ${ddd} ${part1}-${part2}`;
+    }
+
+    // Formato: 551199999999 -> (+55) 11 9999-9999
+    if (cleaned.length === 12 && cleaned.startsWith('55')) {
+        const ddd = cleaned.substring(2, 4);
+        const part1 = cleaned.substring(4, 8);
+        const part2 = cleaned.substring(8);
+        return `(+55) ${ddd} ${part1}-${part2}`;
+    }
+
+    return phone;
+};
+
+interface SwipeableContactItemProps {
+    contact: Contact;
+    isSelected: boolean;
+    isFavorite: boolean;
+    departments: Record<number, string>;
+    onClick: () => void;
+    onToggleFavorite: (id: string) => void;
+    userDepartmentId?: number | null;
+}
+
+const SwipeableContactItem: React.FC<SwipeableContactItemProps> = ({
+    contact,
+    isSelected,
+    isFavorite,
+    departments,
+    onClick,
+    onToggleFavorite,
+    userDepartmentId
+}) => {
+    const [startX, setStartX] = useState(0);
+    const [currentX, setCurrentX] = useState(0);
+    const [isSwiping, setIsSwiping] = useState(false);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        setStartX(e.touches[0].clientX);
+        setIsSwiping(true);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!isSwiping) return;
+        const touchX = e.touches[0].clientX;
+        const diff = touchX - startX;
+        // Limit swipe to left (negative) and max width of action button (e.g. -80px)
+        if (diff < 0 && diff > -100) {
+            setCurrentX(diff);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        setIsSwiping(false);
+        if (currentX < -40) { // Threshold to snap open
+            setCurrentX(-80); // Width of action button
+        } else {
+            setCurrentX(0);
+        }
+    };
+
+    const handleClick = () => {
+        if (currentX < -10) {
+            setCurrentX(0);
+        } else {
+            onClick();
+        }
+    };
+
+    const [showMenu, setShowMenu] = useState(false);
+
+    return (
+        <div className={`relative w-full bg-white border-b border-slate-100 last:border-0 group ${showMenu ? 'z-50' : 'z-0'}`}>
+            {/* Action Button (Behind) */}
+            <div className="absolute inset-y-0 right-0 flex">
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFavorite(contact.id);
+                        setCurrentX(0);
+                    }}
+                    className="h-full w-20 bg-yellow-50 flex items-center justify-center text-yellow-500 transition-colors hover:bg-yellow-100"
+                >
+                    <svg
+                        className={`w-6 h-6 ${isFavorite ? 'fill-yellow-500' : 'fill-none'}`}
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                </button>
+            </div>
+
+            {/* Main Content (Foreground) */}
+            <div
+                className={`relative w-full p-3 flex items-start gap-3 bg-white transition-transform duration-200 ease-out ${isSelected ? 'bg-slate-100' : ''}`}
+                style={{ transform: `translateX(${currentX}px)` }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+            >
+                <button onClick={handleClick} className="flex-1 text-left flex items-start gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0 mt-1 overflow-hidden">
+                        {contact.avatar_url ? (
+                            <img src={contact.avatar_url} alt={contact.name} className="w-full h-full object-cover" />
+                        ) : (
+                            contact.name.charAt(0).toUpperCase()
+                        )}
+                    </div>
+                    <div className="flex-1 text-left min-w-0 py-1">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                                <h3 className="font-semibold text-slate-800 truncate text-[15px]">
+                                    {contact.name}
+                                </h3>
+                                {contact.role === 'Admin' && (
+                                    <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                                        Admin
+                                    </span>
+                                )}
+                                {(contact.role === 'Líder' || contact.role === 'leader') && (
+                                    <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                                        Líder
+                                    </span>
+                                )}
+                                {contact.role === 'Voluntário' && (
+                                    <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                        Vol
+                                    </span>
+                                )}
+                            </div>
+                            {contact.lastMessageTime && (
+                                <span className="text-xs text-slate-500 flex-shrink-0">{contact.lastMessageTime}</span>
+                            )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-slate-500 truncate flex-1">
+                                {contact.lastMessage}
+                            </p>
+                            {(contact.unreadCount || 0) > 0 && (
+                                <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold ml-2 flex-shrink-0">
+                                    {contact.unreadCount}
+                                </div>
+                            )}
+                        </div>
+                        {contact.department_ids && contact.department_ids.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                                {contact.department_ids.slice(0, 2).map(deptId => (
+                                    <span
+                                        key={deptId}
+                                        className={`text-[10px] px-1.5 py-0.5 rounded-full border ${deptId === userDepartmentId
+                                            ? 'bg-blue-600 text-white border-blue-700 font-medium shadow-sm'
+                                            : 'bg-blue-50 text-blue-600 border-blue-100'
+                                            }`}
+                                    >
+                                        {departments[deptId] || 'Dep. desconhecido'}
+                                    </span>
+                                ))}
+                                {contact.department_ids.length > 2 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                        +{contact.department_ids.length - 2}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </button>
+
+                {/* Desktop Menu Trigger */}
+                <div className="absolute right-2 top-8 hidden md:group-hover:block z-10">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowMenu(!showMenu);
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 bg-white/80 backdrop-blur-sm shadow-sm"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    {showMenu && (
+                        <>
+                            <div className="fixed inset-0 z-20" onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} />
+                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-xl border border-slate-100 z-30 py-1">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onToggleFavorite(contact.id);
+                                        setShowMenu(false);
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+                                >
+                                    <svg className={`w-4 h-4 ${isFavorite ? 'fill-yellow-500 text-yellow-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                    </svg>
+                                    {isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+interface SwipeableGroupItemProps {
+    group: Group;
+    isSelected: boolean;
+    onClick: () => void;
+    onDelete: (id: number) => void;
+}
+
+const SwipeableGroupItem: React.FC<SwipeableGroupItemProps> = ({
+    group,
+    isSelected,
+    onClick,
+    onDelete
+}) => {
+    const [startX, setStartX] = useState(0);
+    const [currentX, setCurrentX] = useState(0);
+    const [isSwiping, setIsSwiping] = useState(false);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        setStartX(e.touches[0].clientX);
+        setIsSwiping(true);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!isSwiping) return;
+        const touchX = e.touches[0].clientX;
+        const diff = touchX - startX;
+        // Limit swipe to left (negative) and max width of action button (e.g. -80px)
+        if (diff < 0 && diff > -100) {
+            setCurrentX(diff);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        setIsSwiping(false);
+        if (currentX < -40) { // Threshold to snap open
+            setCurrentX(-80); // Width of action button
+        } else {
+            setCurrentX(0);
+        }
+    };
+
+    const handleClick = () => {
+        if (currentX < -10) {
+            setCurrentX(0);
+        } else {
+            onClick();
+        }
+    };
+
+    const [showMenu, setShowMenu] = useState(false);
+
+    return (
+        <div className={`relative w-full bg-white border-b border-slate-100 last:border-0 group ${showMenu ? 'z-50' : 'z-0'}`}>
+            {/* Action Button (Behind) */}
+            <div className="absolute inset-y-0 right-0 flex">
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(group.id);
+                        setCurrentX(0);
+                    }}
+                    className="h-full w-20 bg-red-50 flex items-center justify-center text-red-600 transition-colors hover:bg-red-100"
+                >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
+
+            {/* Main Content (Foreground) */}
+            <div
+                className={`relative w-full p-3 flex items-start gap-3 bg-white transition-transform duration-200 ease-out ${isSelected ? 'bg-slate-100' : ''}`}
+                style={{ transform: `translateX(${currentX}px)` }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+            >
+                <button onClick={handleClick} className="flex-1 text-left flex items-start gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold flex-shrink-0 mt-1 overflow-hidden relative">
+                        {group.avatar_url ? (
+                            <img src={group.avatar_url} alt={group.name} className="w-full h-full object-cover" />
+                        ) : (
+                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                            </svg>
+                        )}
+                    </div>
+                    <div className="flex-1 min-w-0 py-1">
+                        <div className="flex items-start justify-between mb-1">
+                            <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                                <h3 className="font-semibold text-slate-800 truncate text-[15px]">{group.name}</h3>
+                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                    Grupo
+                                </span>
+                            </div>
+                            {group.lastMessageTime && (
+                                <span className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
+                                    {group.lastMessageTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <p className="text-sm text-slate-500 truncate">
+                                {group.members.length} {group.members.length === 1 ? 'membro' : 'membros'}
+                            </p>
+                            {group.unreadCount && group.unreadCount > 0 ? (
+                                <span className="bg-green-500 text-white text-xs font-bold h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full">
+                                    {group.unreadCount}
+                                </span>
+                            ) : null}
+                        </div>
+                    </div>
+                </button>
+
+                {/* Desktop Menu Trigger */}
+                <div className="absolute right-2 top-8 hidden md:group-hover:block z-10">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowMenu(!showMenu);
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 bg-white/80 backdrop-blur-sm shadow-sm"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    {showMenu && (
+                        <>
+                            <div className="fixed inset-0 z-20" onClick={(e) => { e.stopPropagation(); setShowMenu(false); }} />
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-30 py-1">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDelete(group.id);
+                                        setShowMenu(false);
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Apagar grupo
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) => {
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -69,6 +473,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
     const [showChatMenu, setShowChatMenu] = useState(false);
     const [showClearChatModal, setShowClearChatModal] = useState(false);
+    const [showContactInfoModal, setShowContactInfoModal] = useState(false);
     const [activeSession, setActiveSession] = useState<{ id: string, leader_id: string, leader_name?: string } | null>(null);
 
     // Estados para adicionar membros
@@ -79,6 +484,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
     const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
     const [memberToRemove, setMemberToRemove] = useState<{ id: string, phone: string, name: string } | null>(null);
+    const [departments, setDepartments] = useState<Record<number, string>>({});
 
     useEffect(() => {
         if (selectedContact) {
@@ -129,26 +535,42 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
         }
     };
 
+    useEffect(() => {
+        const fetchDepartments = async () => {
+            const { data, error } = await supabase
+                .from('departments')
+                .select('id, name');
+
+            if (data) {
+                const deptMap: Record<number, string> = {};
+                data.forEach((d: any) => {
+                    deptMap[d.id] = d.name;
+                });
+                setDepartments(deptMap);
+            }
+        };
+
+        fetchDepartments();
+    }, []);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const tabsContainerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll para a aba ativa
+    // Auto-scroll para a aba ativa
     useEffect(() => {
-        if (filterTab === 'grupos' && tabsContainerRef.current) {
-            const gruposTab = document.getElementById('tab-grupos');
-            if (gruposTab) {
-                // Scroll suave para mostrar a aba de grupos
-                tabsContainerRef.current.scrollTo({
-                    left: gruposTab.offsetLeft - 20, // Um pouco de margem
+        if (tabsContainerRef.current) {
+            const activeTab = document.getElementById(`tab-${filterTab}`);
+            if (activeTab) {
+                const container = tabsContainerRef.current;
+                // Centralizar a aba selecionada
+                const scrollLeft = activeTab.offsetLeft - (container.offsetWidth / 2) + (activeTab.offsetWidth / 2);
+
+                container.scrollTo({
+                    left: Math.max(0, scrollLeft),
                     behavior: 'smooth'
                 });
             }
-        } else if (tabsContainerRef.current) {
-            // Voltar para o início se não for grupos (simplificação)
-            tabsContainerRef.current.scrollTo({
-                left: 0,
-                behavior: 'smooth'
-            });
         }
     }, [filterTab]);
 
@@ -1336,7 +1758,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
 
             <div className="flex h-full">
                 {/* Sidebar - Lista de Contatos */}
-                <div className="w-96 border-r border-slate-200 flex flex-col bg-white">
+                <div className={`w-full md:w-96 border-r border-slate-200 flex-col bg-white ${selectedContact || selectedGroup ? 'hidden md:flex' : 'flex'}`}>
                     {/* Header */}
                     <div className="p-4 border-b border-slate-200">
                         <div className="flex items-center justify-between mb-4">
@@ -1374,6 +1796,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             className="flex gap-2 overflow-x-auto pb-2 scrollbar-hover-only relative"
                         >
                             <button
+                                id="tab-tudo"
                                 onClick={() => setFilterTab('tudo')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'tudo'
                                     ? 'bg-blue-600 text-white'
@@ -1383,6 +1806,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                 Tudo
                             </button>
                             <button
+                                id="tab-nao_lidas"
                                 onClick={() => setFilterTab('nao_lidas')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'nao_lidas'
                                     ? 'bg-blue-600 text-white'
@@ -1392,6 +1816,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                 Não lidas
                             </button>
                             <button
+                                id="tab-favoritas"
                                 onClick={() => setFilterTab('favoritas')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'favoritas'
                                     ? 'bg-blue-600 text-white'
@@ -1401,6 +1826,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                 Favoritas
                             </button>
                             <button
+                                id="tab-grupos"
                                 onClick={() => setFilterTab('grupos')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'grupos'
                                     ? 'bg-blue-600 text-white'
@@ -1410,6 +1836,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                 Grupos
                             </button>
                             <button
+                                id="tab-lideres"
                                 onClick={() => setFilterTab('lideres')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'lideres'
                                     ? 'bg-blue-600 text-white'
@@ -1419,6 +1846,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                 Líderes
                             </button>
                             <button
+                                id="tab-voluntarios"
                                 onClick={() => setFilterTab('voluntarios')}
                                 className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'voluntarios'
                                     ? 'bg-blue-600 text-white'
@@ -1488,149 +1916,39 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             return (
                                 <>
                                     {filteredGroups.map((group) => (
-                                        <div
+                                        <SwipeableGroupItem
                                             key={group.id}
-                                            className="w-full p-3 flex items-center gap-1 hover:bg-slate-50 transition-colors group"
-                                        >
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedGroup(group);
-                                                    setSelectedContact(null);
-                                                    fetchGroupMessages(group.id);
-                                                    markGroupAsRead(group.id);
-                                                }}
-                                                className={`flex items-start gap-3 flex-1 min-w-0 text-left ${selectedGroup?.id === group.id ? 'bg-slate-100 rounded-lg -m-2 p-2' : ''}`}
-                                            >
-                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold flex-shrink-0 mt-1 overflow-hidden relative">
-                                                    {group.avatar_url ? (
-                                                        <img src={group.avatar_url} alt={group.name} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                                                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                                        </svg>
-                                                    )}
-                                                </div>
-                                                <div className="flex-1 min-w-0 py-1">
-                                                    <div className="flex items-start justify-between mb-1">
-                                                        <div className="flex items-center gap-1.5 min-w-0 pr-2">
-                                                            <h3 className="font-semibold text-slate-800 truncate text-[15px]">{group.name}</h3>
-                                                            <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                                                Grupo
-                                                            </span>
-                                                        </div>
-                                                        {group.lastMessageTime && (
-                                                            <span className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
-                                                                {group.lastMessageTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex justify-between items-center">
-                                                        <p className="text-sm text-slate-500 truncate">
-                                                            {group.members.length} {group.members.length === 1 ? 'membro' : 'membros'}
-                                                        </p>
-                                                        {group.unreadCount && group.unreadCount > 0 ? (
-                                                            <span className="bg-green-500 text-white text-xs font-bold h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full">
-                                                                {group.unreadCount}
-                                                            </span>
-                                                        ) : null}
-                                                    </div>
-                                                </div>
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteClick(group.id);
-                                                }}
-                                                className="p-2 rounded-full hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                                                title="Deletar grupo"
-                                            >
-                                                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
-                                        </div>
+                                            group={group}
+                                            isSelected={selectedGroup?.id === group.id}
+                                            onClick={() => {
+                                                setSelectedGroup(group);
+                                                setSelectedContact(null);
+                                                fetchGroupMessages(group.id);
+                                                markGroupAsRead(group.id);
+                                            }}
+                                            onDelete={(id) => handleDeleteClick(id.toString())}
+                                        />
                                     ))}
 
                                     {filteredContacts.map((contact) => (
-                                        <div
+                                        <SwipeableContactItem
                                             key={contact.id}
-                                            className={`w-full p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors relative group ${selectedContact?.id === contact.id ? 'bg-slate-100' : ''
-                                                }`}
-                                        >
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedContact(contact);
-                                                    if (contact.unreadCount && contact.unreadCount > 0) {
-                                                        markMessagesAsRead(contact.id);
-                                                        setContacts(prev => prev.map(c =>
-                                                            c.id === contact.id ? { ...c, unreadCount: 0 } : c
-                                                        ));
-                                                    }
-                                                }}
-                                                className="flex items-start gap-3 flex-1 min-w-0 pr-8"
-                                            >
-                                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0 mt-1 overflow-hidden">
-                                                    {contact.avatar_url ? (
-                                                        <img src={contact.avatar_url} alt={contact.name} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        contact.name.charAt(0).toUpperCase()
-                                                    )}
-                                                </div>
-                                                <div className="flex-1 text-left min-w-0 py-1">
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <div className="flex items-center gap-1.5 min-w-0 pr-2">
-                                                            <h3 className="font-semibold text-slate-800 truncate text-[15px]">
-                                                                {contact.name}
-                                                            </h3>
-                                                            {contact.role === 'Admin' && (
-                                                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
-                                                                    Admin
-                                                                </span>
-                                                            )}
-                                                            {(contact.role === 'Líder' || contact.role === 'leader') && (
-                                                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
-                                                                    Líder
-                                                                </span>
-                                                            )}
-                                                            {contact.role === 'Voluntário' && (
-                                                                <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                                                    Vol
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {contact.lastMessageTime && (
-                                                            <span className="text-xs text-slate-500 flex-shrink-0">{contact.lastMessageTime}</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center justify-between">
-                                                        <p className="text-sm text-slate-500 truncate flex-1">
-                                                            {contact.lastMessage || contact.role}
-                                                        </p>
-                                                        {(contact.unreadCount || 0) > 0 && (
-                                                            <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold ml-2 flex-shrink-0">
-                                                                {contact.unreadCount}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleFavorite(contact.id);
-                                                }}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <svg
-                                                    className={`w-4 h-4 ${favorites.has(contact.id) ? 'fill-yellow-400 text-yellow-400' : 'text-slate-400'}`}
-                                                    fill={favorites.has(contact.id) ? 'currentColor' : 'none'}
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                                </svg>
-                                            </button>
-                                        </div>
+                                            contact={contact}
+                                            isSelected={selectedContact?.id === contact.id}
+                                            isFavorite={favorites.has(contact.id)}
+                                            departments={departments}
+                                            onClick={() => {
+                                                setSelectedContact(contact);
+                                                if (contact.unreadCount && contact.unreadCount > 0) {
+                                                    markMessagesAsRead(contact.id);
+                                                    setContacts(prev => prev.map(c =>
+                                                        c.id === contact.id ? { ...c, unreadCount: 0 } : c
+                                                    ));
+                                                }
+                                            }}
+                                            onToggleFavorite={toggleFavorite}
+                                            userDepartmentId={departmentId}
+                                        />
                                     ))}
                                 </>
                             );
@@ -1639,49 +1957,69 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                 </div>
 
                 {/* Área de Chat */}
-                <div className="flex-1 flex flex-col">
+                <div className={`flex-1 flex-col ${!selectedContact && !selectedGroup ? 'hidden md:flex' : 'flex'}`}>
                     {selectedContact ? (
                         <>
                             {/* Header do Chat */}
                             <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold overflow-hidden">
-                                        {selectedContact.avatar_url ? (
-                                            <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            selectedContact.name.charAt(0).toUpperCase()
-                                        )}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-semibold text-slate-800">{selectedContact.name}</h3>
-                                        <p className="text-sm text-slate-500">{selectedContact.phone}</p>
-                                        {activeSession ? (
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className={`text-xs px-2 py-0.5 rounded-full ${activeSession.leader_id === session?.user?.id
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-red-100 text-red-700'
-                                                    }`}>
-                                                    {activeSession.leader_id === session?.user?.id
-                                                        ? 'Em atendimento com você'
-                                                        : 'Em atendimento'}
-                                                </span>
-                                                {activeSession.leader_id === session?.user?.id && (
-                                                    <button
-                                                        onClick={handleCloseSession}
-                                                        className="ml-2 px-2 py-0.5 bg-red-100 text-red-600 hover:bg-red-200 rounded text-xs font-medium transition-colors"
-                                                    >
-                                                        Encerrar Atendimento
-                                                    </button>
-                                                )}
+                                    <button
+                                        onClick={() => {
+                                            setSelectedContact(null);
+                                            setSelectedGroup(null);
+                                        }}
+                                        className="md:hidden -ml-2 p-2 text-slate-600 hover:bg-slate-100 rounded-full"
+                                    >
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={() => setShowContactInfoModal(true)}
+                                        className="flex items-center gap-3 hover:bg-slate-50 p-2 -my-2 rounded-lg transition-colors text-left"
+                                    >
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold overflow-hidden">
+                                            {selectedContact.avatar_url ? (
+                                                <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                selectedContact.name.charAt(0).toUpperCase()
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-semibold text-slate-800">{selectedContact.name}</h3>
                                             </div>
-                                        ) : (
-                                            <div className="mt-1">
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                                                    Disponível
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
+                                            {activeSession ? (
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${activeSession.leader_id === session?.user?.id
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : 'bg-red-100 text-red-700'
+                                                        }`}>
+                                                        {activeSession.leader_id === session?.user?.id
+                                                            ? 'Em atendimento'
+                                                            : 'Em atendimento'}
+                                                    </span>
+                                                    {activeSession.leader_id === session?.user?.id && (
+                                                        <div
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleCloseSession();
+                                                            }}
+                                                            className="ml-2 px-2 py-0.5 bg-red-100 text-red-600 hover:bg-red-200 rounded text-xs font-medium transition-colors cursor-pointer"
+                                                        >
+                                                            Encerrar
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="mt-1">
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                                        Disponível
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
                                 </div>
                                 <div className="relative">
                                     <button
@@ -1730,57 +2068,68 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        {messages.map((msg) => {
+                                        {messages.map((msg, index) => {
                                             const isSent = msg.sender_id === session?.user?.id;
+                                            const showDateSeparator = index === 0 ||
+                                                formatDateSeparator(msg.created_at) !== formatDateSeparator(messages[index - 1].created_at);
+
                                             return (
-                                                <div
-                                                    key={msg.id}
-                                                    className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
-                                                >
-                                                    {!isSent && (
-                                                        <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
-                                                            {selectedContact.avatar_url ? (
-                                                                <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
-                                                                    {selectedContact.name.charAt(0).toUpperCase()}
-                                                                </div>
-                                                            )}
+                                                <React.Fragment key={msg.id}>
+                                                    {showDateSeparator && (
+                                                        <div className="flex justify-center my-4">
+                                                            <span className="bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                                {formatDateSeparator(msg.created_at)}
+                                                            </span>
                                                         </div>
                                                     )}
-
                                                     <div
-                                                        className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
-                                                            ? 'bg-blue-600 text-white'
-                                                            : 'bg-white text-slate-800 border border-slate-200'
-                                                            }`}
+                                                        className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
                                                     >
                                                         {!isSent && (
-                                                            <p className="text-xs font-bold text-blue-600 mb-1">
-                                                                {selectedContact.name}
-                                                            </p>
+                                                            <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
+                                                                {selectedContact.avatar_url ? (
+                                                                    <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
+                                                                        {selectedContact.name.charAt(0).toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         )}
-                                                        <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
-                                                        <p className={`text-xs mt-1 ${isSent ? 'text-blue-100' : 'text-slate-400'}`}>
-                                                            {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
-                                                                hour: '2-digit',
-                                                                minute: '2-digit',
-                                                            })}
-                                                        </p>
-                                                    </div>
 
-                                                    {isSent && (
-                                                        <div className="w-8 h-8 rounded-full bg-blue-700 flex-shrink-0 overflow-hidden mb-1">
-                                                            {currentUserAvatar ? (
-                                                                <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
-                                                                    {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
-                                                                </div>
+                                                        <div
+                                                            className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
+                                                                ? 'bg-blue-600 text-white'
+                                                                : 'bg-white text-slate-800 border border-slate-200'
+                                                                }`}
+                                                        >
+                                                            {!isSent && (
+                                                                <p className="text-xs font-bold text-blue-600 mb-1">
+                                                                    {selectedContact.name}
+                                                                </p>
                                                             )}
+                                                            <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                                                            <p className={`text-xs mt-1 ${isSent ? 'text-blue-100' : 'text-slate-400'}`}>
+                                                                {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit',
+                                                                })}
+                                                            </p>
                                                         </div>
-                                                    )}
-                                                </div>
+
+                                                        {isSent && (
+                                                            <div className="w-8 h-8 rounded-full bg-blue-700 flex-shrink-0 overflow-hidden mb-1">
+                                                                {currentUserAvatar ? (
+                                                                    <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                                                                        {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </React.Fragment>
                                             );
                                         })}
                                         <div ref={messagesEndRef} />
@@ -1831,27 +2180,40 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                         <>
                             {/* Header do Grupo */}
                             <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
-                                <div
-                                    className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors -ml-2"
-                                    onClick={() => {
-                                        if (selectedGroup) {
-                                            fetchGroupMembersDetails(selectedGroup.id);
-                                            setShowGroupDetailsModal(true);
-                                        }
-                                    }}
-                                >
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold overflow-hidden">
-                                        {selectedGroup.avatar_url ? (
-                                            <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                            </svg>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-semibold text-slate-800">{selectedGroup.name}</h3>
-                                        <p className="text-sm text-slate-500">{selectedGroup.members.length} membros</p>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedContact(null);
+                                            setSelectedGroup(null);
+                                        }}
+                                        className="md:hidden -ml-2 p-2 text-slate-600 hover:bg-slate-100 rounded-full"
+                                    >
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                    </button>
+                                    <div
+                                        className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors -ml-2"
+                                        onClick={() => {
+                                            if (selectedGroup) {
+                                                fetchGroupMembersDetails(selectedGroup.id);
+                                                setShowGroupDetailsModal(true);
+                                            }
+                                        }}
+                                    >
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold overflow-hidden">
+                                            {selectedGroup.avatar_url ? (
+                                                <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-slate-800">{selectedGroup.name}</h3>
+                                            <p className="text-sm text-slate-500">{selectedGroup.members.length} membros</p>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="relative">
@@ -1901,66 +2263,77 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        {groupMessages.map((msg) => {
+                                        {groupMessages.map((msg, index) => {
                                             const isSent = msg.sender_id === session?.user?.id;
-                                            return (
-                                                <div
-                                                    key={msg.id}
-                                                    className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
-                                                >
-                                                    {!isSent && (
-                                                        <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
-                                                            {(() => {
-                                                                const senderContact = contacts.find(c => c.id === msg.sender_id);
-                                                                const avatarUrl = senderContact?.avatar_url;
-                                                                const initial = (senderContact?.name || msg.sender_name || msg.sender_phone || '?').charAt(0).toUpperCase();
+                                            const showDateSeparator = index === 0 ||
+                                                formatDateSeparator(msg.created_at) !== formatDateSeparator(groupMessages[index - 1].created_at);
 
-                                                                return avatarUrl ? (
-                                                                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                                                                ) : (
-                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
-                                                                        {initial}
-                                                                    </div>
-                                                                );
-                                                            })()}
+                                            return (
+                                                <React.Fragment key={msg.id}>
+                                                    {showDateSeparator && (
+                                                        <div className="flex justify-center my-4">
+                                                            <span className="bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                                {formatDateSeparator(msg.created_at)}
+                                                            </span>
                                                         </div>
                                                     )}
-
                                                     <div
-                                                        className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
-                                                            ? 'bg-green-600 text-white'
-                                                            : 'bg-white text-slate-800 border border-slate-200'
-                                                            }`}
+                                                        className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
                                                     >
                                                         {!isSent && (
-                                                            <p className="text-xs font-bold text-orange-500 mb-1">
+                                                            <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
                                                                 {(() => {
                                                                     const senderContact = contacts.find(c => c.id === msg.sender_id);
-                                                                    return senderContact?.name || msg.sender_name || msg.sender_phone || 'Membro';
-                                                                })()}
-                                                            </p>
-                                                        )}
-                                                        <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
-                                                        <p className={`text-xs mt-1 ${isSent ? 'text-green-100' : 'text-slate-400'}`}>
-                                                            {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
-                                                                hour: '2-digit',
-                                                                minute: '2-digit',
-                                                            })}
-                                                        </p>
-                                                    </div>
+                                                                    const avatarUrl = senderContact?.avatar_url;
+                                                                    const initial = (senderContact?.name || msg.sender_name || msg.sender_phone || '?').charAt(0).toUpperCase();
 
-                                                    {isSent && (
-                                                        <div className="w-8 h-8 rounded-full bg-green-700 flex-shrink-0 overflow-hidden mb-1">
-                                                            {currentUserAvatar ? (
-                                                                <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
-                                                                    {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
-                                                                </div>
+                                                                    return avatarUrl ? (
+                                                                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
+                                                                            {initial}
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </div>
+                                                        )}
+
+                                                        <div
+                                                            className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
+                                                                ? 'bg-green-600 text-white'
+                                                                : 'bg-white text-slate-800 border border-slate-200'
+                                                                }`}
+                                                        >
+                                                            {!isSent && (
+                                                                <p className="text-xs font-bold text-orange-500 mb-1">
+                                                                    {(() => {
+                                                                        const senderContact = contacts.find(c => c.id === msg.sender_id);
+                                                                        return senderContact?.name || msg.sender_name || msg.sender_phone || 'Membro';
+                                                                    })()}
+                                                                </p>
                                                             )}
+                                                            <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                                                            <p className={`text-xs mt-1 ${isSent ? 'text-green-100' : 'text-slate-400'}`}>
+                                                                {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit',
+                                                                })}
+                                                            </p>
                                                         </div>
-                                                    )}
-                                                </div>
+
+                                                        {isSent && (
+                                                            <div className="w-8 h-8 rounded-full bg-green-700 flex-shrink-0 overflow-hidden mb-1">
+                                                                {currentUserAvatar ? (
+                                                                    <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                                                                        {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </React.Fragment>
                                             );
                                         })}
                                         <div ref={messagesEndRef} />
@@ -1995,7 +2368,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                                     handleSendGroupMessage();
                                                 }
                                             }}
-                                            placeholder="Enviar mensagem para o grupo..."
+                                            placeholder="Enviar mensagem..."
                                             className="flex-1 resize-none border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent max-h-32"
                                             rows={1}
                                         />
@@ -2470,6 +2843,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                                         <div className="flex-1 text-left">
                                             <h4 className="font-semibold text-slate-800 text-sm">{contact.name}</h4>
                                             <p className="text-xs text-slate-500">{contact.role}</p>
+                                            {contact.department_ids && contact.department_ids.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {contact.department_ids.slice(0, 2).map(deptId => (
+                                                        <span
+                                                            key={deptId}
+                                                            className={`text-[10px] px-1.5 py-0.5 rounded-full border ${deptId === departmentId
+                                                                ? 'bg-blue-600 text-white border-blue-700 font-medium shadow-sm'
+                                                                : 'bg-blue-50 text-blue-600 border-blue-100'
+                                                                }`}
+                                                        >
+                                                            {departments[deptId] || 'Dep. desconhecido'}
+                                                        </span>
+                                                    ))}
+                                                    {contact.department_ids.length > 2 && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                                            +{contact.department_ids.length - 2}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         {membersToAdd.has(contact.id) && (
                                             <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -2572,6 +2965,76 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                     </div>
                 </div>
             )}
+            {/* Modal de Informações do Contato */}
+            {showContactInfoModal && selectedContact && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowContactInfoModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="relative h-32 bg-gradient-to-br from-blue-500 to-blue-600">
+                            <button
+                                onClick={() => setShowContactInfoModal(false)}
+                                className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/30 text-white rounded-full transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="px-6 pb-6">
+                            <div className="relative -mt-16 mb-4 flex justify-center">
+                                <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-md overflow-hidden flex items-center justify-center">
+                                    {selectedContact.avatar_url ? (
+                                        <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-4xl font-bold">
+                                            {selectedContact.name.charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="text-center mb-6">
+                                <h2 className="text-2xl font-bold text-slate-800 mb-1">{selectedContact.name}</h2>
+                                <p className="text-slate-500 font-medium">{selectedContact.role}</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-500 font-medium uppercase">Telefone</p>
+                                        <p className="text-slate-800 font-medium">{formatPhoneNumber(selectedContact.phone)}</p>
+                                    </div>
+                                </div>
+
+                                {selectedContact.department_ids && selectedContact.department_ids.length > 0 && (
+                                    <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
+                                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-500 font-medium uppercase mb-1">Departamentos</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {selectedContact.department_ids.map(deptId => (
+                                                    <span key={deptId} className="text-xs px-2 py-1 rounded-md bg-white border border-slate-200 text-slate-600 font-medium shadow-sm">
+                                                        {departments[deptId] || 'Desconhecido'}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal de Confirmação de Limpar Conversa */}
             {showClearChatModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

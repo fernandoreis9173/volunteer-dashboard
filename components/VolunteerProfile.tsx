@@ -11,6 +11,49 @@ interface VolunteerProfileProps {
     leaders: any[];
 }
 
+const formatPhoneNumber = (value: string) => {
+    if (!value) return '';
+    const cleaned = value.replace(/\D/g, '');
+
+    // Logic for numbers starting with 55 (Country Code)
+    if (cleaned.startsWith('55') && cleaned.length > 2) {
+
+
+        const ddd = cleaned.substring(2, 4);
+        const rest = cleaned.substring(4);
+        if (cleaned.length <= 4) return `(+55) ${ddd}`;
+        if (cleaned.length <= 8) return `(+55) ${ddd} ${rest}`;
+        if (cleaned.length <= 12) return `(+55) ${ddd} ${rest.substring(0, 4)}-${rest.substring(4)}`;
+
+        // 13 digits (9 digit number)
+        return `(+55) ${ddd} ${rest.substring(0, 5)}-${rest.substring(5, 9)}`;
+    }
+
+    // Formato: 5511999999999 -> (+55) 11 99999-9999
+
+
+
+
+
+
+
+    // Formato: 551199999999 -> (+55) 11 9999-9999
+
+
+
+
+
+
+
+    // Fallback para formatação simples se não começar com 55 ou tiver tamanho diferente
+    const phoneNumber = cleaned.slice(0, 11);
+    const { length } = phoneNumber;
+    if (length <= 2) return `(${phoneNumber}`;
+    if (length <= 6) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
+    if (length <= 10) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
+    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7)}`;
+};
+
 const Tag: React.FC<{ children: React.ReactNode; color: 'yellow' | 'blue' }> = ({ children, color }) => {
     const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full";
     const colorClasses = {
@@ -127,7 +170,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
         if (volunteerData) {
             setFormData({
                 name: volunteerData.name || '',
-                phone: volunteerData.phone || ''
+                phone: formatPhoneNumber(volunteerData.phone) || ''
             });
             setSkills(parseArrayFromString(volunteerData.skills));
 
@@ -144,7 +187,12 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
     }, [volunteerData]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+        if (name === 'phone') {
+            setFormData(prev => ({ ...prev, [name]: formatPhoneNumber(value) }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -181,14 +229,23 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
             if (userId) {
                 const { error: profileUpdateError } = await supabase
                     .from('profiles')
-                    .update({ default_map_iframe: defaultMapIframe })
+                    .update({
+                        default_map_iframe: defaultMapIframe,
+                        name: formData.name,
+                        phone: cleanPhone
+                    })
                     .eq('id', userId);
 
                 if (profileUpdateError) throw profileUpdateError;
             }
 
             // FIX: Use the correct Supabase v2 API `updateUser` to update user metadata.
-            await supabase.auth.updateUser({ data: { name: formData.name } });
+            await supabase.auth.updateUser({
+                data: {
+                    name: formData.name,
+                    phone: cleanPhone
+                }
+            });
 
             await fetchProfileData();
             onUpdate();
@@ -339,7 +396,7 @@ const VolunteerProfile: React.FC<VolunteerProfileProps> = ({ session, onUpdate, 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-slate-700 dark:text-slate-300">
                             <p><strong>Nome:</strong> {volunteerData.name}</p>
                             <p><strong>Email:</strong> {volunteerData.email}</p>
-                            <p><strong>Telefone:</strong> {volunteerData.phone || 'Não informado'}</p>
+                            <p><strong>Telefone:</strong> {formatPhoneNumber(volunteerData.phone) || 'Não informado'}</p>
                             <p><strong>Disponibilidade:</strong> {availabilityList.map(item => item ? item.charAt(0).toUpperCase() + item.slice(1) : '').join(', ') || 'Nenhuma'}</p>
                         </div>
 
