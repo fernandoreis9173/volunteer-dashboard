@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { AuthView, Department } from '../types';
 import SmartSearch, { SearchItem } from './SmartSearch';
 import { getErrorMessage } from '../lib/utils';
+import { LogoMobileIcon } from '../assets/icons';
 
 // --- Helper Components & Functions ---
 
@@ -46,7 +47,7 @@ interface InputFieldProps {
 
 const InputField: React.FC<InputFieldProps> = ({ label, type, name, value, onChange, placeholder, required, className, readOnly }) => (
     <div className={className}>
-        <label htmlFor={name} className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor={name} className="block text-sm font-medium text-slate-700 ml-1 mb-1">
             {label} {required && <span className="text-red-500">*</span>}
         </label>
         <input
@@ -58,7 +59,7 @@ const InputField: React.FC<InputFieldProps> = ({ label, type, name, value, onCha
             placeholder={placeholder}
             required={required}
             readOnly={readOnly}
-            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900 read-only:bg-slate-100 read-only:cursor-not-allowed"
+            className="appearance-none block w-full px-4 py-3 border border-slate-200 rounded-full placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent read-only:bg-slate-50 read-only:cursor-not-allowed"
         />
     </div>
 );
@@ -78,7 +79,7 @@ const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onC
             id={name}
             checked={checked}
             onChange={onChange}
-            className="appearance-none h-4 w-4 bg-white border border-slate-400 rounded checked:bg-blue-600 checked:border-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
         />
         <label htmlFor={name} className="ml-2 block text-sm text-slate-700">{label}</label>
     </div>
@@ -97,20 +98,20 @@ const RemovableTag: React.FC<{ text: string; color: 'blue' | 'yellow'; onRemove:
 
     const colorClasses = {
         blue: {
-            container: 'bg-blue-100 text-blue-800 border-blue-200',
+            container: 'bg-blue-50 text-blue-700 border-blue-200',
             avatar: 'bg-blue-500 text-white',
-            buttonHover: 'hover:bg-blue-200'
+            buttonHover: 'hover:bg-blue-100'
         },
         yellow: {
-            container: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+            container: 'bg-yellow-50 text-yellow-700 border-yellow-200',
             avatar: 'bg-yellow-500 text-white',
-            buttonHover: 'hover:bg-yellow-200'
+            buttonHover: 'hover:bg-yellow-100'
         },
     };
     const classes = colorClasses[color];
 
     return (
-        <div className={`inline-flex items-center pl-1 pr-1.5 py-1 rounded-full text-sm font-semibold border ${classes.container}`}>
+        <div className={`inline-flex items-center pl-1 pr-1.5 py-1 rounded-full text-sm font-medium border ${classes.container}`}>
             <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${classes.avatar}`}>
                 {initials}
             </div>
@@ -160,7 +161,7 @@ const TagInputField: React.FC<{
 
     return (
         <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+            <label className="block text-sm font-medium text-slate-700 ml-1 mb-1">{label}</label>
             <div className="flex">
                 <input
                     type="text"
@@ -168,12 +169,12 @@ const TagInputField: React.FC<{
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="flex-grow w-full px-3 py-2 bg-white border border-slate-300 rounded-l-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400 text-slate-900"
+                    className="flex-grow w-full px-4 py-3 border border-slate-200 rounded-l-full placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <button
                     type="button"
                     onClick={handleAddTag}
-                    className="px-4 py-2 bg-white text-slate-700 font-bold rounded-r-lg hover:bg-slate-100 border-t border-r border-b border-slate-300"
+                    className="px-5 py-3 bg-slate-100 text-slate-700 font-bold rounded-r-full hover:bg-slate-200 border border-l-0 border-slate-200 transition-colors"
                 >
                     +
                 </button>
@@ -200,6 +201,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
     const [confirmPassword, setConfirmPassword] = useState('');
     const [fullName, setFullName] = useState('');
     const [phone, setPhone] = useState('');
+    const [birthDate, setBirthDate] = useState('');
     const [skills, setSkills] = useState<string[]>([]);
     const [availability, setAvailability] = useState({
         domingo: false, segunda: false, terca: false,
@@ -219,12 +221,9 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
             setIsValidating(true);
             setError(null);
 
-            // FIX: Updated to Supabase v2 async API `getSession` to match library version.
             const { data: { session } } = await supabase.auth.getSession();
 
             if (!session || session.user.aud !== 'authenticated') {
-                // FIX: If there's no valid session, redirect to login instead of showing error
-                // This handles the case where user completed registration and session was cleared
                 setIsValidating(false);
                 setAuthView('login');
                 return;
@@ -311,13 +310,11 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
         setSuccessMessage(null);
 
         try {
-            // FIX: Updated to Supabase v2 async API `getSession` to match library version.
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
                 throw new Error("Sessão de convite inválida ou expirada. Por favor, use o link do seu e-mail novamente.");
             }
 
-            // FIX: Updated to Supabase v2 API `updateUser` to match library version.
             let cleanPhone = phone.replace(/[^\d]/g, '');
             // Auto-add Brazil country code (55) if missing and looks like a valid BR number
             if (cleanPhone && !cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
@@ -329,7 +326,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 data: {
                     name: fullName,
                     phone: cleanPhone,
-                    status: 'Ativo', // CRITICAL FIX: Update status upon registration
+                    birth_date: birthDate,
+                    status: 'Ativo',
                 }
             });
 
@@ -355,6 +353,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                     email: user.email!,
                     name: fullName,
                     phone: cleanPhone,
+                    birth_date: birthDate || null,
                     availability: JSON.stringify(selectedAvailabilityDays),
                     initials: calculatedInitials,
                     skills: skills,
@@ -372,12 +371,14 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 }
 
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
-                // Update profile with phone number
+                // Update profile with phone number, email, and birth date
                 const { error: profileError } = await supabase
                     .from('profiles')
                     .update({
                         name: fullName,
                         phone: cleanPhone,
+                        email: user.email,
+                        birth_date: birthDate || null,
                     })
                     .eq('id', user.id);
 
@@ -388,14 +389,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
 
             setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login...');
 
-            // Sign out the user session from the invite link
-            // FIX: Explicitly set the scope to 'local' to resolve a 403 Forbidden error.
-            // After registration, the temporary invite session must be cleared locally
-            // to allow for a clean login. The default global scope was failing.
             await supabase.auth.signOut({ scope: 'local' });
-
-            // FIX: Redirect immediately to login after signOut
-            // The useEffect will detect no session and redirect automatically
             setAuthView('login');
 
         } catch (error: any) {
@@ -409,33 +403,27 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
 
     if (isValidating) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 p-4">
+            <div className="flex items-center justify-center min-h-screen bg-white p-4">
                 <p className="text-lg text-slate-500">Validando convite...</p>
             </div>
         );
     }
 
     return (
-        <div className="h-full w-full overflow-y-auto bg-gradient-to-br from-slate-50 to-slate-200">
-            <style>{`
-                input[type="checkbox"]:checked {
-                    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
-                }
-            `}</style>
-            <div className="min-h-full flex items-center justify-center p-4">
-                <div className="w-full max-w-md p-6 sm:p-8 space-y-8 bg-white rounded-2xl shadow-lg my-8">
-                    <div className="text-center">
-                        <div className="flex justify-center mb-4">
-                            <div className="p-3 bg-blue-600 text-white rounded-xl">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-                                </svg>
-                            </div>
+        <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
+            {/* Left Side - Form */}
+            <div className="w-full lg:w-1/2 flex flex-col items-center px-6 pt-8 pb-8 lg:p-24 bg-white relative z-10 min-h-screen overflow-y-auto">
+                <div className="w-full max-w-md space-y-6 my-auto">
+                    {/* Header */}
+                    <div className="text-left">
+                        <div className="flex items-center gap-3 mb-6">
+                            <img src={LogoMobileIcon} alt="Logo" className="h-12 w-12 lg:h-16 lg:w-16" />
+                            <span className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Volunteers</span>
                         </div>
-                        <h1 className="text-3xl font-bold text-slate-800">
+                        <h1 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
                             Complete seu Cadastro
                         </h1>
-                        <p className="mt-2 text-slate-500">
+                        <p className="text-slate-500 text-base lg:text-lg">
                             Você foi convidado para o Sistema de Voluntários. Preencha seus dados e crie uma senha para começar.
                         </p>
                     </div>
@@ -446,7 +434,7 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                             <p className="text-sm mt-1">{error}</p>
                         </div>
                     ) : (
-                        <form className="mt-8 space-y-6" onSubmit={handleAcceptInvite}>
+                        <form className="space-y-5" onSubmit={handleAcceptInvite}>
                             <InputField
                                 label="Nome Completo"
                                 type="text"
@@ -472,11 +460,19 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                 placeholder="(11) 99876-5432"
                                 required={isVolunteer}
                             />
+                            <InputField
+                                label="Data de Nascimento"
+                                type="date"
+                                name="birthDate"
+                                value={birthDate}
+                                onChange={(e) => setBirthDate(e.target.value)}
+                                placeholder="DD/MM/AAAA"
+                            />
 
                             {isVolunteer && (
                                 <>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Departamentos de Interesse</label>
+                                        <label className="block text-sm font-medium text-slate-700 ml-1 mb-1">Departamentos de Interesse</label>
                                         <SmartSearch
                                             items={departments.filter(d => d.id != null) as SearchItem[]}
                                             selectedItems={selectedDepartments.filter(d => d.id != null) as SearchItem[]}
@@ -506,8 +502,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                     />
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-2">Disponibilidade</label>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                        <label className="block text-sm font-medium text-slate-700 ml-1 mb-2">Disponibilidade</label>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                             <CheckboxField label="Domingo" name="domingo" checked={availability.domingo} onChange={handleCheckboxChange} />
                                             <CheckboxField label="Segunda" name="segunda" checked={availability.segunda} onChange={handleCheckboxChange} />
                                             <CheckboxField label="Terça" name="terca" checked={availability.terca} onChange={handleCheckboxChange} />
@@ -540,16 +536,68 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                 required
                             />
 
-                            {error && <p className="text-sm text-red-600 text-center pt-4">{error}</p>}
-                            {successMessage && <p className="text-sm text-green-600 text-center pt-4">{successMessage}</p>}
+                            {error && <p className="text-sm text-red-600 text-center bg-red-50 p-3 rounded-lg">{error}</p>}
+                            {successMessage && <p className="text-sm text-green-600 text-center bg-green-50 p-3 rounded-lg">{successMessage}</p>}
 
                             <div className="pt-2">
-                                <button type="submit" disabled={loading || !!successMessage} className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400">
+                                <button
+                                    type="submit"
+                                    disabled={loading || !!successMessage}
+                                    className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-full text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 shadow-lg shadow-blue-600/30 transition-all hover:shadow-xl hover:-translate-y-0.5"
+                                >
                                     {loading ? 'Criando Conta...' : 'Criar Conta'}
                                 </button>
                             </div>
                         </form>
                     )}
+                </div>
+            </div>
+
+            {/* Right Side - Visuals */}
+            <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-blue-600 to-indigo-700 relative overflow-hidden flex-col justify-center items-center p-12 text-white">
+                {/* Abstract Background Shapes */}
+                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-white opacity-5 rounded-full"></div>
+                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-400 opacity-10 rounded-full"></div>
+
+                {/* Central Graphic */}
+                <div className="relative w-full max-w-lg aspect-square mb-12 flex items-center justify-center">
+                    <div className="relative z-10 w-64 h-64 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 flex items-center justify-center shadow-2xl">
+                        <div className="w-48 h-48 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                            <img src={LogoMobileIcon} className="h-24 w-24" alt="Logo" />
+                        </div>
+                    </div>
+
+                    {/* Floating Icon Cards */}
+                    <div className="absolute top-10 right-0 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-3">
+                        <div className="bg-blue-100 p-3 rounded-xl">
+                            <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Bem-vindo</p>
+                            <p className="text-lg font-bold text-slate-900">Novo Membro</p>
+                        </div>
+                    </div>
+
+                    <div className="absolute bottom-20 left-0 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-3">
+                        <div className="bg-green-100 p-3 rounded-xl">
+                            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Cadastro</p>
+                            <p className="text-lg font-bold text-slate-900">Seguro</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="relative z-10 text-center max-w-md">
+                    <h2 className="text-3xl font-bold mb-4">Junte-se a Nós</h2>
+                    <p className="text-blue-100 text-lg leading-relaxed">
+                        Complete seu cadastro e faça parte de uma comunidade dedicada a fazer a diferença.
+                    </p>
                 </div>
             </div>
         </div>
