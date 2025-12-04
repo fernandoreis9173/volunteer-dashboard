@@ -8,7 +8,23 @@ import { getErrorMessage } from '../lib/utils';
 
 const formatPhoneNumber = (value: string) => {
     if (!value) return '';
-    const phoneNumber = value.replace(/\D/g, '').slice(0, 11);
+    const cleaned = value.replace(/\D/g, '');
+
+    // Logic for numbers starting with 55 (Country Code)
+    if (cleaned.startsWith('55') && cleaned.length > 2) {
+        const ddd = cleaned.substring(2, 4);
+        const rest = cleaned.substring(4);
+
+        if (cleaned.length <= 4) return `(+55) ${ddd}`;
+        if (cleaned.length <= 8) return `(+55) ${ddd} ${rest}`;
+        if (cleaned.length <= 12) return `(+55) ${ddd} ${rest.substring(0, 4)}-${rest.substring(4)}`;
+
+        // 13 digits (9 digit number)
+        return `(+55) ${ddd} ${rest.substring(0, 5)}-${rest.substring(5, 9)}`;
+    }
+
+    // Fallback (Standard DDD + Number)
+    const phoneNumber = cleaned.slice(0, 11);
     const { length } = phoneNumber;
     if (length <= 2) return `(${phoneNumber}`;
     if (length <= 6) return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
@@ -356,10 +372,18 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 }
 
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
-                // FIX: The profile for admins and leaders is created server-side by the 'invite-user' function.
-                // This client-side upsert was redundant and caused a permission error due to RLS policies.
-                // It is now removed, as only the auth user data needs updating at this stage.
-                console.log(`Admin/Leader registration for ${user.email}. Profile was created during invitation.`);
+                // Update profile with phone number
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .update({
+                        name: fullName,
+                        phone: cleanPhone,
+                    })
+                    .eq('id', user.id);
+
+                if (profileError) {
+                    console.error("Error updating profile:", profileError);
+                }
             }
 
             setSuccessMessage('Cadastro confirmado com sucesso! Redirecionando para a tela de login...');

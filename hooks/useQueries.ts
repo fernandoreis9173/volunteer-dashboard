@@ -394,24 +394,32 @@ export const useInvalidateQueries = () => {
 
 // Função auxiliar para fetch de usuários (compartilhada)
 export const fetchAdminUsers = async () => {
-    // Chamar função RPC que busca admins e líderes com segurança
-    const { data, error } = await supabase
-        .rpc('get_admin_users');
+    // Use the 'list-users' Edge Function to get full user details including metadata and status
+    const { data, error } = await supabase.functions.invoke('list-users');
 
     if (error) throw error;
 
-    // Formatar para manter compatibilidade com o formato anterior
-    return (data || []).map((user: any) => ({
+    const allUsers = data?.users || [];
+
+    // Filter for admins and leaders
+    const adminUsers = allUsers.filter((user: any) => {
+        const role = user.user_metadata?.role;
+        return role === 'admin' || role === 'leader' || role === 'lider';
+    });
+
+    // Map to the expected format
+    return adminUsers.map((user: any) => ({
         id: user.id,
         email: user.email || '',
-        phone: user.phone,
+        phone: user.phone || user.user_metadata?.phone,
         created_at: user.created_at,
         user_metadata: {
-            name: user.name,
-            role: user.role,
-            avatar_url: user.avatar_url
+            name: user.user_metadata?.name,
+            role: user.user_metadata?.role,
+            avatar_url: user.user_metadata?.avatar_url
         },
-        app_status: 'Ativo' // Profiles sempre ativos
+        // Use the status from metadata, or fall back to 'Pendente' if not confirmed/signed in
+        app_status: user.user_metadata?.status || (user.confirmed_at || user.last_sign_in_at ? 'Ativo' : 'Pendente')
     }));
 };
 
