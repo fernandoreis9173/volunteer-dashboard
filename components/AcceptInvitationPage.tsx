@@ -4,6 +4,7 @@ import { AuthView, Department } from '../types';
 import SmartSearch, { SearchItem } from './SmartSearch';
 import { getErrorMessage } from '../lib/utils';
 import { LogoMobileIcon } from '../assets/icons';
+import DatePicker from './DatePicker';
 
 // --- Helper Components & Functions ---
 
@@ -460,12 +461,11 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                                 placeholder="(11) 99876-5432"
                                 required={isVolunteer}
                             />
-                            <InputField
+                            <DatePicker
                                 label="Data de Nascimento"
-                                type="date"
                                 name="birthDate"
                                 value={birthDate}
-                                onChange={(e) => setBirthDate(e.target.value)}
+                                onChange={setBirthDate}
                                 placeholder="DD/MM/AAAA"
                             />
 
@@ -555,46 +555,22 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
 
             {/* Right Side - Visuals */}
             <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-blue-600 to-indigo-700 relative overflow-hidden flex-col justify-center items-center p-12 text-white">
-                {/* Abstract Background Shapes */}
-                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-white opacity-5 rounded-full"></div>
-                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-blue-400 opacity-10 rounded-full"></div>
+                {/* Simple Background Elements */}
+                <div className="absolute inset-0 opacity-10">
+                    <div className="absolute top-0 right-0 w-96 h-96 bg-white rounded-full -mr-48 -mt-48"></div>
+                    <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-400 rounded-full -ml-40 -mb-40"></div>
+                </div>
 
-                {/* Central Graphic */}
-                <div className="relative w-full max-w-lg aspect-square mb-12 flex items-center justify-center">
-                    <div className="relative z-10 w-64 h-64 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 flex items-center justify-center shadow-2xl">
-                        <div className="w-48 h-48 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                            <img src={LogoMobileIcon} className="h-24 w-24" alt="Logo" />
-                        </div>
-                    </div>
-
-                    {/* Floating Icon Cards */}
-                    <div className="absolute top-10 right-0 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-3">
-                        <div className="bg-blue-100 p-3 rounded-xl">
-                            <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Bem-vindo</p>
-                            <p className="text-lg font-bold text-slate-900">Novo Membro</p>
-                        </div>
-                    </div>
-
-                    <div className="absolute bottom-20 left-0 bg-white text-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-3">
-                        <div className="bg-green-100 p-3 rounded-xl">
-                            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Cadastro</p>
-                            <p className="text-lg font-bold text-slate-900">Seguro</p>
-                        </div>
+                {/* Central Logo */}
+                <div className="relative z-10 mb-12">
+                    <div className="w-32 h-32 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
+                        <img src={LogoMobileIcon} className="h-16 w-16" alt="Logo" />
                     </div>
                 </div>
 
+                {/* Text Content */}
                 <div className="relative z-10 text-center max-w-md">
-                    <h2 className="text-3xl font-bold mb-4">Junte-se a Nós</h2>
+                    <h2 className="text-4xl font-bold mb-4">Junte-se a Nós</h2>
                     <p className="text-blue-100 text-lg leading-relaxed">
                         Complete seu cadastro e faça parte de uma comunidade dedicada a fazer a diferença.
                     </p>
