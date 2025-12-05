@@ -1678,7 +1678,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
 
     return (
 
-        <div className="w-full h-full overflow-hidden bg-white relative flex flex-col">
+        <div className="fixed inset-0 overflow-hidden bg-white flex flex-col">
             <style>{`
                 /* Scrollbar Hover Only */
                 .scrollbar-hover-only::-webkit-scrollbar {
