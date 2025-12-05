@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface DatePickerProps {
     label: string;
@@ -11,9 +11,7 @@ interface DatePickerProps {
 }
 
 const DatePicker: React.FC<DatePickerProps> = ({ label, name, value, onChange, placeholder, required, className }) => {
-    const [isOpen, setIsOpen] = useState(false);
     const [displayValue, setDisplayValue] = useState('');
-    const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Parse value to display format
     useEffect(() => {
@@ -24,23 +22,6 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, name, value, onChange, p
             setDisplayValue('');
         }
     }, [value]);
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-
-        if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [isOpen]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         let input = e.target.value.replace(/\D/g, '');
@@ -66,13 +47,8 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, name, value, onChange, p
         }
     };
 
-    const handleNativeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        onChange(e.target.value);
-        setIsOpen(false);
-    };
-
     return (
-        <div className={className} ref={dropdownRef}>
+        <div className={className}>
             <label htmlFor={name} className="block text-sm font-medium text-slate-700 ml-1 mb-1">
                 {label} {required && <span className="text-red-500">*</span>}
             </label>
@@ -83,7 +59,6 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, name, value, onChange, p
                     name={name}
                     value={displayValue}
                     onChange={handleInputChange}
-                    onClick={() => setIsOpen(!isOpen)}
                     placeholder={placeholder || 'DD/MM/AAAA'}
                     required={required}
                     maxLength={10}
@@ -94,18 +69,6 @@ const DatePicker: React.FC<DatePickerProps> = ({ label, name, value, onChange, p
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                 </div>
-
-                {isOpen && (
-                    <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-2xl shadow-lg p-4">
-                        <p className="text-xs text-slate-500 mb-2">Selecione uma data:</p>
-                        <input
-                            type="date"
-                            value={value}
-                            onChange={handleNativeChange}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        />
-                    </div>
-                )}
             </div>
         </div>
     );

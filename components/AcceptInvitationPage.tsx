@@ -413,8 +413,8 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
     return (
         <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
             {/* Left Side - Form */}
-            <div className="w-full lg:w-1/2 flex flex-col items-center px-6 pt-8 pb-8 lg:p-24 bg-white relative z-10 min-h-screen overflow-y-auto">
-                <div className="w-full max-w-md space-y-6 my-auto">
+            <div className="w-full lg:w-1/2 flex flex-col items-center px-6 pt-8 pb-8 lg:p-12 bg-white relative z-10 min-h-screen overflow-y-auto">
+                <div className="w-full max-w-md space-y-6">{/* Removed my-auto to allow natural scroll */}
                     {/* Header */}
                     <div className="text-left">
                         <div className="flex items-center gap-3 mb-6">
