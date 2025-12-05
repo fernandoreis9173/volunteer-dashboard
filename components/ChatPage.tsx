@@ -1699,7 +1699,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     };
 
     return (
-    return (
+
         <div className="h-full bg-white relative">
             <style>{`
                 /* Scrollbar Hover Only */
