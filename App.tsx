@@ -125,6 +125,7 @@ const App: React.FC = () => {
         if (typeof window !== 'undefined' && window.visualViewport) {
             const handleResize = () => {
                 setViewportHeight(`${window.visualViewport.height}px`);
+                window.scrollTo(0, 0);
             };
 
             window.visualViewport.addEventListener('resize', handleResize);
@@ -904,7 +905,7 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className="flex bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300" style={{ height: viewportHeight, minHeight: viewportHeight }}>
+        <div className="absolute inset-0 w-screen overflow-hidden flex bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300" style={{ height: viewportHeight }}>
             <Sidebar
                 activePage={activePage}
                 onNavigate={handleNavigate}
