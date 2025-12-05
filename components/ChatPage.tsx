@@ -487,33 +487,11 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     const [departments, setDepartments] = useState<Record<number, string>>({});
 
     // Fix for mobile viewport height
+    // Fix removed: Using 100dvh instead of JS calculation
     useEffect(() => {
+        // Legacy fix kept for very old browsers if needed, but 100dvh is preferred
         const setVH = () => {
-            // Use visualViewport if available (better for mobile browsers)
-            const height = window.visualViewport?.height || window.innerHeight;
-            const vh = height * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        };
-
-        setVH();
-
-        // Listen to both resize and visualViewport events
-        window.addEventListener('resize', setVH);
-        window.addEventListener('orientationchange', setVH);
-
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', setVH);
-            window.visualViewport.addEventListener('scroll', setVH);
-        }
-
-        return () => {
-            window.removeEventListener('resize', setVH);
-            window.removeEventListener('orientationchange', setVH);
-
-            if (window.visualViewport) {
-                window.visualViewport.removeEventListener('resize', setVH);
-                window.visualViewport.removeEventListener('scroll', setVH);
-            }
+            // ...
         };
     }, []);
 
@@ -1702,7 +1680,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
 
         <div
             className="w-full overflow-x-hidden bg-white relative"
-            style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+            style={{ height: '100dvh' }}
         >
             <style>{`
                 /* Scrollbar Hover Only */
@@ -2173,7 +2151,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             </div>
 
                             {/* Input de Mensagem */}
-                            <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-slate-200 bg-white flex-shrink-0">
+                            <div className="p-4 pb-8 md:pb-4 border-t border-slate-200 bg-white flex-shrink-0" style={{ paddingBottom: 'max(2rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
                                 {!whatsappEnabled ? (
                                     <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
                                         <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2377,7 +2355,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             </div>
 
                             {/* Input de Mensagem do Grupo */}
-                            <div className="p-4 border-t border-slate-200 bg-white flex-shrink-0">
+                            <div className="p-4 pb-8 md:pb-4 border-t border-slate-200 bg-white flex-shrink-0" style={{ paddingBottom: 'max(2rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
                                 {!whatsappEnabled ? (
                                     <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
                                         <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
