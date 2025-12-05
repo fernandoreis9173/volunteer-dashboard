@@ -1679,7 +1679,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     return (
 
         <div
-            className="w-full overflow-x-hidden bg-white relative flex flex-col"
+            className="w-full overflow-x-hidden bg-white relative flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
             style={{ height: '100dvh', minHeight: '100dvh', maxHeight: '100dvh' }}
         >
             <style>{`
@@ -1773,7 +1773,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                 {/* Sidebar - Lista de Contatos */}
                 <div className={`w-full md:w-96 border-r border-slate-200 flex-col bg-white ${selectedContact || selectedGroup ? 'hidden md:flex' : 'flex'}`}>
                     {/* Header */}
-                    <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-slate-200">
+                    <div className="p-4 border-b border-slate-200">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-2xl font-bold text-slate-800">Chat</h2>
                             {(userRole === 'admin' || ['leader', 'lider', 'líder'].includes(userRole?.toLowerCase())) && (
@@ -1974,7 +1974,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                     {selectedContact ? (
                         <div className="flex flex-col h-full min-h-0">
                             {/* Header do Chat */}
-                            <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                            <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => {
@@ -2151,7 +2151,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             </div>
 
                             {/* Input de Mensagem */}
-                            <div className="p-4 pb-8 md:pb-4 border-t border-slate-200 bg-white flex-shrink-0" style={{ paddingBottom: 'max(2rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
+                            <div className="p-4 border-t border-slate-200 bg-white flex-shrink-0">
                                 {!whatsappEnabled ? (
                                     <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
                                         <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2192,7 +2192,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                     ) : selectedGroup ? (
                         <div className="flex flex-col h-full min-h-0">
                             {/* Header do Grupo */}
-                            <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                            <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => {
@@ -2355,7 +2355,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             </div>
 
                             {/* Input de Mensagem do Grupo */}
-                            <div className="p-4 pb-8 md:pb-4 border-t border-slate-200 bg-white flex-shrink-0" style={{ paddingBottom: 'max(2rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
+                            <div className="p-4 border-t border-slate-200 bg-white flex-shrink-0">
                                 {!whatsappEnabled ? (
                                     <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
                                         <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
