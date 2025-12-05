@@ -123,18 +123,34 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (typeof window !== 'undefined' && window.visualViewport) {
+            let timeoutId: NodeJS.Timeout;
+
             const handleResize = () => {
-                setViewportHeight(`${window.visualViewport.height}px`);
-                window.scrollTo(0, 0);
+                // Clear any pending updates
+                if (timeoutId) clearTimeout(timeoutId);
+
+                // Debounce to avoid too many updates
+                timeoutId = setTimeout(() => {
+                    const height = window.visualViewport!.height;
+                    setViewportHeight(`${height}px`);
+
+                    // Force scroll to top to prevent iOS Safari from hiding content
+                    window.scrollTo(0, 0);
+                    document.body.scrollTop = 0;
+                    document.documentElement.scrollTop = 0;
+                }, 50);
             };
 
             window.visualViewport.addEventListener('resize', handleResize);
             window.visualViewport.addEventListener('scroll', handleResize);
+
+            // Initial call
             handleResize();
 
             return () => {
-                window.visualViewport.removeEventListener('resize', handleResize);
-                window.visualViewport.removeEventListener('scroll', handleResize);
+                if (timeoutId) clearTimeout(timeoutId);
+                window.visualViewport!.removeEventListener('resize', handleResize);
+                window.visualViewport!.removeEventListener('scroll', handleResize);
             };
         }
     }, []);

@@ -63,6 +63,26 @@
           -webkit-overflow-scrolling: touch;
         }
       }
+
+      /* Safari iOS specific fixes for keyboard */
+      html {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        height: 100%;
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+      }
+
+      /* Prevent zoom on input focus */
+      input,
+      textarea,
+      select {
+        font-size: 16px !important;
+      }
     }
   </style>
 
