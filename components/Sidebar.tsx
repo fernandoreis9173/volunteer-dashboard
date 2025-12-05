@@ -117,7 +117,6 @@ const NavItem: React.FC<NavItemProps> = ({ page, label, icon, activePage, onNavi
 
 const allNavItems: NavItemData[] = [
   { page: 'dashboard', label: 'Dashboard', icon: <img src={DashboardIcon} alt="Dashboard" />, roles: ['admin', 'leader', 'volunteer'] },
-  { page: 'chat', label: 'Chat', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>, roles: ['leader'] },
   { page: 'notifications', label: 'Notificações', icon: <img src={NotificationIconAsset} alt="Notificações" />, roles: ['leader', 'volunteer'] },
   { page: 'history', label: 'Histórico', icon: <img src={HistoryIconAsset} alt="Histórico" />, roles: ['volunteer'] },
   { page: 'volunteers', label: 'Voluntários', icon: <img src={VolunteerIcon} alt="Voluntários" />, roles: ['admin', 'leader'] },
@@ -125,6 +124,7 @@ const allNavItems: NavItemData[] = [
   { page: 'departments', label: 'Departamentos', icon: <img src={DepartamentsIconAsset} alt="Departamentos" />, roles: ['admin'] },
   { page: 'events', label: 'Eventos', icon: <img src={EventosIconAsset} alt="Eventos (Lista)" />, roles: ['admin', 'leader'] },
   { page: 'calendar', label: 'Calendário', icon: <img src={CalendarIconAsset} alt="Calendário" />, roles: ['admin', 'leader'] },
+  { page: 'chat', label: 'Chat', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>, roles: ['leader'] },
   { page: 'timelines', label: 'Cronogramas', icon: <img src={CronogramasIconAsset} alt="Calendário" />, roles: ['admin'] },
   { page: 'frequency', label: 'Frequência', icon: <img src={FrequenciaIconAsset} alt="Frequência" />, roles: ['admin'] },
 ];
