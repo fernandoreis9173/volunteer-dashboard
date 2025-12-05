@@ -1699,21 +1699,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     };
 
     return (
-        <div className="-m-4 sm:-m-6 lg:-m-8 h-screen bg-white relative" style={{ height: '100dvh' }}>{/* Using inline style for dvh with fallback */}
+    return (
+        <div className="h-full bg-white relative">
             <style>{`
-                /* Mobile viewport height fix */
-                @supports (height: 100dvh) {
-                    .mobile-viewport-fix {
-                        height: 100dvh !important;
-                    }
-                }
-                @supports not (height: 100dvh) {
-                    .mobile-viewport-fix {
-                        height: 100vh !important;
-                        height: calc(var(--vh, 1vh) * 100) !important;
-                    }
-                }
-                
                 /* Scrollbar Hover Only */
                 .scrollbar-hover-only::-webkit-scrollbar {
                     height: 6px;

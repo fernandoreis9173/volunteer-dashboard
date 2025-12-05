@@ -927,7 +927,7 @@ const App: React.FC = () => {
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {activePage !== 'chat' && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
-                <main className={`flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-900 ${activePage === 'chat' ? 'overflow-y-hidden' : 'overflow-y-auto'} ${activePage === 'calendar' ? 'p-0' : 'p-4 sm:p-6 lg:p-8'}`}>
+                <main className={`flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-900 ${activePage === 'chat' ? 'overflow-y-hidden' : 'overflow-y-auto'} ${(activePage === 'calendar' || activePage === 'chat') ? 'p-0' : 'p-4 sm:p-6 lg:p-8'}`}>
                     {renderPage()}
                 </main>
             </div>
