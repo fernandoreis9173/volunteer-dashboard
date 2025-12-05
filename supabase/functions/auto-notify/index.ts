@@ -151,31 +151,51 @@ serve(async (req) => {
                 // Enviar mensagens
                 // Enviar WhatsApp se configurado
                 if (whatsappSettings) { // Usar whatsappSettings que já está definido
-                    for (const volunteer of volunteers) {
-                        const phone = volunteer.volunteers?.phone; // Apenas se houver volunteers aninhado
-                        const name = volunteer.volunteers?.name || 'Voluntário';
+                    // 🚀 OTIMIZAÇÃO: Processar em PARALELO ao invés de sequencial
+                    // Isso permite enviar para 300+ voluntários sem timeout
+                    const volunteersWithPhone = volunteers.filter(v => v.volunteers?.phone);
 
-                        if (phone) {
-                            // Usar template do banco ou fallback para mensagem padrão
-                            const template = type === '24h' ? template24h : template2h;
-                            let waMessage = '';
+                    if (volunteersWithPhone.length > 0) {
+                        console.log(`Enviando WhatsApp para ${volunteersWithPhone.length} voluntários em paralelo...`);
 
-                            if (template) {
-                                // Substituir variáveis no template
-                                waMessage = template.message_content
-                                    .replace('{nome}', volunteer.volunteers.name.split(' ')[0])
-                                    .replace('{evento}', event.name)
-                                    .replace('{horario}', event.start_time);
-                            } else {
-                                // Fallback para mensagem padrão
-                                waMessage = type === '24h'
-                                    ? `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: Você está escalado para o evento *${event.name}* amanhã às ${event.start_time}.`
-                                    : `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: O evento *${event.name}* começa em breve (às ${event.start_time}).`;
+                        // Preparar template
+                        const template = type === '24h' ? template24h : template2h;
+
+                        // Enviar TODAS as mensagens em paralelo
+                        const whatsappPromises = volunteersWithPhone.map(async (volunteer) => {
+                            try {
+                                const phone = volunteer.volunteers.phone;
+                                const name = volunteer.volunteers.name || 'Voluntário';
+                                let waMessage = '';
+
+                                if (template) {
+                                    // Substituir variáveis no template
+                                    waMessage = template.message_content
+                                        .replace('{nome}', volunteer.volunteers.name.split(' ')[0])
+                                        .replace('{evento}', event.name)
+                                        .replace('{horario}', event.start_time);
+                                } else {
+                                    // Fallback para mensagem padrão
+                                    waMessage = type === '24h'
+                                        ? `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: Você está escalado para o evento *${event.name}* amanhã às ${event.start_time}.`
+                                        : `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: O evento *${event.name}* começa em breve (às ${event.start_time}).`;
+                                }
+
+                                await sendWhatsAppMessage(whatsappSettings, phone, waMessage, supabaseClient);
+                                return { success: true, phone };
+                            } catch (error) {
+                                console.error(`Erro ao enviar WhatsApp para voluntário ${volunteer.volunteer_id}:`, error);
+                                return { success: false, phone: volunteer.volunteers?.phone, error };
                             }
+                        });
 
-                            await sendWhatsAppMessage(whatsappSettings, phone, waMessage, supabaseClient); // Ajustado para a assinatura da função
-                            sentCount++; // Contar cada mensagem WhatsApp enviada
-                        }
+                        // Aguardar TODAS as mensagens serem enviadas
+                        const results = await Promise.all(whatsappPromises);
+                        const successCount = results.filter(r => r.success).length;
+                        const failCount = results.length - successCount;
+
+                        sentCount += successCount;
+                        console.log(`WhatsApp enviado: ${successCount} sucesso, ${failCount} falhas`);
                     }
                 }
 
