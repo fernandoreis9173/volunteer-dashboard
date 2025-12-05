@@ -884,7 +884,12 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className="flex h-screen bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300">
+        <div className="flex h-screen bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300" style={{
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            paddingLeft: 'env(safe-area-inset-left, 0px)',
+            paddingRight: 'env(safe-area-inset-right, 0px)'
+        }}>
             <Sidebar
                 activePage={activePage}
                 onNavigate={handleNavigate}
