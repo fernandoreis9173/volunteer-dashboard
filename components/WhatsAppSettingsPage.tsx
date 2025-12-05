@@ -199,12 +199,45 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
             }
 
             console.log('Templates carregados com sucesso:', data);
-            if (data) setTemplates(data);
+            if (data) {
+                setTemplates(data);
+
+                // Verificar se o template dashboard_message existe, se não, criar
+                const hasDashboardTemplate = data.some(t => t.template_type === 'dashboard_message');
+                if (!hasDashboardTemplate) {
+                    await createDashboardTemplate();
+                }
+            }
         } catch (error: any) {
             console.error('Erro ao carregar templates:', error);
             setMessage({ type: 'error', text: `Erro ao carregar templates de mensagens: ${error.message || 'Erro desconhecido'}` });
         } finally {
             setIsLoadingTemplates(false);
+        }
+    };
+
+    const createDashboardTemplate = async () => {
+        try {
+            const { error } = await supabase
+                .from('whatsapp_message_templates')
+                .insert({
+                    template_type: 'dashboard_message',
+                    message_content: 'Mensagem do Dashboard',
+                    variables: [],
+                    active: true
+                });
+
+            if (error) throw error;
+
+            // Recarregar templates após criar
+            const { data } = await supabase
+                .from('whatsapp_message_templates')
+                .select('*')
+                .order('template_type');
+
+            if (data) setTemplates(data);
+        } catch (error: any) {
+            console.error('Erro ao criar template dashboard:', error);
         }
     };
 
@@ -1203,6 +1236,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                                         '2h_before': 'WhatsApp: Notificação 2h Antes',
                                         'attendance_confirmed': 'WhatsApp: Confirmação de Presença',
                                         'new_schedule': 'WhatsApp: Nova Escala',
+                                        'dashboard_message': 'Mensagem do Dashboard',
                                         'push_24h_before': 'Push: Lembrete 24h Antes',
                                         'push_2h_before': 'Push: Lembrete 2h Antes',
                                         'push_attendance_confirmed': 'Push: Presença Confirmada'
@@ -1213,6 +1247,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                                         '2h_before': 'Mensagem WhatsApp enviada 2 horas antes do evento',
                                         'attendance_confirmed': 'Mensagem WhatsApp ao confirmar presença',
                                         'new_schedule': 'Mensagem WhatsApp enviada ao escalar um voluntário',
+                                        'dashboard_message': 'Template de mensagem personalizada para envio manual via chat',
                                         'push_24h_before': 'Notificação push (celular) enviada 24 horas antes',
                                         'push_2h_before': 'Notificação push (celular) enviada 2 horas antes',
                                         'push_attendance_confirmed': 'Notificação push (celular) ao confirmar presença'
