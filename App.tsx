@@ -883,8 +883,28 @@ const App: React.FC = () => {
         return <PermissionDeniedPage onNavigate={handleNavigate} />;
     }
 
+    // Hook para ajustar altura no mobile com teclado virtual
+    const [viewportHeight, setViewportHeight] = useState('100%');
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.visualViewport) {
+            const handleResize = () => {
+                setViewportHeight(`${window.visualViewport.height}px`);
+            };
+
+            window.visualViewport.addEventListener('resize', handleResize);
+            window.visualViewport.addEventListener('scroll', handleResize);
+            handleResize();
+
+            return () => {
+                window.visualViewport.removeEventListener('resize', handleResize);
+                window.visualViewport.removeEventListener('scroll', handleResize);
+            };
+        }
+    }, []);
+
     return (
-        <div className="flex h-screen bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300">
+        <div className="flex bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300" style={{ height: viewportHeight, minHeight: viewportHeight }}>
             <Sidebar
                 activePage={activePage}
                 onNavigate={handleNavigate}
@@ -907,7 +927,7 @@ const App: React.FC = () => {
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {activePage !== 'chat' && <Header onMenuClick={() => setIsSidebarOpen(true)} />}
-                <main className={`flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900 ${activePage === 'calendar' ? 'p-0' : 'p-4 sm:p-6 lg:p-8'}`}>
+                <main className={`flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-900 ${activePage === 'chat' ? 'overflow-y-hidden' : 'overflow-y-auto'} ${activePage === 'calendar' ? 'p-0' : 'p-4 sm:p-6 lg:p-8'}`}>
                     {renderPage()}
                 </main>
             </div>
