@@ -486,6 +486,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     const [memberToRemove, setMemberToRemove] = useState<{ id: string, phone: string, name: string } | null>(null);
     const [departments, setDepartments] = useState<Record<number, string>>({});
 
+    // Fix for mobile viewport height
+    useEffect(() => {
+        const setVH = () => {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        };
+
+        setVH();
+        window.addEventListener('resize', setVH);
+        window.addEventListener('orientationchange', setVH);
+
+        return () => {
+            window.removeEventListener('resize', setVH);
+            window.removeEventListener('orientationchange', setVH);
+        };
+    }, []);
+
     useEffect(() => {
         if (selectedContact) {
             checkActiveSession(selectedContact.id);
@@ -1668,8 +1685,21 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     };
 
     return (
-        <div className="-m-4 sm:-m-6 lg:-m-8 h-[100dvh] bg-white relative">{/* Using dvh for mobile keyboard support */}
+        <div className="-m-4 sm:-m-6 lg:-m-8 h-screen bg-white relative" style={{ height: '100dvh' }}>{/* Using inline style for dvh with fallback */}
             <style>{`
+                /* Mobile viewport height fix */
+                @supports (height: 100dvh) {
+                    .mobile-viewport-fix {
+                        height: 100dvh !important;
+                    }
+                }
+                @supports not (height: 100dvh) {
+                    .mobile-viewport-fix {
+                        height: 100vh !important;
+                        height: calc(var(--vh, 1vh) * 100) !important;
+                    }
+                }
+                
                 /* Scrollbar Hover Only */
                 .scrollbar-hover-only::-webkit-scrollbar {
                     height: 6px;
