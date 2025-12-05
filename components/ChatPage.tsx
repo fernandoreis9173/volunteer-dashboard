@@ -1679,8 +1679,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     return (
 
         <div
-            className="w-full overflow-x-hidden bg-white relative"
-            style={{ height: '100dvh' }}
+            className="w-full overflow-x-hidden bg-white relative flex flex-col"
+            style={{ height: '100dvh', minHeight: '100dvh', maxHeight: '100dvh' }}
         >
             <style>{`
                 /* Scrollbar Hover Only */
@@ -1769,7 +1769,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                 </div>
             )}
 
-            <div className="flex h-full">
+            <div className="flex h-full min-h-0 flex-1">
                 {/* Sidebar - Lista de Contatos */}
                 <div className={`w-full md:w-96 border-r border-slate-200 flex-col bg-white ${selectedContact || selectedGroup ? 'hidden md:flex' : 'flex'}`}>
                     {/* Header */}
@@ -1970,9 +1970,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                 </div>
 
                 {/* Área de Chat */}
-                <div className={`flex-1 flex-col h-full ${!selectedContact && !selectedGroup ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`flex-1 flex-col min-h-0 ${!selectedContact && !selectedGroup ? 'hidden md:flex' : 'flex'}`}>
                     {selectedContact ? (
-                        <div className="flex flex-col h-full">
+                        <div className="flex flex-col h-full min-h-0">
                             {/* Header do Chat */}
                             <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-3">
@@ -2070,7 +2070,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             </div>
 
                             {/* Mensagens */}
-                            <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+                            <div className="flex-1 overflow-y-auto p-4 bg-slate-50 min-h-0">
                                 {messages.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
                                         <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2190,7 +2190,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             </div>
                         </div>
                     ) : selectedGroup ? (
-                        <div className="flex flex-col h-full">
+                        <div className="flex flex-col h-full min-h-0">
                             {/* Header do Grupo */}
                             <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-3">
@@ -2265,7 +2265,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             </div>
 
                             {/* Mensagens do Grupo */}
-                            <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+                            <div className="flex-1 overflow-y-auto p-4 bg-slate-50 min-h-0">
                                 {groupMessages.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
                                         <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
