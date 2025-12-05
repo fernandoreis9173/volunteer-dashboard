@@ -905,7 +905,7 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className="absolute inset-0 w-screen overflow-hidden flex bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300" style={{ height: viewportHeight }}>
+        <div className="absolute inset-0 w-full overflow-hidden flex bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300" style={{ height: viewportHeight }}>
             <Sidebar
                 activePage={activePage}
                 onNavigate={handleNavigate}

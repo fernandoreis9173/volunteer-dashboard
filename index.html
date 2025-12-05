@@ -34,6 +34,38 @@
   <!-- TailwindCSS -->
   <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
 
+  <!-- PWA Standalone Mode Fixes -->
+  <style>
+    /* Prevent horizontal overflow in PWA standalone mode */
+    @media all and (display-mode: standalone) {
+
+      html,
+      body {
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
+        position: relative !important;
+      }
+
+      body {
+        overscroll-behavior: none;
+      }
+
+      #root {
+        overflow-x: hidden !important;
+        max-width: 100% !important;
+      }
+    }
+
+    /* iOS PWA specific fixes */
+    @supports (-webkit-touch-callout: none) {
+      @media all and (display-mode: standalone) {
+        * {
+          -webkit-overflow-scrolling: touch;
+        }
+      }
+    }
+  </style>
+
   <!-- Fix passive event listeners and suppress logs BEFORE any other code runs -->
   <script>
     // Suppress Supabase debug logs (all console methods)
