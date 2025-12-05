@@ -1679,7 +1679,30 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     return (
 
         <div className="w-full h-screen overflow-hidden bg-white relative flex flex-col">
-            <style>{`
+            {/* Mobile Warning - Only visible on mobile */}
+            <div className="md:hidden fixed inset-0 bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center z-50 p-6">
+                <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm text-center">
+                    <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-3">Chat Disponível Apenas no Desktop</h2>
+                    <p className="text-slate-600 mb-6">
+                        Para uma melhor experiência, acesse a página de chat através de um computador ou tablet.
+                    </p>
+                    <button
+                        onClick={() => window.history.back()}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+                    >
+                        Voltar
+                    </button>
+                </div>
+            </div>
+
+            {/* Main Content - Hidden on mobile */}
+            <div className="hidden md:flex flex-col h-full w-full">
+                <style>{`
                 /* Scrollbar Hover Only */
                 .scrollbar-hover-only::-webkit-scrollbar {
                     height: 6px;
@@ -1723,1360 +1746,1361 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                 }
             `}</style>
 
-            {/* Overlay de bloqueio quando WhatsApp está desativado */}
-            {!whatsappEnabled && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-lg bg-slate-900/20">
-                    <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl p-12 max-w-md mx-4 border border-slate-200/50 transform transition-all animate-slide-up">
-                        <div className="flex flex-col items-center text-center">
-                            {/* Ícone de WhatsApp bloqueado */}
-                            <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mb-6 shadow-xl relative">
-                                <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                                </svg>
-                                {/* Ícone de bloqueio */}
-                                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-red-500 rounded-full flex items-center justify-center shadow-lg border-4 border-white">
-                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                {/* Overlay de bloqueio quando WhatsApp está desativado */}
+                {!whatsappEnabled && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-lg bg-slate-900/20">
+                        <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl p-12 max-w-md mx-4 border border-slate-200/50 transform transition-all animate-slide-up">
+                            <div className="flex flex-col items-center text-center">
+                                {/* Ícone de WhatsApp bloqueado */}
+                                <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mb-6 shadow-xl relative">
+                                    <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                                     </svg>
-                                </div>
-                            </div>
-
-                            {/* Título */}
-                            <h3 className="text-3xl font-bold text-slate-800 mb-3">
-                                Chat Desativado
-                            </h3>
-
-                            {/* Mensagem */}
-                            <p className="text-slate-600 mb-6 leading-relaxed text-base">
-                                A integração do WhatsApp foi desativada pelo administrador.
-                                Entre em contato com a administração para mais informações.
-                            </p>
-
-                            {/* Ícone de alerta */}
-                            <div className="flex items-center gap-3 px-5 py-4 bg-yellow-50 border-2 border-yellow-200 rounded-2xl w-full">
-                                <svg className="w-6 h-6 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                                <span className="text-sm font-semibold text-yellow-800">
-                                    Funcionalidade temporariamente indisponível
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <div className="flex flex-1 min-h-0">
-                {/* Sidebar - Lista de Contatos */}
-                <div className={`w-full md:w-96 border-r border-slate-200 flex-col bg-white ${selectedContact || selectedGroup ? 'hidden md:flex' : 'flex'}`}>
-                    {/* Header */}
-                    <div className="p-4 border-b border-slate-200">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-2xl font-bold text-slate-800">Chat</h2>
-                            {(userRole === 'admin' || ['leader', 'lider', 'líder'].includes(userRole?.toLowerCase())) && (
-                                <button
-                                    onClick={() => setShowGroupModal(true)}
-                                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                                    title="Criar novo grupo"
-                                >
-                                    <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                                    </svg>
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Search Bar */}
-                        <div className="relative mb-4">
-                            <input
-                                type="text"
-                                placeholder="Pesquisar ou começar uma nova conversa"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <svg className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                        </div>
-
-                        {/* Filter Tabs */}
-                        <div
-                            ref={tabsContainerRef}
-                            className="flex gap-2 overflow-x-auto pb-2 scrollbar-hover-only relative"
-                        >
-                            <button
-                                id="tab-tudo"
-                                onClick={() => setFilterTab('tudo')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'tudo'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                            >
-                                Tudo
-                            </button>
-                            <button
-                                id="tab-nao_lidas"
-                                onClick={() => setFilterTab('nao_lidas')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'nao_lidas'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                            >
-                                Não lidas
-                            </button>
-                            <button
-                                id="tab-favoritas"
-                                onClick={() => setFilterTab('favoritas')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'favoritas'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                            >
-                                Favoritas
-                            </button>
-                            <button
-                                id="tab-grupos"
-                                onClick={() => setFilterTab('grupos')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'grupos'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                            >
-                                Grupos
-                            </button>
-                            <button
-                                id="tab-lideres"
-                                onClick={() => setFilterTab('lideres')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'lideres'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                            >
-                                Líderes
-                            </button>
-                            <button
-                                id="tab-voluntarios"
-                                onClick={() => setFilterTab('voluntarios')}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'voluntarios'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                    }`}
-                            >
-                                Voluntários
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Lista de Contatos */}
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-glass pb-[env(safe-area-inset-bottom)]">
-                        {loading ? (
-                            <div className="flex items-center justify-center h-32">
-                                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                            </div>
-                        ) : (() => {
-                            // Aplicar filtros
-                            let filteredContacts = contacts;
-                            let filteredGroups = groups;
-
-                            // Filtro por busca
-                            if (searchQuery.trim()) {
-                                const query = searchQuery.toLowerCase();
-                                filteredContacts = filteredContacts.filter(c =>
-                                    c.name.toLowerCase().includes(query) ||
-                                    (c.phone && c.phone.includes(searchQuery))
-                                );
-                                filteredGroups = filteredGroups.filter(g =>
-                                    g.name.toLowerCase().includes(query)
-                                );
-                            }
-
-                            // Filtro por aba
-                            if (filterTab === 'nao_lidas') {
-                                filteredContacts = filteredContacts.filter(c => c.unreadCount && c.unreadCount > 0);
-                                filteredGroups = filteredGroups.filter(g => (g.unreadCount || 0) > 0);
-                            } else if (filterTab === 'favoritas') {
-                                filteredContacts = filteredContacts.filter(c => favorites.has(c.id));
-                                filteredGroups = [];
-                            } else if (filterTab === 'grupos') {
-                                filteredContacts = [];
-                            } else if (filterTab === 'lideres') {
-                                filteredContacts = filteredContacts.filter(c => ['leader', 'lider', 'líder', 'admin'].includes(c.role?.toLowerCase()));
-                                filteredGroups = [];
-                            } else if (filterTab === 'voluntarios') {
-                                filteredContacts = filteredContacts.filter(c => !['leader', 'lider', 'líder', 'admin'].includes(c.role?.toLowerCase()));
-                                filteredGroups = [];
-                            } else if (filterTab === 'tudo') {
-                                // Mantém ambos
-                            }
-
-                            const hasItems = filteredGroups.length > 0 || filteredContacts.length > 0;
-
-                            if (!hasItems) {
-                                return (
-                                    <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
-                                        <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    {/* Ícone de bloqueio */}
+                                    <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-red-500 rounded-full flex items-center justify-center shadow-lg border-4 border-white">
+                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
                                         </svg>
-                                        <p className="font-medium">Nenhum contato ou grupo encontrado</p>
                                     </div>
-                                );
-                            }
-
-                            return (
-                                <>
-                                    {filteredGroups.map((group) => (
-                                        <SwipeableGroupItem
-                                            key={group.id}
-                                            group={group}
-                                            isSelected={selectedGroup?.id === group.id}
-                                            onClick={() => {
-                                                setSelectedGroup(group);
-                                                setSelectedContact(null);
-                                                fetchGroupMessages(group.id);
-                                                markGroupAsRead(group.id);
-                                            }}
-                                            onDelete={(id) => handleDeleteClick(id.toString())}
-                                        />
-                                    ))}
-
-                                    {filteredContacts.map((contact) => (
-                                        <SwipeableContactItem
-                                            key={contact.id}
-                                            contact={contact}
-                                            isSelected={selectedContact?.id === contact.id}
-                                            isFavorite={favorites.has(contact.id)}
-                                            departments={departments}
-                                            onClick={() => {
-                                                setSelectedContact(contact);
-                                                if (contact.unreadCount && contact.unreadCount > 0) {
-                                                    markMessagesAsRead(contact.id);
-                                                    setContacts(prev => prev.map(c =>
-                                                        c.id === contact.id ? { ...c, unreadCount: 0 } : c
-                                                    ));
-                                                }
-                                            }}
-                                            onToggleFavorite={toggleFavorite}
-                                            userDepartmentId={departmentId}
-                                        />
-                                    ))}
-                                </>
-                            );
-                        })()}
-                    </div >
-                </div>
-
-                {/* Área de Chat */}
-                <div className={`flex-1 flex-col min-h-0 ${!selectedContact && !selectedGroup ? 'hidden md:flex' : 'flex'}`}>
-                    {selectedContact ? (
-                        <div className="flex flex-col h-full min-h-0">
-                            {/* Header do Chat */}
-                            <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={() => {
-                                            setSelectedContact(null);
-                                            setSelectedGroup(null);
-                                        }}
-                                        className="md:hidden -ml-2 p-2 text-slate-600 hover:bg-slate-100 rounded-full"
-                                    >
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                                        </svg>
-                                    </button>
-                                    <button
-                                        onClick={() => setShowContactInfoModal(true)}
-                                        className="flex items-center gap-3 hover:bg-slate-50 p-2 -my-2 rounded-lg transition-colors text-left"
-                                    >
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold overflow-hidden">
-                                            {selectedContact.avatar_url ? (
-                                                <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
-                                            ) : (
-                                                selectedContact.name.charAt(0).toUpperCase()
-                                            )}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="font-semibold text-slate-800">{selectedContact.name}</h3>
-                                            </div>
-                                            {activeSession ? (
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${activeSession.leader_id === session?.user?.id
-                                                        ? 'bg-green-100 text-green-700'
-                                                        : 'bg-red-100 text-red-700'
-                                                        }`}>
-                                                        {activeSession.leader_id === session?.user?.id
-                                                            ? 'Em atendimento'
-                                                            : 'Em atendimento'}
-                                                    </span>
-                                                    {activeSession.leader_id === session?.user?.id && (
-                                                        <div
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleCloseSession();
-                                                            }}
-                                                            className="ml-2 px-2 py-0.5 bg-red-100 text-red-600 hover:bg-red-200 rounded text-xs font-medium transition-colors cursor-pointer"
-                                                        >
-                                                            Encerrar
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="mt-1">
-                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                                                        Disponível
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </button>
                                 </div>
-                                <div className="relative">
+
+                                {/* Título */}
+                                <h3 className="text-3xl font-bold text-slate-800 mb-3">
+                                    Chat Desativado
+                                </h3>
+
+                                {/* Mensagem */}
+                                <p className="text-slate-600 mb-6 leading-relaxed text-base">
+                                    A integração do WhatsApp foi desativada pelo administrador.
+                                    Entre em contato com a administração para mais informações.
+                                </p>
+
+                                {/* Ícone de alerta */}
+                                <div className="flex items-center gap-3 px-5 py-4 bg-yellow-50 border-2 border-yellow-200 rounded-2xl w-full">
+                                    <svg className="w-6 h-6 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <span className="text-sm font-semibold text-yellow-800">
+                                        Funcionalidade temporariamente indisponível
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex flex-1 min-h-0">
+                    {/* Sidebar - Lista de Contatos */}
+                    <div className={`w-full md:w-96 border-r border-slate-200 flex-col bg-white ${selectedContact || selectedGroup ? 'hidden md:flex' : 'flex'}`}>
+                        {/* Header */}
+                        <div className="p-4 border-b border-slate-200">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-2xl font-bold text-slate-800">Chat</h2>
+                                {(userRole === 'admin' || ['leader', 'lider', 'líder'].includes(userRole?.toLowerCase())) && (
                                     <button
-                                        onClick={() => setShowChatMenu(!showChatMenu)}
+                                        onClick={() => setShowGroupModal(true)}
                                         className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                        title="Criar novo grupo"
                                     >
                                         <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                                         </svg>
                                     </button>
-
-                                    {showChatMenu && (
-                                        <>
-                                            <div
-                                                className="fixed inset-0 z-10"
-                                                onClick={() => setShowChatMenu(false)}
-                                            ></div>
-                                            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 z-20 py-1">
-                                                <button
-                                                    onClick={() => {
-                                                        setShowClearChatModal(true);
-                                                        setShowChatMenu(false);
-                                                    }}
-                                                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                    Limpar conversa
-                                                </button>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Mensagens */}
-                            <div className="flex-1 overflow-y-auto p-4 bg-slate-50 min-h-0">
-                                {messages.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                                        <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                        </svg>
-                                        <p className="font-medium">Nenhuma mensagem ainda</p>
-                                        <p className="text-sm mt-1">Envie uma mensagem para começar a conversa</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {messages.map((msg, index) => {
-                                            const isSent = msg.sender_id === session?.user?.id;
-                                            const showDateSeparator = index === 0 ||
-                                                formatDateSeparator(msg.created_at) !== formatDateSeparator(messages[index - 1].created_at);
-
-                                            return (
-                                                <React.Fragment key={msg.id}>
-                                                    {showDateSeparator && (
-                                                        <div className="flex justify-center my-4">
-                                                            <span className="bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                                                                {formatDateSeparator(msg.created_at)}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                    <div
-                                                        className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
-                                                    >
-                                                        {!isSent && (
-                                                            <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
-                                                                {selectedContact.avatar_url ? (
-                                                                    <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
-                                                                ) : (
-                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
-                                                                        {selectedContact.name.charAt(0).toUpperCase()}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-
-                                                        <div
-                                                            className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
-                                                                ? 'bg-blue-600 text-white'
-                                                                : 'bg-white text-slate-800 border border-slate-200'
-                                                                }`}
-                                                        >
-                                                            {!isSent && (
-                                                                <p className="text-xs font-bold text-blue-600 mb-1">
-                                                                    {selectedContact.name}
-                                                                </p>
-                                                            )}
-                                                            <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
-                                                            <p className={`text-xs mt-1 ${isSent ? 'text-blue-100' : 'text-slate-400'}`}>
-                                                                {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit',
-                                                                })}
-                                                            </p>
-                                                        </div>
-
-                                                        {isSent && (
-                                                            <div className="w-8 h-8 rounded-full bg-blue-700 flex-shrink-0 overflow-hidden mb-1">
-                                                                {currentUserAvatar ? (
-                                                                    <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
-                                                                ) : (
-                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
-                                                                        {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                        <div ref={messagesEndRef} />
-                                    </div>
                                 )}
                             </div>
 
-                            {/* Input de Mensagem */}
-                            <div className="p-4 border-t border-slate-200 bg-white flex-shrink-0">
-                                {!whatsappEnabled ? (
-                                    <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                                        <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                        </svg>
-                                        <span className="text-sm font-medium text-yellow-800">
-                                            Integração do WhatsApp desativada pelo administrador
-                                        </span>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-end gap-2 w-full">
-                                        <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0">
-                                            <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            {/* Search Bar */}
+                            <div className="relative mb-4">
+                                <input
+                                    type="text"
+                                    placeholder="Pesquisar ou começar uma nova conversa"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <svg className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+
+                            {/* Filter Tabs */}
+                            <div
+                                ref={tabsContainerRef}
+                                className="flex gap-2 overflow-x-auto pb-2 scrollbar-hover-only relative"
+                            >
+                                <button
+                                    id="tab-tudo"
+                                    onClick={() => setFilterTab('tudo')}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'tudo'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    Tudo
+                                </button>
+                                <button
+                                    id="tab-nao_lidas"
+                                    onClick={() => setFilterTab('nao_lidas')}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'nao_lidas'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    Não lidas
+                                </button>
+                                <button
+                                    id="tab-favoritas"
+                                    onClick={() => setFilterTab('favoritas')}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'favoritas'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    Favoritas
+                                </button>
+                                <button
+                                    id="tab-grupos"
+                                    onClick={() => setFilterTab('grupos')}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'grupos'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    Grupos
+                                </button>
+                                <button
+                                    id="tab-lideres"
+                                    onClick={() => setFilterTab('lideres')}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'lideres'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    Líderes
+                                </button>
+                                <button
+                                    id="tab-voluntarios"
+                                    onClick={() => setFilterTab('voluntarios')}
+                                    className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${filterTab === 'voluntarios'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    Voluntários
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Lista de Contatos */}
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-glass pb-[env(safe-area-inset-bottom)]">
+                            {loading ? (
+                                <div className="flex items-center justify-center h-32">
+                                    <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                </div>
+                            ) : (() => {
+                                // Aplicar filtros
+                                let filteredContacts = contacts;
+                                let filteredGroups = groups;
+
+                                // Filtro por busca
+                                if (searchQuery.trim()) {
+                                    const query = searchQuery.toLowerCase();
+                                    filteredContacts = filteredContacts.filter(c =>
+                                        c.name.toLowerCase().includes(query) ||
+                                        (c.phone && c.phone.includes(searchQuery))
+                                    );
+                                    filteredGroups = filteredGroups.filter(g =>
+                                        g.name.toLowerCase().includes(query)
+                                    );
+                                }
+
+                                // Filtro por aba
+                                if (filterTab === 'nao_lidas') {
+                                    filteredContacts = filteredContacts.filter(c => c.unreadCount && c.unreadCount > 0);
+                                    filteredGroups = filteredGroups.filter(g => (g.unreadCount || 0) > 0);
+                                } else if (filterTab === 'favoritas') {
+                                    filteredContacts = filteredContacts.filter(c => favorites.has(c.id));
+                                    filteredGroups = [];
+                                } else if (filterTab === 'grupos') {
+                                    filteredContacts = [];
+                                } else if (filterTab === 'lideres') {
+                                    filteredContacts = filteredContacts.filter(c => ['leader', 'lider', 'líder', 'admin'].includes(c.role?.toLowerCase()));
+                                    filteredGroups = [];
+                                } else if (filterTab === 'voluntarios') {
+                                    filteredContacts = filteredContacts.filter(c => !['leader', 'lider', 'líder', 'admin'].includes(c.role?.toLowerCase()));
+                                    filteredGroups = [];
+                                } else if (filterTab === 'tudo') {
+                                    // Mantém ambos
+                                }
+
+                                const hasItems = filteredGroups.length > 0 || filteredContacts.length > 0;
+
+                                if (!hasItems) {
+                                    return (
+                                        <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
+                                            <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                             </svg>
-                                        </button>
-                                        <textarea
-                                            value={newMessage}
-                                            onChange={(e) => setNewMessage(e.target.value)}
-                                            onKeyPress={handleKeyPress}
-                                            placeholder="Enviar mensagem..."
-                                            className="flex-1 min-w-0 resize-none border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32"
-                                            rows={1}
-                                        />
+                                            <p className="font-medium">Nenhum contato ou grupo encontrado</p>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <>
+                                        {filteredGroups.map((group) => (
+                                            <SwipeableGroupItem
+                                                key={group.id}
+                                                group={group}
+                                                isSelected={selectedGroup?.id === group.id}
+                                                onClick={() => {
+                                                    setSelectedGroup(group);
+                                                    setSelectedContact(null);
+                                                    fetchGroupMessages(group.id);
+                                                    markGroupAsRead(group.id);
+                                                }}
+                                                onDelete={(id) => handleDeleteClick(id.toString())}
+                                            />
+                                        ))}
+
+                                        {filteredContacts.map((contact) => (
+                                            <SwipeableContactItem
+                                                key={contact.id}
+                                                contact={contact}
+                                                isSelected={selectedContact?.id === contact.id}
+                                                isFavorite={favorites.has(contact.id)}
+                                                departments={departments}
+                                                onClick={() => {
+                                                    setSelectedContact(contact);
+                                                    if (contact.unreadCount && contact.unreadCount > 0) {
+                                                        markMessagesAsRead(contact.id);
+                                                        setContacts(prev => prev.map(c =>
+                                                            c.id === contact.id ? { ...c, unreadCount: 0 } : c
+                                                        ));
+                                                    }
+                                                }}
+                                                onToggleFavorite={toggleFavorite}
+                                                userDepartmentId={departmentId}
+                                            />
+                                        ))}
+                                    </>
+                                );
+                            })()}
+                        </div >
+                    </div>
+
+                    {/* Área de Chat */}
+                    <div className={`flex-1 flex-col min-h-0 ${!selectedContact && !selectedGroup ? 'hidden md:flex' : 'flex'}`}>
+                        {selectedContact ? (
+                            <div className="flex flex-col h-full min-h-0">
+                                {/* Header do Chat */}
+                                <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                                    <div className="flex items-center gap-3">
                                         <button
-                                            onClick={sendMessage}
-                                            disabled={!newMessage.trim() || sending}
-                                            className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                            onClick={() => {
+                                                setSelectedContact(null);
+                                                setSelectedGroup(null);
+                                            }}
+                                            className="md:hidden -ml-2 p-2 text-slate-600 hover:bg-slate-100 rounded-full"
                                         >
                                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
                                             </svg>
                                         </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : selectedGroup ? (
-                        <div className="flex flex-col h-full min-h-0">
-                            {/* Header do Grupo */}
-                            <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={() => {
-                                            setSelectedContact(null);
-                                            setSelectedGroup(null);
-                                        }}
-                                        className="md:hidden -ml-2 p-2 text-slate-600 hover:bg-slate-100 rounded-full"
-                                    >
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                                        </svg>
-                                    </button>
-                                    <div
-                                        className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors -ml-2"
-                                        onClick={() => {
-                                            if (selectedGroup) {
-                                                fetchGroupMembersDetails(selectedGroup.id);
-                                                setShowGroupDetailsModal(true);
-                                            }
-                                        }}
-                                    >
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold overflow-hidden">
-                                            {selectedGroup.avatar_url ? (
-                                                <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                                </svg>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-semibold text-slate-800">{selectedGroup.name}</h3>
-                                            <p className="text-sm text-slate-500">{selectedGroup.members.length} membros</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="relative">
-                                    <button
-                                        onClick={() => setShowChatMenu(!showChatMenu)}
-                                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                                    >
-                                        <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                        </svg>
-                                    </button>
-
-                                    {showChatMenu && (
-                                        <>
-                                            <div
-                                                className="fixed inset-0 z-10"
-                                                onClick={() => setShowChatMenu(false)}
-                                            ></div>
-                                            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 z-20 py-1">
-                                                <button
-                                                    onClick={() => {
-                                                        setShowClearChatModal(true);
-                                                        setShowChatMenu(false);
-                                                    }}
-                                                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                    Limpar conversa
-                                                </button>
+                                        <button
+                                            onClick={() => setShowContactInfoModal(true)}
+                                            className="flex items-center gap-3 hover:bg-slate-50 p-2 -my-2 rounded-lg transition-colors text-left"
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold overflow-hidden">
+                                                {selectedContact.avatar_url ? (
+                                                    <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    selectedContact.name.charAt(0).toUpperCase()
+                                                )}
                                             </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Mensagens do Grupo */}
-                            <div className="flex-1 overflow-y-auto p-4 bg-slate-50 min-h-0">
-                                {groupMessages.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                                        <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                        </svg>
-                                        <p className="font-medium">Nenhuma mensagem no grupo</p>
-                                        <p className="text-sm mt-1">Envie a primeira mensagem!</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {groupMessages.map((msg, index) => {
-                                            const isSent = msg.sender_id === session?.user?.id;
-                                            const showDateSeparator = index === 0 ||
-                                                formatDateSeparator(msg.created_at) !== formatDateSeparator(groupMessages[index - 1].created_at);
-
-                                            return (
-                                                <React.Fragment key={msg.id}>
-                                                    {showDateSeparator && (
-                                                        <div className="flex justify-center my-4">
-                                                            <span className="bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                                                                {formatDateSeparator(msg.created_at)}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                    <div
-                                                        className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
-                                                    >
-                                                        {!isSent && (
-                                                            <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
-                                                                {(() => {
-                                                                    const senderContact = contacts.find(c => c.id === msg.sender_id);
-                                                                    const avatarUrl = senderContact?.avatar_url;
-                                                                    const initial = (senderContact?.name || msg.sender_name || msg.sender_phone || '?').charAt(0).toUpperCase();
-
-                                                                    return avatarUrl ? (
-                                                                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                                                                    ) : (
-                                                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
-                                                                            {initial}
-                                                                        </div>
-                                                                    );
-                                                                })()}
-                                                            </div>
-                                                        )}
-
-                                                        <div
-                                                            className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
-                                                                ? 'bg-green-600 text-white'
-                                                                : 'bg-white text-slate-800 border border-slate-200'
-                                                                }`}
-                                                        >
-                                                            {!isSent && (
-                                                                <p className="text-xs font-bold text-orange-500 mb-1">
-                                                                    {(() => {
-                                                                        const senderContact = contacts.find(c => c.id === msg.sender_id);
-                                                                        return senderContact?.name || msg.sender_name || msg.sender_phone || 'Membro';
-                                                                    })()}
-                                                                </p>
-                                                            )}
-                                                            <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
-                                                            <p className={`text-xs mt-1 ${isSent ? 'text-green-100' : 'text-slate-400'}`}>
-                                                                {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit',
-                                                                })}
-                                                            </p>
-                                                        </div>
-
-                                                        {isSent && (
-                                                            <div className="w-8 h-8 rounded-full bg-green-700 flex-shrink-0 overflow-hidden mb-1">
-                                                                {currentUserAvatar ? (
-                                                                    <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
-                                                                ) : (
-                                                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
-                                                                        {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
-                                                                    </div>
-                                                                )}
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-semibold text-slate-800">{selectedContact.name}</h3>
+                                                </div>
+                                                {activeSession ? (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${activeSession.leader_id === session?.user?.id
+                                                            ? 'bg-green-100 text-green-700'
+                                                            : 'bg-red-100 text-red-700'
+                                                            }`}>
+                                                            {activeSession.leader_id === session?.user?.id
+                                                                ? 'Em atendimento'
+                                                                : 'Em atendimento'}
+                                                        </span>
+                                                        {activeSession.leader_id === session?.user?.id && (
+                                                            <div
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleCloseSession();
+                                                                }}
+                                                                className="ml-2 px-2 py-0.5 bg-red-100 text-red-600 hover:bg-red-200 rounded text-xs font-medium transition-colors cursor-pointer"
+                                                            >
+                                                                Encerrar
                                                             </div>
                                                         )}
                                                     </div>
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                        <div ref={messagesEndRef} />
+                                                ) : (
+                                                    <div className="mt-1">
+                                                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                                            Disponível
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </button>
                                     </div>
-                                )}
-                            </div>
-
-                            {/* Input de Mensagem do Grupo */}
-                            <div className="p-4 border-t border-slate-200 bg-white flex-shrink-0">
-                                {!whatsappEnabled ? (
-                                    <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                                        <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                        </svg>
-                                        <span className="text-sm font-medium text-yellow-800">
-                                            Integração do WhatsApp desativada pelo administrador
-                                        </span>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-end gap-2 w-full">
-                                        <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0">
-                                            <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowChatMenu(!showChatMenu)}
+                                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                        >
+                                            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                                             </svg>
                                         </button>
-                                        <textarea
-                                            value={newMessage}
-                                            onChange={(e) => setNewMessage(e.target.value)}
-                                            onKeyPress={(e) => {
-                                                if (e.key === 'Enter' && !e.shiftKey) {
-                                                    e.preventDefault();
-                                                    handleSendGroupMessage();
-                                                }
-                                            }}
-                                            placeholder="Enviar mensagem..."
-                                            className="flex-1 min-w-0 resize-none border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent max-h-32"
-                                            rows={1}
-                                        />
-                                        <button
-                                            onClick={handleSendGroupMessage}
-                                            disabled={!newMessage.trim() || sending}
-                                            className="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                                        >
-                                            {sending ? (
-                                                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                            ) : (
+
+                                        {showChatMenu && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-10"
+                                                    onClick={() => setShowChatMenu(false)}
+                                                ></div>
+                                                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 z-20 py-1">
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowClearChatModal(true);
+                                                            setShowChatMenu(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                        Limpar conversa
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Mensagens */}
+                                <div className="flex-1 overflow-y-auto p-4 bg-slate-50 min-h-0">
+                                    {messages.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                                            <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                            </svg>
+                                            <p className="font-medium">Nenhuma mensagem ainda</p>
+                                            <p className="text-sm mt-1">Envie uma mensagem para começar a conversa</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {messages.map((msg, index) => {
+                                                const isSent = msg.sender_id === session?.user?.id;
+                                                const showDateSeparator = index === 0 ||
+                                                    formatDateSeparator(msg.created_at) !== formatDateSeparator(messages[index - 1].created_at);
+
+                                                return (
+                                                    <React.Fragment key={msg.id}>
+                                                        {showDateSeparator && (
+                                                            <div className="flex justify-center my-4">
+                                                                <span className="bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                                    {formatDateSeparator(msg.created_at)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <div
+                                                            className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
+                                                        >
+                                                            {!isSent && (
+                                                                <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
+                                                                    {selectedContact.avatar_url ? (
+                                                                        <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
+                                                                            {selectedContact.name.charAt(0).toUpperCase()}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            <div
+                                                                className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
+                                                                    ? 'bg-blue-600 text-white'
+                                                                    : 'bg-white text-slate-800 border border-slate-200'
+                                                                    }`}
+                                                            >
+                                                                {!isSent && (
+                                                                    <p className="text-xs font-bold text-blue-600 mb-1">
+                                                                        {selectedContact.name}
+                                                                    </p>
+                                                                )}
+                                                                <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                                                                <p className={`text-xs mt-1 ${isSent ? 'text-blue-100' : 'text-slate-400'}`}>
+                                                                    {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+                                                                        hour: '2-digit',
+                                                                        minute: '2-digit',
+                                                                    })}
+                                                                </p>
+                                                            </div>
+
+                                                            {isSent && (
+                                                                <div className="w-8 h-8 rounded-full bg-blue-700 flex-shrink-0 overflow-hidden mb-1">
+                                                                    {currentUserAvatar ? (
+                                                                        <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                                                                            {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                            <div ref={messagesEndRef} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Input de Mensagem */}
+                                <div className="p-4 border-t border-slate-200 bg-white flex-shrink-0">
+                                    {!whatsappEnabled ? (
+                                        <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                                            <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            <span className="text-sm font-medium text-yellow-800">
+                                                Integração do WhatsApp desativada pelo administrador
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-end gap-2 w-full">
+                                            <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0">
+                                                <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                                </svg>
+                                            </button>
+                                            <textarea
+                                                value={newMessage}
+                                                onChange={(e) => setNewMessage(e.target.value)}
+                                                onKeyPress={handleKeyPress}
+                                                placeholder="Enviar mensagem..."
+                                                className="flex-1 min-w-0 resize-none border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32"
+                                                rows={1}
+                                            />
+                                            <button
+                                                onClick={sendMessage}
+                                                disabled={!newMessage.trim() || sending}
+                                                className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                            >
                                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                                 </svg>
-                                            )}
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-50">
-                            <svg className="w-24 h-24 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
-                            <p className="text-lg font-medium">Olá! Bem-vindo ao Chat Volunteers.</p>
-                            <p className="text-sm mt-2">Selecione um contato para começar a conversar</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Modal de Detalhes do Grupo */}
-            {showGroupDetailsModal && selectedGroup && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-slate-800">Dados do Grupo</h3>
-                            <button
-                                onClick={() => setShowGroupDetailsModal(false)}
-                                className="text-slate-400 hover:text-slate-600 transition-colors"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto">
-                            {/* Foto do Grupo */}
-                            <div className="flex flex-col items-center mb-8">
-                                <div className="relative group cursor-pointer">
-                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white text-3xl font-semibold overflow-hidden shadow-lg">
-                                        {selectedGroup.avatar_url ? (
-                                            <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                            </svg>
-                                        )}
-                                    </div>
-                                    <label className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                        {uploadingAvatar ? (
-                                            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        ) : (
-                                            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                        )}
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={handleGroupAvatarUpload}
-                                            disabled={uploadingAvatar}
-                                        />
-                                    </label>
-                                </div>
-                                <h4 className="mt-3 text-lg font-semibold text-slate-800">{selectedGroup.name}</h4>
-                                <p className="text-sm text-slate-500">Grupo • {selectedGroup.members.length} membros</p>
-                            </div>
-
-                            {/* Lista de Membros */}
-                            <div>
-                                <div className="flex items-center justify-between mb-3">
-                                    <h5 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Membros ({groupDetailsMembers.length})</h5>
-                                    {(userRole === 'admin' || ['leader', 'lider', 'líder'].includes(userRole?.toLowerCase())) && (
-                                        <button
-                                            onClick={() => setShowAddMemberModal(true)}
-                                            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                                            </svg>
-                                            Adicionar
-                                        </button>
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
-                                <div className="space-y-3">
-                                    {groupDetailsMembers.map((member) => (
-                                        <div key={member.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors group/member">
-                                            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-semibold flex-shrink-0 overflow-hidden">
-                                                {member.avatar_url ? (
-                                                    <img src={member.avatar_url} alt={member.name} className="w-full h-full object-cover" />
+                            </div>
+                        ) : selectedGroup ? (
+                            <div className="flex flex-col h-full min-h-0">
+                                {/* Header do Grupo */}
+                                <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedContact(null);
+                                                setSelectedGroup(null);
+                                            }}
+                                            className="md:hidden -ml-2 p-2 text-slate-600 hover:bg-slate-100 rounded-full"
+                                        >
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                        </button>
+                                        <div
+                                            className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors -ml-2"
+                                            onClick={() => {
+                                                if (selectedGroup) {
+                                                    fetchGroupMembersDetails(selectedGroup.id);
+                                                    setShowGroupDetailsModal(true);
+                                                }
+                                            }}
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold overflow-hidden">
+                                                {selectedGroup.avatar_url ? (
+                                                    <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
                                                 ) : (
-                                                    member.name.charAt(0).toUpperCase()
+                                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                                                    </svg>
                                                 )}
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="font-medium text-slate-800 truncate">{member.name}</p>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${member.role === 'Admin' ? 'bg-purple-100 text-purple-700 border-purple-200' :
-                                                            (member.role === 'Líder' || member.role === 'leader') ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                                                                'bg-slate-100 text-slate-600 border-slate-200'
-                                                            }`}>
-                                                            {member.role === 'leader' ? 'Líder' : member.role}
-                                                        </span>
-                                                        {member.is_group_admin && (
-                                                            <span className="text-[10px] px-1.5 py-0.5 rounded font-bold border bg-green-100 text-green-700 border-green-200" title="Admin do Grupo">
-                                                                Admin
-                                                            </span>
-                                                        )}
-
-                                                        {/* Botão de Remover Membro */}
-                                                        {/* Botão de Remover Membro */}
-                                                        {(userRole === 'admin' || (['leader', 'lider', 'líder'].includes(userRole?.toLowerCase()) && member.role !== 'Admin')) && member.id !== session?.user?.id && (
-                                                            <>
-                                                                {/* Botão de Promover/Rebaixar Admin (apenas se quem está vendo tiver permissão) */}
-                                                                {/* Lógica simplificada: Admin do sistema ou Criador do grupo pode promover */}
-                                                                {(userRole === 'admin' || selectedGroup.created_by === session?.user?.id) && (
-                                                                    <button
-                                                                        onClick={() => handleToggleGroupAdmin(member.id, member.phone, member.is_group_admin)}
-                                                                        className={`opacity-0 group-hover/member:opacity-100 p-1 rounded transition-all ${member.is_group_admin ? 'text-green-600 hover:bg-green-50' : 'text-slate-400 hover:text-green-600 hover:bg-green-50'}`}
-                                                                        title={member.is_group_admin ? "Remover admin do grupo" : "Promover a admin do grupo"}
-                                                                    >
-                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                                                        </svg>
-                                                                    </button>
-                                                                )}
-
-                                                                <button
-                                                                    onClick={() => handleRemoveMember(member.id, member.phone, member.name)}
-                                                                    disabled={removingMemberId === member.id}
-                                                                    className="opacity-0 group-hover/member:opacity-100 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                                                                    title="Remover membro"
-                                                                >
-                                                                    {removingMemberId === member.id ? (
-                                                                        <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                                                                    ) : (
-                                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                                        </svg>
-                                                                    )}
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <p className="text-xs text-slate-500 truncate">{member.phone}</p>
+                                            <div>
+                                                <h3 className="font-semibold text-slate-800">{selectedGroup.name}</h3>
+                                                <p className="text-sm text-slate-500">{selectedGroup.members.length} membros</p>
                                             </div>
                                         </div>
-                                    ))}
+                                    </div>
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowChatMenu(!showChatMenu)}
+                                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                        >
+                                            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                            </svg>
+                                        </button>
+
+                                        {showChatMenu && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-10"
+                                                    onClick={() => setShowChatMenu(false)}
+                                                ></div>
+                                                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-100 z-20 py-1">
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowClearChatModal(true);
+                                                            setShowChatMenu(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                        Limpar conversa
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Mensagens do Grupo */}
+                                <div className="flex-1 overflow-y-auto p-4 bg-slate-50 min-h-0">
+                                    {groupMessages.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                                            <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                            </svg>
+                                            <p className="font-medium">Nenhuma mensagem no grupo</p>
+                                            <p className="text-sm mt-1">Envie a primeira mensagem!</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {groupMessages.map((msg, index) => {
+                                                const isSent = msg.sender_id === session?.user?.id;
+                                                const showDateSeparator = index === 0 ||
+                                                    formatDateSeparator(msg.created_at) !== formatDateSeparator(groupMessages[index - 1].created_at);
+
+                                                return (
+                                                    <React.Fragment key={msg.id}>
+                                                        {showDateSeparator && (
+                                                            <div className="flex justify-center my-4">
+                                                                <span className="bg-slate-200 text-slate-600 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                                    {formatDateSeparator(msg.created_at)}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <div
+                                                            className={`flex ${isSent ? 'justify-end' : 'justify-start'} items-end gap-2`}
+                                                        >
+                                                            {!isSent && (
+                                                                <div className="w-8 h-8 rounded-full bg-slate-200 flex-shrink-0 overflow-hidden mb-1">
+                                                                    {(() => {
+                                                                        const senderContact = contacts.find(c => c.id === msg.sender_id);
+                                                                        const avatarUrl = senderContact?.avatar_url;
+                                                                        const initial = (senderContact?.name || msg.sender_name || msg.sender_phone || '?').charAt(0).toUpperCase();
+
+                                                                        return avatarUrl ? (
+                                                                            <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                                                        ) : (
+                                                                            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
+                                                                                {initial}
+                                                                            </div>
+                                                                        );
+                                                                    })()}
+                                                                </div>
+                                                            )}
+
+                                                            <div
+                                                                className={`max-w-[70%] rounded-2xl px-4 py-2 ${isSent
+                                                                    ? 'bg-green-600 text-white'
+                                                                    : 'bg-white text-slate-800 border border-slate-200'
+                                                                    }`}
+                                                            >
+                                                                {!isSent && (
+                                                                    <p className="text-xs font-bold text-orange-500 mb-1">
+                                                                        {(() => {
+                                                                            const senderContact = contacts.find(c => c.id === msg.sender_id);
+                                                                            return senderContact?.name || msg.sender_name || msg.sender_phone || 'Membro';
+                                                                        })()}
+                                                                    </p>
+                                                                )}
+                                                                <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                                                                <p className={`text-xs mt-1 ${isSent ? 'text-green-100' : 'text-slate-400'}`}>
+                                                                    {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+                                                                        hour: '2-digit',
+                                                                        minute: '2-digit',
+                                                                    })}
+                                                                </p>
+                                                            </div>
+
+                                                            {isSent && (
+                                                                <div className="w-8 h-8 rounded-full bg-green-700 flex-shrink-0 overflow-hidden mb-1">
+                                                                    {currentUserAvatar ? (
+                                                                        <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                                                                            {session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                            <div ref={messagesEndRef} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Input de Mensagem do Grupo */}
+                                <div className="p-4 border-t border-slate-200 bg-white flex-shrink-0">
+                                    {!whatsappEnabled ? (
+                                        <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                                            <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            <span className="text-sm font-medium text-yellow-800">
+                                                Integração do WhatsApp desativada pelo administrador
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-end gap-2 w-full">
+                                            <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0">
+                                                <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                                </svg>
+                                            </button>
+                                            <textarea
+                                                value={newMessage}
+                                                onChange={(e) => setNewMessage(e.target.value)}
+                                                onKeyPress={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleSendGroupMessage();
+                                                    }
+                                                }}
+                                                placeholder="Enviar mensagem..."
+                                                className="flex-1 min-w-0 resize-none border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent max-h-32"
+                                                rows={1}
+                                            />
+                                            <button
+                                                onClick={handleSendGroupMessage}
+                                                disabled={!newMessage.trim() || sending}
+                                                className="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                            >
+                                                {sending ? (
+                                                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                ) : (
+                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                                    </svg>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal de Confirmação de Remoção de Membro */}
-            {showRemoveMemberModal && memberToRemove && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]" onClick={() => setShowRemoveMemberModal(false)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-col items-center text-center">
-                            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-50">
+                                <svg className="w-24 h-24 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                 </svg>
+                                <p className="text-lg font-medium">Olá! Bem-vindo ao Chat Volunteers.</p>
+                                <p className="text-sm mt-2">Selecione um contato para começar a conversar</p>
                             </div>
-                            <h3 className="text-lg font-bold text-slate-800 mb-2">Remover Membro</h3>
-                            <p className="text-slate-600 mb-6">
-                                Tem certeza que deseja remover <strong>{memberToRemove.name}</strong> do grupo? Esta ação não pode ser desfeita.
-                            </p>
-                            <div className="flex gap-3 w-full">
-                                <button
-                                    onClick={() => setShowRemoveMemberModal(false)}
-                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={confirmRemoveMember}
-                                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
-                                >
-                                    Remover
-                                </button>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
-            )}
 
-            {/* Modal de Criar Grupo */}
-            {showGroupModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={closeGroupModal}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-                        {/* Header */}
-                        <div className="p-6 border-b border-slate-200">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-xl font-bold text-slate-800">Criar Grupo</h3>
+                {/* Modal de Detalhes do Grupo */}
+                {showGroupDetailsModal && selectedGroup && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+                            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                                <h3 className="text-xl font-bold text-slate-800">Dados do Grupo</h3>
                                 <button
-                                    onClick={closeGroupModal}
-                                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                    onClick={() => setShowGroupDetailsModal(false)}
+                                    className="text-slate-400 hover:text-slate-600 transition-colors"
                                 >
-                                    <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                 </button>
                             </div>
-                        </div>
 
-                        {/* Body */}
-                        <div className="p-6">
-                            {/* Nome do Grupo */}
-                            <div className="mb-6">
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Nome do Grupo
-                                </label>
-                                <input
-                                    type="text"
-                                    value={groupName}
-                                    onChange={(e) => setGroupName(e.target.value)}
-                                    placeholder="Ex: Equipe de Louvor"
-                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            {/* Seleção de Membros */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Adicionar Membros ({selectedMembers.size})
-                                </label>
-
-                                {/* Opção para incluir a si mesmo */}
-                                <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center gap-3 border border-blue-100">
-                                    <input
-                                        type="checkbox"
-                                        id="includeMe"
-                                        checked={includeMe}
-                                        onChange={(e) => setIncludeMe(e.target.checked)}
-                                        className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                                    />
-                                    <label htmlFor="includeMe" className="flex items-center gap-3 cursor-pointer flex-1">
-                                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-semibold flex-shrink-0 overflow-hidden">
-                                            {currentUserAvatar ? (
-                                                <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                            <div className="p-6 overflow-y-auto">
+                                {/* Foto do Grupo */}
+                                <div className="flex flex-col items-center mb-8">
+                                    <div className="relative group cursor-pointer">
+                                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white text-3xl font-semibold overflow-hidden shadow-lg">
+                                            {selectedGroup.avatar_url ? (
+                                                <img src={selectedGroup.avatar_url} alt={selectedGroup.name} className="w-full h-full object-cover" />
                                             ) : (
-                                                session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'
+                                                <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                                                </svg>
                                             )}
                                         </div>
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-slate-800 text-sm">Você ({session?.user?.user_metadata?.name || 'Eu'})</p>
-                                            <p className="text-xs text-slate-500">Adicionar-me ao grupo</p>
-                                        </div>
-                                    </label>
+                                        <label className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                            {uploadingAvatar ? (
+                                                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            ) : (
+                                                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                            )}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleGroupAvatarUpload}
+                                                disabled={uploadingAvatar}
+                                            />
+                                        </label>
+                                    </div>
+                                    <h4 className="mt-3 text-lg font-semibold text-slate-800">{selectedGroup.name}</h4>
+                                    <p className="text-sm text-slate-500">Grupo • {selectedGroup.members.length} membros</p>
                                 </div>
 
-                                {/* Campo de busca de membros */}
-                                <div className="mb-3">
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            value={memberSearchQuery}
-                                            onChange={(e) => setMemberSearchQuery(e.target.value)}
-                                            placeholder="Buscar voluntário..."
-                                            className="w-full px-4 py-2 pl-10 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                        <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                        </svg>
+                                {/* Lista de Membros */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h5 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Membros ({groupDetailsMembers.length})</h5>
+                                        {(userRole === 'admin' || ['leader', 'lider', 'líder'].includes(userRole?.toLowerCase())) && (
+                                            <button
+                                                onClick={() => setShowAddMemberModal(true)}
+                                                className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                                                </svg>
+                                                Adicionar
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="space-y-3">
+                                        {groupDetailsMembers.map((member) => (
+                                            <div key={member.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg transition-colors group/member">
+                                                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-semibold flex-shrink-0 overflow-hidden">
+                                                    {member.avatar_url ? (
+                                                        <img src={member.avatar_url} alt={member.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        member.name.charAt(0).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="font-medium text-slate-800 truncate">{member.name}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${member.role === 'Admin' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                                                                (member.role === 'Líder' || member.role === 'leader') ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                                                    'bg-slate-100 text-slate-600 border-slate-200'
+                                                                }`}>
+                                                                {member.role === 'leader' ? 'Líder' : member.role}
+                                                            </span>
+                                                            {member.is_group_admin && (
+                                                                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold border bg-green-100 text-green-700 border-green-200" title="Admin do Grupo">
+                                                                    Admin
+                                                                </span>
+                                                            )}
+
+                                                            {/* Botão de Remover Membro */}
+                                                            {/* Botão de Remover Membro */}
+                                                            {(userRole === 'admin' || (['leader', 'lider', 'líder'].includes(userRole?.toLowerCase()) && member.role !== 'Admin')) && member.id !== session?.user?.id && (
+                                                                <>
+                                                                    {/* Botão de Promover/Rebaixar Admin (apenas se quem está vendo tiver permissão) */}
+                                                                    {/* Lógica simplificada: Admin do sistema ou Criador do grupo pode promover */}
+                                                                    {(userRole === 'admin' || selectedGroup.created_by === session?.user?.id) && (
+                                                                        <button
+                                                                            onClick={() => handleToggleGroupAdmin(member.id, member.phone, member.is_group_admin)}
+                                                                            className={`opacity-0 group-hover/member:opacity-100 p-1 rounded transition-all ${member.is_group_admin ? 'text-green-600 hover:bg-green-50' : 'text-slate-400 hover:text-green-600 hover:bg-green-50'}`}
+                                                                            title={member.is_group_admin ? "Remover admin do grupo" : "Promover a admin do grupo"}
+                                                                        >
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                                                            </svg>
+                                                                        </button>
+                                                                    )}
+
+                                                                    <button
+                                                                        onClick={() => handleRemoveMember(member.id, member.phone, member.name)}
+                                                                        disabled={removingMemberId === member.id}
+                                                                        className="opacity-0 group-hover/member:opacity-100 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                                                        title="Remover membro"
+                                                                    >
+                                                                        {removingMemberId === member.id ? (
+                                                                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                                                                        ) : (
+                                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                            </svg>
+                                                                        )}
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 truncate">{member.phone}</p>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-                                {/* Lista de membros com scroll único */}
-                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 scrollbar-glass">
-                                    {contacts
-                                        .filter(contact => {
-                                            // Filtro de telefone obrigatório
-                                            if (!contact.phone) return false;
+                {/* Modal de Confirmação de Remoção de Membro */}
+                {showRemoveMemberModal && memberToRemove && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]" onClick={() => setShowRemoveMemberModal(false)}>
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-col items-center text-center">
+                                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-800 mb-2">Remover Membro</h3>
+                                <p className="text-slate-600 mb-6">
+                                    Tem certeza que deseja remover <strong>{memberToRemove.name}</strong> do grupo? Esta ação não pode ser desfeita.
+                                </p>
+                                <div className="flex gap-3 w-full">
+                                    <button
+                                        onClick={() => setShowRemoveMemberModal(false)}
+                                        className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={confirmRemoveMember}
+                                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+                                    >
+                                        Remover
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-                                            // Filtro de busca por nome
-                                            if (memberSearchQuery.trim()) {
-                                                const searchLower = memberSearchQuery.toLowerCase();
-                                                if (!contact.name.toLowerCase().includes(searchLower)) {
-                                                    return false;
-                                                }
-                                            }
+                {/* Modal de Criar Grupo */}
+                {showGroupModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={closeGroupModal}>
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+                            {/* Header */}
+                            <div className="p-6 border-b border-slate-200">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xl font-bold text-slate-800">Criar Grupo</h3>
+                                    <button
+                                        onClick={closeGroupModal}
+                                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                    >
+                                        <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
 
-                                            // Se for admin, mostra todos (que tenham telefone)
-                                            if (userRole === 'admin') return true;
+                            {/* Body */}
+                            <div className="p-6">
+                                {/* Nome do Grupo */}
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        Nome do Grupo
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={groupName}
+                                        onChange={(e) => setGroupName(e.target.value)}
+                                        placeholder="Ex: Equipe de Louvor"
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
 
-                                            // Se for líder, filtra por departamento
-                                            const normalizedRole = userRole?.toLowerCase();
-                                            if (['leader', 'lider', 'líder'].includes(normalizedRole)) {
-                                                if (!departmentId) return false;
+                                {/* Seleção de Membros */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        Adicionar Membros ({selectedMembers.size})
+                                    </label>
 
-                                                // Normalizar department_ids (pode vir como array ou string JSON)
-                                                let deptIds = contact.department_ids;
-                                                if (typeof deptIds === 'string') {
-                                                    try {
-                                                        deptIds = JSON.parse(deptIds);
-                                                    } catch (e) {
-                                                        deptIds = [];
+                                    {/* Opção para incluir a si mesmo */}
+                                    <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center gap-3 border border-blue-100">
+                                        <input
+                                            type="checkbox"
+                                            id="includeMe"
+                                            checked={includeMe}
+                                            onChange={(e) => setIncludeMe(e.target.checked)}
+                                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                                        />
+                                        <label htmlFor="includeMe" className="flex items-center gap-3 cursor-pointer flex-1">
+                                            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-semibold flex-shrink-0 overflow-hidden">
+                                                {currentUserAvatar ? (
+                                                    <img src={currentUserAvatar} alt="Eu" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    session?.user?.user_metadata?.name?.charAt(0).toUpperCase() || 'E'
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-slate-800 text-sm">Você ({session?.user?.user_metadata?.name || 'Eu'})</p>
+                                                <p className="text-xs text-slate-500">Adicionar-me ao grupo</p>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {/* Campo de busca de membros */}
+                                    <div className="mb-3">
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                value={memberSearchQuery}
+                                                onChange={(e) => setMemberSearchQuery(e.target.value)}
+                                                placeholder="Buscar voluntário..."
+                                                className="w-full px-4 py-2 pl-10 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    {/* Lista de membros com scroll único */}
+                                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2 scrollbar-glass">
+                                        {contacts
+                                            .filter(contact => {
+                                                // Filtro de telefone obrigatório
+                                                if (!contact.phone) return false;
+
+                                                // Filtro de busca por nome
+                                                if (memberSearchQuery.trim()) {
+                                                    const searchLower = memberSearchQuery.toLowerCase();
+                                                    if (!contact.name.toLowerCase().includes(searchLower)) {
+                                                        return false;
                                                     }
                                                 }
 
-                                                // Garantir que é array
-                                                if (!Array.isArray(deptIds)) return false;
+                                                // Se for admin, mostra todos (que tenham telefone)
+                                                if (userRole === 'admin') return true;
 
+                                                // Se for líder, filtra por departamento
+                                                const normalizedRole = userRole?.toLowerCase();
+                                                if (['leader', 'lider', 'líder'].includes(normalizedRole)) {
+                                                    if (!departmentId) return false;
+
+                                                    // Normalizar department_ids (pode vir como array ou string JSON)
+                                                    let deptIds = contact.department_ids;
+                                                    if (typeof deptIds === 'string') {
+                                                        try {
+                                                            deptIds = JSON.parse(deptIds);
+                                                        } catch (e) {
+                                                            deptIds = [];
+                                                        }
+                                                    }
+
+                                                    // Garantir que é array
+                                                    if (!Array.isArray(deptIds)) return false;
+
+                                                    return deptIds.includes(Number(departmentId));
+                                                }
+
+                                                return true; // Fallback
+                                            })
+                                            .map((contact) => (
+                                                <button
+                                                    key={contact.id}
+                                                    onClick={() => toggleMember(contact.id)}
+                                                    className={`w-full p-3 flex items-center gap-3 rounded-lg transition-colors ${selectedMembers.has(contact.id)
+                                                        ? 'bg-blue-50 border-2 border-blue-500'
+                                                        : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
+                                                        }`}
+                                                >
+                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                                                        {contact.name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div className="flex-1 text-left">
+                                                        <h4 className="font-semibold text-slate-800 text-sm">{contact.name}</h4>
+                                                        <p className="text-xs text-slate-500">{contact.role}</p>
+                                                    </div>
+                                                    {selectedMembers.has(contact.id) && (
+                                                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                        </svg>
+                                                    )}
+
+
+                                                </button>
+                                            ))
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-6 border-t border-slate-200 flex gap-3">
+                                <button
+                                    onClick={closeGroupModal}
+                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={createGroup}
+                                    disabled={!groupName.trim() || selectedMembers.size === 0 || creatingGroup}
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {creatingGroup && (
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    )}
+                                    {creatingGroup ? 'Criando...' : 'Criar Grupo'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Adicionar Membros */}
+                {showAddMemberModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowAddMemberModal(false)}>
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                            <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+                                <h3 className="text-xl font-bold text-slate-800">Adicionar Membros</h3>
+                                <button
+                                    onClick={() => setShowAddMemberModal(false)}
+                                    className="text-slate-400 hover:text-slate-600"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="p-4 border-b border-slate-100">
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={addMemberSearchQuery}
+                                        onChange={(e) => setAddMemberSearchQuery(e.target.value)}
+                                        placeholder="Buscar voluntário..."
+                                        className="w-full px-4 py-2 pl-10 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-glass">
+                                {contacts
+                                    .filter(contact => {
+                                        // 1. Deve ter telefone
+                                        if (!contact.phone) return false;
+
+                                        // 2. Não pode estar no grupo
+                                        const isAlreadyMember = groupDetailsMembers.some(m =>
+                                            m.id === contact.id || m.phone === contact.phone
+                                        );
+                                        if (isAlreadyMember) return false;
+
+                                        // 3. Filtro de busca
+                                        if (addMemberSearchQuery.trim()) {
+                                            const searchLower = addMemberSearchQuery.toLowerCase();
+                                            if (!contact.name.toLowerCase().includes(searchLower)) {
+                                                return false;
+                                            }
+                                        }
+
+                                        // 4. Regras de Permissão (Admin vs Líder)
+                                        if (userRole === 'admin') return true;
+
+                                        const normalizedRole = userRole?.toLowerCase();
+                                        if (['leader', 'lider', 'líder'].includes(normalizedRole)) {
+                                            // Se for líder, só pode adicionar quem é do seu departamento
+                                            // O departmentId vem das props. Se não tiver, assume que não pode filtrar (ou mostra todos que ele vê)
+                                            // Mas a lista 'contacts' já deve vir filtrada ou conter info de departamentos.
+
+                                            // Verificando department_ids do contato
+                                            let deptIds = contact.department_ids;
+                                            if (typeof deptIds === 'string') {
+                                                try { deptIds = JSON.parse(deptIds); } catch (e) { deptIds = []; }
+                                            }
+                                            if (!Array.isArray(deptIds)) deptIds = [];
+
+                                            // Se o líder tem um departmentId definido na prop, usa ele
+                                            if (departmentId) {
                                                 return deptIds.includes(Number(departmentId));
                                             }
 
-                                            return true; // Fallback
-                                        })
-                                        .map((contact) => (
-                                            <button
-                                                key={contact.id}
-                                                onClick={() => toggleMember(contact.id)}
-                                                className={`w-full p-3 flex items-center gap-3 rounded-lg transition-colors ${selectedMembers.has(contact.id)
-                                                    ? 'bg-blue-50 border-2 border-blue-500'
-                                                    : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
-                                                    }`}
-                                            >
-                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                                                    {contact.name.charAt(0).toUpperCase()}
-                                                </div>
-                                                <div className="flex-1 text-left">
-                                                    <h4 className="font-semibold text-slate-800 text-sm">{contact.name}</h4>
-                                                    <p className="text-xs text-slate-500">{contact.role}</p>
-                                                </div>
-                                                {selectedMembers.has(contact.id) && (
-                                                    <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                    </svg>
+                                            // Se não tem departmentId explícito (ex: vê todos), talvez permitir?
+                                            // Por segurança, vamos assumir que se ele vê na lista de contatos (que já é filtrada para ele), ele pode adicionar.
+                                            return true;
+                                        }
+
+                                        return false;
+                                    })
+                                    .map((contact) => (
+                                        <button
+                                            key={contact.id}
+                                            onClick={() => toggleMemberToAdd(contact.id)}
+                                            className={`w-full p-3 flex items-center gap-3 rounded-lg transition-colors ${membersToAdd.has(contact.id)
+                                                ? 'bg-blue-50 border-2 border-blue-500'
+                                                : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
+                                                }`}
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                                                {contact.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="flex-1 text-left">
+                                                <h4 className="font-semibold text-slate-800 text-sm">{contact.name}</h4>
+                                                <p className="text-xs text-slate-500">{contact.role}</p>
+                                                {contact.department_ids && contact.department_ids.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {contact.department_ids.slice(0, 2).map(deptId => (
+                                                            <span
+                                                                key={deptId}
+                                                                className={`text-[10px] px-1.5 py-0.5 rounded-full border ${deptId === departmentId
+                                                                    ? 'bg-blue-600 text-white border-blue-700 font-medium shadow-sm'
+                                                                    : 'bg-blue-50 text-blue-600 border-blue-100'
+                                                                    }`}
+                                                            >
+                                                                {departments[deptId] || 'Dep. desconhecido'}
+                                                            </span>
+                                                        ))}
+                                                        {contact.department_ids.length > 2 && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                                                +{contact.department_ids.length - 2}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 )}
-
-
-                                            </button>
-                                        ))
-                                    }
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="p-6 border-t border-slate-200 flex gap-3">
-                            <button
-                                onClick={closeGroupModal}
-                                className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={createGroup}
-                                disabled={!groupName.trim() || selectedMembers.size === 0 || creatingGroup}
-                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {creatingGroup && (
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                )}
-                                {creatingGroup ? 'Criando...' : 'Criar Grupo'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal de Adicionar Membros */}
-            {showAddMemberModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowAddMemberModal(false)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-6 border-b border-slate-200 flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-slate-800">Adicionar Membros</h3>
-                            <button
-                                onClick={() => setShowAddMemberModal(false)}
-                                className="text-slate-400 hover:text-slate-600"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        <div className="p-4 border-b border-slate-100">
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    value={addMemberSearchQuery}
-                                    onChange={(e) => setAddMemberSearchQuery(e.target.value)}
-                                    placeholder="Buscar voluntário..."
-                                    className="w-full px-4 py-2 pl-10 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-glass">
-                            {contacts
-                                .filter(contact => {
-                                    // 1. Deve ter telefone
-                                    if (!contact.phone) return false;
-
-                                    // 2. Não pode estar no grupo
-                                    const isAlreadyMember = groupDetailsMembers.some(m =>
-                                        m.id === contact.id || m.phone === contact.phone
-                                    );
-                                    if (isAlreadyMember) return false;
-
-                                    // 3. Filtro de busca
-                                    if (addMemberSearchQuery.trim()) {
-                                        const searchLower = addMemberSearchQuery.toLowerCase();
-                                        if (!contact.name.toLowerCase().includes(searchLower)) {
-                                            return false;
-                                        }
-                                    }
-
-                                    // 4. Regras de Permissão (Admin vs Líder)
-                                    if (userRole === 'admin') return true;
-
-                                    const normalizedRole = userRole?.toLowerCase();
-                                    if (['leader', 'lider', 'líder'].includes(normalizedRole)) {
-                                        // Se for líder, só pode adicionar quem é do seu departamento
-                                        // O departmentId vem das props. Se não tiver, assume que não pode filtrar (ou mostra todos que ele vê)
-                                        // Mas a lista 'contacts' já deve vir filtrada ou conter info de departamentos.
-
-                                        // Verificando department_ids do contato
-                                        let deptIds = contact.department_ids;
-                                        if (typeof deptIds === 'string') {
-                                            try { deptIds = JSON.parse(deptIds); } catch (e) { deptIds = []; }
-                                        }
-                                        if (!Array.isArray(deptIds)) deptIds = [];
-
-                                        // Se o líder tem um departmentId definido na prop, usa ele
-                                        if (departmentId) {
-                                            return deptIds.includes(Number(departmentId));
-                                        }
-
-                                        // Se não tem departmentId explícito (ex: vê todos), talvez permitir?
-                                        // Por segurança, vamos assumir que se ele vê na lista de contatos (que já é filtrada para ele), ele pode adicionar.
-                                        return true;
-                                    }
-
-                                    return false;
-                                })
-                                .map((contact) => (
-                                    <button
-                                        key={contact.id}
-                                        onClick={() => toggleMemberToAdd(contact.id)}
-                                        className={`w-full p-3 flex items-center gap-3 rounded-lg transition-colors ${membersToAdd.has(contact.id)
-                                            ? 'bg-blue-50 border-2 border-blue-500'
-                                            : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
-                                            }`}
-                                    >
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                                            {contact.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div className="flex-1 text-left">
-                                            <h4 className="font-semibold text-slate-800 text-sm">{contact.name}</h4>
-                                            <p className="text-xs text-slate-500">{contact.role}</p>
-                                            {contact.department_ids && contact.department_ids.length > 0 && (
-                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                    {contact.department_ids.slice(0, 2).map(deptId => (
-                                                        <span
-                                                            key={deptId}
-                                                            className={`text-[10px] px-1.5 py-0.5 rounded-full border ${deptId === departmentId
-                                                                ? 'bg-blue-600 text-white border-blue-700 font-medium shadow-sm'
-                                                                : 'bg-blue-50 text-blue-600 border-blue-100'
-                                                                }`}
-                                                        >
-                                                            {departments[deptId] || 'Dep. desconhecido'}
-                                                        </span>
-                                                    ))}
-                                                    {contact.department_ids.length > 2 && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
-                                                            +{contact.department_ids.length - 2}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                            </div>
+                                            {membersToAdd.has(contact.id) && (
+                                                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                </svg>
                                             )}
-                                        </div>
-                                        {membersToAdd.has(contact.id) && (
-                                            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                            </svg>
-                                        )}
-                                    </button>
-                                ))
-                            }
-                            {contacts.filter(c => !groupDetailsMembers.some(m => m.id === c.id || m.phone === c.phone)).length === 0 && (
-                                <p className="text-center text-slate-500 py-4">Nenhum contato disponível para adicionar.</p>
-                            )}
-                        </div>
-
-                        <div className="p-6 border-t border-slate-200 flex gap-3">
-                            <button
-                                onClick={() => setShowAddMemberModal(false)}
-                                className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleAddMembers}
-                                disabled={membersToAdd.size === 0 || addingMembers}
-                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {addingMembers && (
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        </button>
+                                    ))
+                                }
+                                {contacts.filter(c => !groupDetailsMembers.some(m => m.id === c.id || m.phone === c.phone)).length === 0 && (
+                                    <p className="text-center text-slate-500 py-4">Nenhum contato disponível para adicionar.</p>
                                 )}
-                                {addingMembers ? 'Adicionando...' : `Adicionar(${membersToAdd.size})`}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal de Confirmação de Exclusão */}
-            {showDeleteModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => !isDeleting && setShowDeleteModal(false)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-slide-up" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-6 text-center">
-                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
                             </div>
-                            <h3 className="text-xl font-bold text-slate-800 mb-2">Excluir Grupo?</h3>
-                            <p className="text-slate-600 mb-6">
-                                Tem certeza que deseja excluir este grupo? Esta ação não pode ser desfeita e todas as mensagens serão perdidas.
-                            </p>
 
-                            <div className="flex gap-3">
+                            <div className="p-6 border-t border-slate-200 flex gap-3">
                                 <button
-                                    onClick={() => setShowDeleteModal(false)}
-                                    disabled={isDeleting}
-                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium disabled:opacity-50"
+                                    onClick={() => setShowAddMemberModal(false)}
+                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
                                 >
                                     Cancelar
                                 </button>
                                 <button
-                                    onClick={confirmDeleteGroup}
-                                    disabled={isDeleting}
-                                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                                    onClick={handleAddMembers}
+                                    disabled={membersToAdd.size === 0 || addingMembers}
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
-                                    {isDeleting ? (
+                                    {addingMembers && (
                                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    ) : (
-                                        'Sim, Excluir'
                                     )}
+                                    {addingMembers ? 'Adicionando...' : `Adicionar(${membersToAdd.size})`}
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Toast Notification */}
-            {toast.show && (
-                <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
-                    <div className={`px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 ${toast.type === 'success' ? 'bg-green-600' :
-                        toast.type === 'error' ? 'bg-red-600' :
-                            'bg-blue-600'
-                        }`}>
-                        {toast.type === 'success' && (
-                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                        )}
-                        {toast.type === 'error' && (
-                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                            </svg>
-                        )}
-                        {toast.type === 'info' && (
-                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                        )}
-                        <p className="text-white font-medium">{toast.message}</p>
-                    </div>
-                </div>
-            )}
-            {/* Modal de Informações do Contato */}
-            {showContactInfoModal && selectedContact && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowContactInfoModal(false)}>
-                    <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-                        <div className="relative h-32 bg-gradient-to-br from-blue-500 to-blue-600">
-                            <button
-                                onClick={() => setShowContactInfoModal(false)}
-                                className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/30 text-white rounded-full transition-colors"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                {/* Modal de Confirmação de Exclusão */}
+                {showDeleteModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" onClick={() => !isDeleting && setShowDeleteModal(false)}>
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                            <div className="p-6 text-center">
+                                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-800 mb-2">Excluir Grupo?</h3>
+                                <p className="text-slate-600 mb-6">
+                                    Tem certeza que deseja excluir este grupo? Esta ação não pode ser desfeita e todas as mensagens serão perdidas.
+                                </p>
+
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setShowDeleteModal(false)}
+                                        disabled={isDeleting}
+                                        className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium disabled:opacity-50"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={confirmDeleteGroup}
+                                        disabled={isDeleting}
+                                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {isDeleting ? (
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        ) : (
+                                            'Sim, Excluir'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div className="px-6 pb-6">
-                            <div className="relative -mt-16 mb-4 flex justify-center">
-                                <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-md overflow-hidden flex items-center justify-center">
-                                    {selectedContact.avatar_url ? (
-                                        <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-4xl font-bold">
-                                            {selectedContact.name.charAt(0).toUpperCase()}
-                                        </div>
-                                    )}
-                                </div>
+                    </div>
+                )}
+
+                {/* Toast Notification */}
+                {toast.show && (
+                    <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
+                        <div className={`px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 ${toast.type === 'success' ? 'bg-green-600' :
+                            toast.type === 'error' ? 'bg-red-600' :
+                                'bg-blue-600'
+                            }`}>
+                            {toast.type === 'success' && (
+                                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                            )}
+                            {toast.type === 'error' && (
+                                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                            )}
+                            {toast.type === 'info' && (
+                                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                            )}
+                            <p className="text-white font-medium">{toast.message}</p>
+                        </div>
+                    </div>
+                )}
+                {/* Modal de Informações do Contato */}
+                {showContactInfoModal && selectedContact && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowContactInfoModal(false)}>
+                        <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                            <div className="relative h-32 bg-gradient-to-br from-blue-500 to-blue-600">
+                                <button
+                                    onClick={() => setShowContactInfoModal(false)}
+                                    className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/30 text-white rounded-full transition-colors"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
                             </div>
-
-                            <div className="text-center mb-6">
-                                <h2 className="text-2xl font-bold text-slate-800 mb-1">{selectedContact.name}</h2>
-                                <p className="text-slate-500 font-medium">{selectedContact.role}</p>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-slate-500 font-medium uppercase">Telefone</p>
-                                        <p className="text-slate-800 font-medium">{formatPhoneNumber(selectedContact.phone)}</p>
+                            <div className="px-6 pb-6">
+                                <div className="relative -mt-16 mb-4 flex justify-center">
+                                    <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-md overflow-hidden flex items-center justify-center">
+                                        {selectedContact.avatar_url ? (
+                                            <img src={selectedContact.avatar_url} alt={selectedContact.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-4xl font-bold">
+                                                {selectedContact.name.charAt(0).toUpperCase()}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {selectedContact.department_ids && selectedContact.department_ids.length > 0 && (
-                                    <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-                                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">
+                                <div className="text-center mb-6">
+                                    <h2 className="text-2xl font-bold text-slate-800 mb-1">{selectedContact.name}</h2>
+                                    <p className="text-slate-500 font-medium">{selectedContact.role}</p>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-slate-500 font-medium uppercase mb-1">Departamentos</p>
-                                            <div className="flex flex-wrap gap-1">
-                                                {selectedContact.department_ids.map(deptId => (
-                                                    <span key={deptId} className="text-xs px-2 py-1 rounded-md bg-white border border-slate-200 text-slate-600 font-medium shadow-sm">
-                                                        {departments[deptId] || 'Desconhecido'}
-                                                    </span>
-                                                ))}
-                                            </div>
+                                            <p className="text-xs text-slate-500 font-medium uppercase">Telefone</p>
+                                            <p className="text-slate-800 font-medium">{formatPhoneNumber(selectedContact.phone)}</p>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
-            {/* Modal de Confirmação de Limpar Conversa */}
-            {showClearChatModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
-                        <div className="flex flex-col items-center text-center">
-                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 text-red-600">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </div>
-                            <h3 className="text-lg font-bold text-slate-900 mb-2">Limpar conversa?</h3>
-                            <p className="text-slate-500 mb-6">
-                                Tem certeza que deseja apagar todas as mensagens desta conversa? Esta ação não pode ser desfeita.
-                            </p>
-                            <div className="flex gap-3 w-full">
-                                <button
-                                    onClick={() => setShowClearChatModal(false)}
-                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={selectedGroup ? handleClearGroupChat : handleClearChat}
-                                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
-                                >
-                                    Limpar
-                                </button>
+                                    {selectedContact.department_ids && selectedContact.department_ids.length > 0 && (
+                                        <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
+                                            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-slate-500 font-medium uppercase mb-1">Departamentos</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {selectedContact.department_ids.map(deptId => (
+                                                        <span key={deptId} className="text-xs px-2 py-1 rounded-md bg-white border border-slate-200 text-slate-600 font-medium shadow-sm">
+                                                            {departments[deptId] || 'Desconhecido'}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {/* Modal de Confirmação de Limpar Conversa */}
+                {showClearChatModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+                            <div className="flex flex-col items-center text-center">
+                                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 text-red-600">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">Limpar conversa?</h3>
+                                <p className="text-slate-500 mb-6">
+                                    Tem certeza que deseja apagar todas as mensagens desta conversa? Esta ação não pode ser desfeita.
+                                </p>
+                                <div className="flex gap-3 w-full">
+                                    <button
+                                        onClick={() => setShowClearChatModal(false)}
+                                        className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={selectedGroup ? handleClearGroupChat : handleClearChat}
+                                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+                                    >
+                                        Limpar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
