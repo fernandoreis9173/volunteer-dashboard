@@ -1668,7 +1668,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     };
 
     return (
-        <div className="-m-4 sm:-m-6 lg:-m-8 h-screen bg-white relative">
+        <div className="-m-4 sm:-m-6 lg:-m-8 h-[100dvh] bg-white relative">{/* Using dvh for mobile keyboard support */}
             <style>{`
                 /* Scrollbar Hover Only */
                 .scrollbar-hover-only::-webkit-scrollbar {
