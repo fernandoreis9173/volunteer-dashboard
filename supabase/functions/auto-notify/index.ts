@@ -149,53 +149,61 @@ serve(async (req) => {
                 }
 
                 // Enviar mensagens
-                // Enviar WhatsApp se configurado
-                if (whatsappSettings) { // Usar whatsappSettings que já está definido
-                    // 🚀 OTIMIZAÇÃO: Processar em PARALELO ao invés de sequencial
-                    // Isso permite enviar para 300+ voluntários sem timeout
+                // 🚀 OTIMIZAÇÃO: Enfileirar mensagens WhatsApp ao invés de enviar direto
+                // Isso permite suportar 1500-3000+ voluntários sem timeout
+                if (whatsappSettings) {
                     const volunteersWithPhone = volunteers.filter(v => v.volunteers?.phone);
 
                     if (volunteersWithPhone.length > 0) {
-                        console.log(`Enviando WhatsApp para ${volunteersWithPhone.length} voluntários em paralelo...`);
+                        console.log(`📥 Enfileirando ${volunteersWithPhone.length} mensagens WhatsApp...`);
 
                         // Preparar template
                         const template = type === '24h' ? template24h : template2h;
+                        const messageType = type === '24h' ? '24h_before' : '2h_before';
 
-                        // Enviar TODAS as mensagens em paralelo
-                        const whatsappPromises = volunteersWithPhone.map(async (volunteer) => {
-                            try {
-                                const phone = volunteer.volunteers.phone;
-                                const name = volunteer.volunteers.name || 'Voluntário';
-                                let waMessage = '';
+                        // Preparar mensagens para enfileirar
+                        const messagesToQueue = volunteersWithPhone.map(volunteer => {
+                            let waMessage = '';
 
-                                if (template) {
-                                    // Substituir variáveis no template
-                                    waMessage = template.message_content
-                                        .replace('{nome}', volunteer.volunteers.name.split(' ')[0])
-                                        .replace('{evento}', event.name)
-                                        .replace('{horario}', event.start_time);
-                                } else {
-                                    // Fallback para mensagem padrão
-                                    waMessage = type === '24h'
-                                        ? `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: Você está escalado para o evento *${event.name}* amanhã às ${event.start_time}.`
-                                        : `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: O evento *${event.name}* começa em breve (às ${event.start_time}).`;
-                                }
-
-                                await sendWhatsAppMessage(whatsappSettings, phone, waMessage, supabaseClient);
-                                return { success: true, phone };
-                            } catch (error) {
-                                console.error(`Erro ao enviar WhatsApp para voluntário ${volunteer.volunteer_id}:`, error);
-                                return { success: false, phone: volunteer.volunteers?.phone, error };
+                            if (template) {
+                                // Substituir variáveis no template
+                                waMessage = template.message_content
+                                    .replace('{nome}', volunteer.volunteers.name.split(' ')[0])
+                                    .replace('{evento}', event.name)
+                                    .replace('{horario}', event.start_time);
+                            } else {
+                                // Fallback para mensagem padrão
+                                waMessage = type === '24h'
+                                    ? `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: Você está escalado para o evento *${event.name}* amanhã às ${event.start_time}.`
+                                    : `Olá ${volunteer.volunteers.name.split(' ')[0]}, lembrete: O evento *${event.name}* começa em breve (às ${event.start_time}).`;
                             }
+
+                            return {
+                                volunteer_id: volunteer.volunteer_id,
+                                volunteer_name: volunteer.volunteers.name,
+                                volunteer_phone: volunteer.volunteers.phone,
+                                user_id: volunteer.volunteers.user_id,
+                                event_id: event.id,
+                                event_name: event.name,
+                                event_date: event.date,
+                                event_time: event.start_time,
+                                message_type: messageType,
+                                message_content: waMessage,
+                                status: 'pending'
+                            };
                         });
 
-                        // Aguardar TODAS as mensagens serem enviadas
-                        const results = await Promise.all(whatsappPromises);
-                        const successCount = results.filter(r => r.success).length;
-                        const failCount = results.length - successCount;
+                        // Inserir na fila
+                        const { error: queueError } = await supabaseClient
+                            .from('pending_messages')
+                            .insert(messagesToQueue);
 
-                        sentCount += successCount;
-                        console.log(`WhatsApp enviado: ${successCount} sucesso, ${failCount} falhas`);
+                        if (queueError) {
+                            console.error('❌ Erro ao enfileirar mensagens:', queueError);
+                        } else {
+                            sentCount += messagesToQueue.length;
+                            console.log(`✅ ${messagesToQueue.length} mensagens enfileiradas com sucesso`);
+                        }
                     }
                 }
 
