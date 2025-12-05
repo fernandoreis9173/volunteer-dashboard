@@ -372,19 +372,24 @@ export const AcceptInvitationPage: React.FC<AcceptInvitationPageProps> = ({ setA
                 }
 
             } else if (role === 'admin' || role === 'leader' || role === 'lider') {
-                // Update profile with phone number, email, and birth date
+                // Upsert profile with phone number, email, and birth date
+                // Using upsert to ensure the profile is created if it doesn't exist
                 const { error: profileError } = await supabase
                     .from('profiles')
-                    .update({
+                    .upsert({
+                        id: user.id,
                         name: fullName,
                         phone: cleanPhone,
                         email: user.email,
                         birth_date: birthDate || null,
-                    })
-                    .eq('id', user.id);
+                        role: role,
+                    }, {
+                        onConflict: 'id'
+                    });
 
                 if (profileError) {
-                    console.error("Error updating profile:", profileError);
+                    console.error("Error upserting profile:", profileError);
+                    throw new Error("Erro ao salvar perfil. Por favor, contate um administrador.");
                 }
             }
 
