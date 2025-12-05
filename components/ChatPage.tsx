@@ -1766,7 +1766,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                 </div>
             )}
 
-            <div className="flex h-full min-h-0 flex-1">
+            <div className="flex flex-1 min-h-0">
                 {/* Sidebar - Lista de Contatos */}
                 <div className={`w-full md:w-96 border-r border-slate-200 flex-col bg-white ${selectedContact || selectedGroup ? 'hidden md:flex' : 'flex'}`}>
                     {/* Header */}
