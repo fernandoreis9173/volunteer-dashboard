@@ -489,17 +489,31 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
     // Fix for mobile viewport height
     useEffect(() => {
         const setVH = () => {
-            const vh = window.innerHeight * 0.01;
+            // Use visualViewport if available (better for mobile browsers)
+            const height = window.visualViewport?.height || window.innerHeight;
+            const vh = height * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
         };
 
         setVH();
+
+        // Listen to both resize and visualViewport events
         window.addEventListener('resize', setVH);
         window.addEventListener('orientationchange', setVH);
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', setVH);
+            window.visualViewport.addEventListener('scroll', setVH);
+        }
 
         return () => {
             window.removeEventListener('resize', setVH);
             window.removeEventListener('orientationchange', setVH);
+
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', setVH);
+                window.visualViewport.removeEventListener('scroll', setVH);
+            }
         };
     }, []);
 
