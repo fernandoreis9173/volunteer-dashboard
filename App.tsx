@@ -118,6 +118,26 @@ const getInitialTheme = (): 'light' | 'dark' => {
 };
 
 const App: React.FC = () => {
+    // Hook para ajustar altura no mobile com teclado virtual
+    const [viewportHeight, setViewportHeight] = useState('100%');
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.visualViewport) {
+            const handleResize = () => {
+                setViewportHeight(`${window.visualViewport.height}px`);
+            };
+
+            window.visualViewport.addEventListener('resize', handleResize);
+            window.visualViewport.addEventListener('scroll', handleResize);
+            handleResize();
+
+            return () => {
+                window.visualViewport.removeEventListener('resize', handleResize);
+                window.visualViewport.removeEventListener('scroll', handleResize);
+            };
+        }
+    }, []);
+
     // FIX: Use 'any' for Session type due to import errors.
     const [session, setSession] = useState<Session | null>(null);
     const [activePage, setActivePage] = useState<Page>(getPageFromHash());
@@ -882,26 +902,6 @@ const App: React.FC = () => {
     if (!hasPermission) {
         return <PermissionDeniedPage onNavigate={handleNavigate} />;
     }
-
-    // Hook para ajustar altura no mobile com teclado virtual
-    const [viewportHeight, setViewportHeight] = useState('100%');
-
-    useEffect(() => {
-        if (typeof window !== 'undefined' && window.visualViewport) {
-            const handleResize = () => {
-                setViewportHeight(`${window.visualViewport.height}px`);
-            };
-
-            window.visualViewport.addEventListener('resize', handleResize);
-            window.visualViewport.addEventListener('scroll', handleResize);
-            handleResize();
-
-            return () => {
-                window.visualViewport.removeEventListener('resize', handleResize);
-                window.visualViewport.removeEventListener('scroll', handleResize);
-            };
-        }
-    }, []);
 
     return (
         <div className="flex bg-slate-50 text-gray-800 font-display antialiased dark:bg-slate-900 dark:text-slate-300" style={{ height: viewportHeight, minHeight: viewportHeight }}>
