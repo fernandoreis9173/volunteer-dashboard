@@ -1700,7 +1700,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
 
     return (
 
-        <div className="h-full w-full overflow-x-hidden bg-white relative">
+        <div
+            className="w-full overflow-x-hidden bg-white relative"
+            style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+        >
             <style>{`
                 /* Scrollbar Hover Only */
                 .scrollbar-hover-only::-webkit-scrollbar {
@@ -1792,7 +1795,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                 {/* Sidebar - Lista de Contatos */}
                 <div className={`w-full md:w-96 border-r border-slate-200 flex-col bg-white ${selectedContact || selectedGroup ? 'hidden md:flex' : 'flex'}`}>
                     {/* Header */}
-                    <div className="p-4 border-b border-slate-200">
+                    <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-slate-200">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-2xl font-bold text-slate-800">Chat</h2>
                             {(userRole === 'admin' || ['leader', 'lider', 'líder'].includes(userRole?.toLowerCase())) && (
@@ -1891,7 +1894,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                     </div>
 
                     {/* Lista de Contatos */}
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-glass">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-glass pb-[env(safe-area-inset-bottom)]">
                         {loading ? (
                             <div className="flex items-center justify-center h-32">
                                 <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -1993,7 +1996,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                     {selectedContact ? (
                         <div className="flex flex-col h-full">
                             {/* Header do Chat */}
-                            <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                            <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => {
@@ -2170,7 +2173,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                             </div>
 
                             {/* Input de Mensagem */}
-                            <div className="p-4 border-t border-slate-200 bg-white flex-shrink-0">
+                            <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-slate-200 bg-white flex-shrink-0">
                                 {!whatsappEnabled ? (
                                     <div className="flex items-center justify-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
                                         <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2211,7 +2214,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                     ) : selectedGroup ? (
                         <div className="flex flex-col h-full">
                             {/* Header do Grupo */}
-                            <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                            <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={() => {
