@@ -209,6 +209,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuthView }) => {
 
 
                 </div>
+
+                <div className="mt-auto pt-8 text-center">
+                    <p className="text-xs text-slate-400">
+                        Ao entrar, você concorda com nossos{' '}
+                        <a href="#/terms-of-service" className="underline hover:text-slate-600 transition-colors">Termos de Serviço</a>
+                        {' '}e{' '}
+                        <a href="#/privacy-policy" className="underline hover:text-slate-600 transition-colors">Política de Privacidade</a>.
+                    </p>
+                </div>
             </div>
 
             {/* Right Side - Visuals */}

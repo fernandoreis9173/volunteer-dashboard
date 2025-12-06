@@ -308,7 +308,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
         }
     };
 
-    const [activeTab, setActiveTab] = useState<'config' | 'test' | 'history' | 'bulk' | 'templates'>('config');
+    const [activeTab, setActiveTab] = useState<'config' | 'test' | 'history' | 'bulk' | 'templates' | 'webhooks'>('config');
     const [bulkType, setBulkType] = useState<'department' | 'event'>('department');
     const [bulkTargetId, setBulkTargetId] = useState<string>('');
     const [bulkMessage, setBulkMessage] = useState<string>('Olá {nome}, ');
@@ -331,6 +331,24 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
     const [showConfirmationModal, setShowConfirmationModal] = useState(false);
     const [preparedVolunteers, setPreparedVolunteers] = useState<any[]>([]);
     const [bulkStats, setBulkStats] = useState({ total: 0, unique: 0 });
+
+    // Webhook Logs state
+    const [webhookLogs, setWebhookLogs] = useState<any[]>([]);
+
+    const fetchWebhookLogs = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('webhook_logs')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (error) throw error;
+            if (data) setWebhookLogs(data);
+        } catch (error) {
+            console.error('Erro ao buscar logs de webhook:', error);
+        }
+    };
 
     // Estado para logs em tempo real
     interface LiveLog {
@@ -357,6 +375,9 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
         }
         if (activeTab === 'templates') {
             fetchTemplates();
+        }
+        if (activeTab === 'webhooks') {
+            fetchWebhookLogs();
         }
     }, [activeTab, bulkType]);
 
@@ -599,7 +620,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                             : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                     >
-                        Teste e Automação
+                        Teste de envio
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
@@ -608,7 +629,7 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                             : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                     >
-                        Histórico de Envios
+                        Histórico
                     </button>
                     <button
                         onClick={() => setActiveTab('bulk')}
@@ -626,7 +647,16 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                             : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                             }`}
                     >
-                        Templates de Mensagens
+                        Templates
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('webhooks')}
+                        className={`pb-2 px-4 font-medium transition-colors relative ${activeTab === 'webhooks'
+                            ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
+                    >
+                        Webhook
                     </button>
                 </div>
 
@@ -1441,6 +1471,85 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                )}
+                {activeTab === 'webhooks' && (
+                    <div className="space-y-6">
+                        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6">
+                            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Configuração de Webhook</h2>
+                            <p className="text-slate-600 dark:text-slate-400 mb-4">
+                                Configure este URL no seu provedor de WhatsApp (Evolution API) para receber eventos de mensagens.
+                            </p>
+                            <div className="flex items-center space-x-2">
+                                <code className="flex-1 bg-slate-100 dark:bg-slate-700 p-3 rounded-lg text-sm font-mono break-all text-slate-800 dark:text-slate-200">
+                                    https://zmgwuttcqmpyonvtjprw.supabase.co/functions/v1/webhook-whatsapp
+                                </code>
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText('https://zmgwuttcqmpyonvtjprw.supabase.co/functions/v1/webhook-whatsapp');
+                                        setMessage({ type: 'success', text: 'URL copiado!' });
+                                        setTimeout(() => setMessage(null), 3000);
+                                    }}
+                                    className="p-3 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                                    title="Copiar URL"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+                            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Logs de Recebimento</h2>
+                                <button
+                                    onClick={fetchWebhookLogs}
+                                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+                                >
+                                    Atualizar
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 relative">
+                                    <thead className="bg-slate-50 dark:bg-slate-700 sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Data/Hora</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Mensagem</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">Payload</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                                        {webhookLogs.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={3} className="px-6 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
+                                                    Nenhum log encontrado.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            webhookLogs.map((log) => (
+                                                <tr key={log.id}>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                                                        {new Date(log.created_at).toLocaleString('pt-BR')}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-slate-900 dark:text-slate-100">
+                                                        {log.message}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
+                                                        <details className="cursor-pointer">
+                                                            <summary className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">Ver JSON</summary>
+                                                            <pre className="mt-2 p-2 bg-slate-100 dark:bg-slate-900 rounded text-xs overflow-auto max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl max-h-60">
+                                                                {JSON.stringify(log.payload, null, 2)}
+                                                            </pre>
+                                                        </details>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}

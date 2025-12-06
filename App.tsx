@@ -37,6 +37,8 @@ import SplashScreen from './components/SplashScreen'; // Import SplashScreen
 import WhatsAppSettingsPage from './components/WhatsAppSettingsPage'; // Import WhatsApp Settings Page
 import GeneralSettingsPage from './components/GeneralSettingsPage'; // Import General Settings Page
 import ChatPage from './components/ChatPage'; // Import Chat Page
+import PrivacyPolicyPage from './components/PrivacyPolicyPage';
+import TermsOfServicePage from './components/TermsOfServicePage';
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
 // FIX: Import EnrichedUser type to correctly type users from `list-users` function.
 import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer, type EnrichedUser } from './types';
@@ -76,6 +78,8 @@ const pagePermissions: Record<Page, string[]> = {
     'whatsapp-settings': ['admin'],
     'general-settings': ['admin'],
     'chat': ['admin', 'leader'],
+    'privacy-policy': ['admin', 'leader', 'volunteer'], // Public pages, but added for type safety
+    'terms-of-service': ['admin', 'leader', 'volunteer'],
 };
 
 const getInitialAuthView = (): AuthView => {
@@ -87,7 +91,7 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2);
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking', 'whatsapp-settings', 'general-settings', 'chat'];
+    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking', 'whatsapp-settings', 'general-settings', 'chat', 'privacy-policy', 'terms-of-service'];
     if (validPages.includes(hash as Page)) return hash as Page;
     return 'dashboard';
 };
@@ -835,30 +839,24 @@ const App: React.FC = () => {
         return <ApiConfigPage />;
     }
 
+    // FIX: Render Spinner while checking session to prevent flicker of login screen.
     if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-900" aria-live="polite" aria-busy="true">
-                <div
-                    className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
-                    role="status"
-                >
-                    <span className="sr-only">Carregando...</span>
-                </div>
-                <p className="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-300">Carregando...</p>
-            </div>
-        );
+        return <SplashScreen />;
+    }
+
+    // Public pages that don't require session
+    if (activePage === 'privacy-policy') {
+        return <PrivacyPolicyPage />;
+    }
+    if (activePage === 'terms-of-service') {
+        return <TermsOfServicePage />;
     }
 
     if (!session) {
-        switch (authView) {
-            case 'accept-invite':
-                return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
-            case 'reset-password':
-                return <ResetPasswordPage setAuthView={setAuthView} />;
-            case 'login':
-            default:
-                return <LoginPage setAuthView={setAuthView} />;
-        }
+        if (authView === 'reset-password') return <ResetPasswordPage setAuthView={setAuthView} />;
+        if (authView === 'accept-invite') return <AcceptInvitationPage setAuthView={setAuthView} onRegistrationComplete={handleRegistrationComplete} />;
+        if (authView === 'login') return <LoginPage setAuthView={setAuthView} />;
+        return <LoginPage setAuthView={setAuthView} />;
     }
 
     // At this point, we have a session.

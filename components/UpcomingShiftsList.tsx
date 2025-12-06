@@ -53,7 +53,7 @@ const ScheduleCard: React.FC<{ schedule: DashboardEvent; onViewDetails: (event: 
 
   const isLeader = userRole === 'leader' || userRole === 'lider' || userRole === 'admin';
 
-  const cardContainerClasses = isToday ? 'w-full' : 'w-80 flex-shrink-0';
+  const cardContainerClasses = 'w-80 flex-shrink-0';
 
   const now = new Date();
   const toleranceAfter = 10 * 60 * 1000; // 10 minutos após o fim
@@ -242,9 +242,7 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
 
   const isToday = activeFilter === 'today';
 
-  const listContainerClasses = isToday
-    ? "grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow"
-    : "flex overflow-x-auto space-x-4 pb-4 no-scrollbar";
+  const listContainerClasses = "flex overflow-x-auto space-x-4 pb-4 no-scrollbar";
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm h-full flex flex-col">
@@ -267,7 +265,7 @@ const UpcomingShiftsList: React.FC<UpcomingShiftsListProps> = ({ todaySchedules,
       <div className={listContainerClasses}>
         {loading && activeFilter === 'upcoming' ? null : loading ? (
           Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className={`p-5 rounded-xl border border-slate-200 animate-pulse ${!isToday ? 'w-80 flex-shrink-0' : 'w-full'}`}>
+            <div key={index} className={`p-5 rounded-xl border border-slate-200 animate-pulse w-80 flex-shrink-0`}>
               <div className="h-4 bg-slate-200 rounded w-3/4 mb-4"></div>
               <div className="space-y-2">
                 <div className="h-3 bg-slate-200 rounded w-1/2"></div>
