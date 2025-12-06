@@ -73,7 +73,24 @@ serve(async (req) => {
             if (volunteer?.name) senderName = volunteer.name;
         }
 
-        const formattedMessage = `📱 *Mensagem do Dashboard*\n\n${message}\n\n_Enviado por: ${senderName}_`;
+        // 1.2 Buscar template de mensagem do dashboard
+        const { data: template } = await supabaseClient
+            .from('whatsapp_message_templates')
+            .select('*')
+            .eq('template_type', 'dashboard_message')
+            .eq('active', true)
+            .single();
+
+        let formattedMessage = '';
+
+        if (template) {
+            formattedMessage = template.message_content
+                .replace('{mensagem}', message)
+                .replace('{remetente}', senderName);
+        } else {
+            // Fallback se não houver template
+            formattedMessage = `📱 *Mensagem do Dashboard*\n\n${message}\n\n_Enviado por: ${senderName}_`;
+        }
 
         // 2. Buscar configurações
         const { data: settings, error: settingsError } = await supabaseClient

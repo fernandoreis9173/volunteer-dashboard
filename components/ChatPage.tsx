@@ -1156,7 +1156,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ session, userRole, departmentId }) 
                     supabase.functions.invoke('send-whatsapp', {
                         body: {
                             number: whatsappJid,
-                            message: `📱 *Mensagem do Dashboard*\n\n${newMessage.trim()}\n\n_Enviado por: ${session.user.user_metadata?.name || 'Admin'}_`
+                            message: newMessage.trim(),
+                            templateType: 'dashboard_message'
                         }
                     }).then(({ data, error }) => {
                         if (error) console.error('Erro ao enviar WhatsApp:', error);

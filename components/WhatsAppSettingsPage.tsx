@@ -222,8 +222,8 @@ const WhatsAppSettingsPage: React.FC<WhatsAppSettingsPageProps> = ({ session }) 
                 .from('whatsapp_message_templates')
                 .insert({
                     template_type: 'dashboard_message',
-                    message_content: 'Mensagem do Dashboard',
-                    variables: [],
+                    message_content: '📱 *Mensagem do Dashboard*\n\n{mensagem}\n\n_Enviado por: {remetente}_',
+                    variables: ['mensagem', 'remetente'],
                     active: true
                 });
 

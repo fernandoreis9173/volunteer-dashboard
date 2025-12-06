@@ -52,10 +52,53 @@ serve(async (req) => {
         }
 
         // Obter dados da requisição
-        const { number, message }: WhatsAppRequest = await req.json();
+        let { number, message, templateType }: { number: string, message: string, templateType?: string } = await req.json();
 
         if (!number || !message) {
             throw new Error('Número e mensagem são obrigatórios');
+        }
+
+        // Detectar formato legado se nenhum templateType for fornecido
+        if (!templateType && message.startsWith('📱 *Mensagem do Dashboard*')) {
+            // Tentar extrair o conteúdo real da mensagem
+            const match = message.match(/📱 \*Mensagem do Dashboard\*\n\n([\s\S]*?)\n\n_Enviado por:/);
+            if (match && match[1]) {
+                message = match[1].trim();
+                templateType = 'dashboard_message';
+                console.log('Formato legado detectado. Convertendo para template dashboard_message. Mensagem extraída:', message);
+            }
+        }
+
+        let finalMessage = message;
+
+        // Se um templateType for fornecido, buscar e usar o template
+        if (templateType) {
+            const { data: template } = await supabaseClient
+                .from('whatsapp_message_templates')
+                .select('*')
+                .eq('template_type', templateType)
+                .eq('active', true)
+                .single();
+
+            if (template) {
+                // Obter nome do remetente
+                let senderName = 'Admin';
+                if (user.user_metadata?.name) {
+                    senderName = user.user_metadata.name;
+                } else {
+                    // Tentar buscar no profiles ou volunteers
+                    const { data: profile } = await supabaseClient
+                        .from('profiles')
+                        .select('name')
+                        .eq('id', user.id)
+                        .single();
+                    if (profile?.name) senderName = profile.name;
+                }
+
+                finalMessage = template.message_content
+                    .replace('{mensagem}', message)
+                    .replace('{remetente}', senderName);
+            }
         }
 
         // Buscar configurações do WhatsApp
@@ -87,7 +130,7 @@ serve(async (req) => {
                 // Preparar payload para Evolution API
                 const evolutionPayload = {
                     number: formattedNumber,
-                    text: message,
+                    text: finalMessage,
                 };
 
                 console.log('Enviando para Evolution:', JSON.stringify(evolutionPayload));
@@ -120,7 +163,7 @@ serve(async (req) => {
                 // Assumindo um payload padrão { phone: "...", message: "..." }
                 const genericPayload = {
                     phone: formattedNumber,
-                    message: message,
+                    message: finalMessage,
                 };
 
                 const genericResponse = await fetch(
@@ -155,7 +198,7 @@ serve(async (req) => {
         // Salvar log no banco de dados
         await supabaseClient.from('whatsapp_logs').insert({
             recipient_phone: formattedNumber,
-            message_content: message,
+            message_content: finalMessage,
             status: status,
             response_data: evolutionData,
             error_message: errorMessage

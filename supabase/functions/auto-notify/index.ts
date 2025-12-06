@@ -112,12 +112,12 @@ serve(async (req) => {
 
             let type = null;
 
-            // Lógica de 24h (entre 23h e 25h)
-            if (hoursUntilEvent >= 23 && hoursUntilEvent <= 25 && !event.notification_24h_sent) {
+            // Lógica de 24h (entre 22h e 26h - janela mais ampla para segurança)
+            if (hoursUntilEvent >= 22 && hoursUntilEvent <= 26 && !event.notification_24h_sent) {
                 type = '24h';
             }
-            // Lógica de 2h (entre 1.5h e 2.5h para maior precisão)
-            else if (hoursUntilEvent >= 1.5 && hoursUntilEvent <= 2.5 && !event.notification_2h_sent) {
+            // Lógica de 2h (entre 1h e 3h - janela mais ampla para segurança)
+            else if (hoursUntilEvent >= 1.0 && hoursUntilEvent <= 3.0 && !event.notification_2h_sent) {
                 type = '2h';
             }
 
