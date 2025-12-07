@@ -580,6 +580,13 @@ const App: React.FC = () => {
         }
     }, [session, userProfile, handleNavigate, pushPermissionStatus, authView]);
 
+    // NEW: Continuous protection - If authenticated, prevent access to landing page
+    useEffect(() => {
+        if (session && userProfile && activePage === 'landing') {
+            handleNavigate('dashboard');
+        }
+    }, [session, userProfile, activePage, handleNavigate]);
+
     // Real-time notifications subscription
     // OTIMIZADO: Realtime de notificações só quando app está visível e em páginas relevantes
     useEffect(() => {
@@ -847,7 +854,7 @@ const App: React.FC = () => {
     }
 
     // Public pages that don't require session
-    if (activePage === 'landing') {
+    if (activePage === 'landing' && !session) {
         return <LandingPage />;
     }
     if (activePage === 'privacy-policy') {
