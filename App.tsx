@@ -39,6 +39,7 @@ import GeneralSettingsPage from './components/GeneralSettingsPage'; // Import Ge
 import ChatPage from './components/ChatPage'; // Import Chat Page
 import PrivacyPolicyPage from './components/PrivacyPolicyPage';
 import TermsOfServicePage from './components/TermsOfServicePage';
+import LandingPage from './components/LandingPage';
 // FIX: To avoid a name collision with the DOM's `Event` type, the app's event type is aliased to `AppEvent`.
 // FIX: Import EnrichedUser type to correctly type users from `list-users` function.
 import { Page, AuthView, type NotificationRecord, type Event as AppEvent, type DetailedVolunteer, type EnrichedUser } from './types';
@@ -80,6 +81,7 @@ const pagePermissions: Record<Page, string[]> = {
     'chat': ['admin', 'leader'],
     'privacy-policy': ['admin', 'leader', 'volunteer'], // Public pages, but added for type safety
     'terms-of-service': ['admin', 'leader', 'volunteer'],
+    'landing': ['admin', 'leader', 'volunteer'],
 };
 
 const getInitialAuthView = (): AuthView => {
@@ -91,9 +93,9 @@ const getInitialAuthView = (): AuthView => {
 
 const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(2);
-    const validPages: Page[] = ['dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking', 'whatsapp-settings', 'general-settings', 'chat', 'privacy-policy', 'terms-of-service'];
+    const validPages: Page[] = ['landing', 'dashboard', 'volunteers', 'departments', 'events', 'calendar', 'my-profile', 'notifications', 'frequency', 'admin', 'history', 'timelines', 'ranking', 'whatsapp-settings', 'general-settings', 'chat', 'privacy-policy', 'terms-of-service'];
     if (validPages.includes(hash as Page)) return hash as Page;
-    return 'dashboard';
+    return 'landing';
 };
 
 const urlBase64ToUint8Array = (base64String: string) => {
@@ -845,6 +847,9 @@ const App: React.FC = () => {
     }
 
     // Public pages that don't require session
+    if (activePage === 'landing') {
+        return <LandingPage />;
+    }
     if (activePage === 'privacy-policy') {
         return <PrivacyPolicyPage />;
     }
